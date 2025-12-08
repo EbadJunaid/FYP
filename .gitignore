@@ -2,3 +2,20 @@ FYP-Send-Code
 SSL-Certificates-Crawler
 SSL-Certificates-Crawler-copy
 .DS_Store
+
+### Dashboard 
+
+dashboard/.vscode
+dashboard/backend/__pycache__
+dashboard/backend/SSL_Dashboard/__pycache__
+dashboard/backend/overview/__pycache__
+dashboard/backend/.env
+dashboard/backend/overview/migrations
+
+
+
+dashboard/frontend/.next
+dashboard/frontend/node_modules
+dashboard/frontend/package-lock.json
+dashboard/frontend/.env.local
+
