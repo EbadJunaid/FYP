@@ -1,0 +1,6 @@
+(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[816],{1245:(e,s,l)=>{"use strict";l.d(s,{default:()=>a});var r=l(5155);function a({topLeft:e,topRight:s,bottom:l,classNameTop:a="",classNameBottom:i=""}){return(0,r.jsxs)("div",{className:"w-full flex flex-col gap-6",children:[(0,r.jsxs)("div",{className:`grid grid-cols-1 md:grid-cols-2 gap-6${a}`,children:[(0,r.jsx)("div",{className:"w-full",children:e}),(0,r.jsx)("div",{className:"w-full",children:s})]}),(0,r.jsx)("div",{className:`w-full ${i}`,children:l})]})}l(2115)},5432:(e,s,l)=>{"use strict";l.d(s,{default:()=>d});var r=l(5155),a=l(8500),i=l.n(a);function d({title:e,value:s,className:l="",href:a}){let d=a?i():"div";return(0,r.jsxs)(d,{href:a||"#",onClick:a?void 0:()=>{void 0!==a&&(a||alert("\uD83D\uDEA7 Feature in progress..."))},className:`block p-5  text-lg 
+        rounded-xl shadow-xl font-semibold
+        bg-sidebarLight dark:bg-sidebarDark
+        text-navTextLight dark:text-navTextDark
+        transition 
+        cursor-pointer select-none ${l}`,children:[(0,r.jsx)("span",{className:"text-xl font-bold mb-1",children:e}),(0,r.jsx)("span",{className:"text-4xl font-bold",children:s})]})}},9574:(e,s,l)=>{Promise.resolve().then(l.bind(l,5432)),Promise.resolve().then(l.bind(l,1245))}},e=>{e.O(0,[500,441,794,358],()=>e(e.s=9574)),_N_E=e.O()}]);

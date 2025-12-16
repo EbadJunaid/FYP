@@ -1,0 +1,7 @@
+1:"$Sreact.fragment"
+2:I[1245,["500","static/chunks/500-7c9d4be872effb4e.js","816","static/chunks/app/dashboard/Active-vs-Expired/page-be3e2de1f9f7ea64.js"],"default"]
+3:I[5432,["500","static/chunks/500-7c9d4be872effb4e.js","816","static/chunks/app/dashboard/Active-vs-Expired/page-be3e2de1f9f7ea64.js"],"default"]
+4:I[484,[],"OutletBoundary"]
+5:"$Sreact.suspense"
+0:{"buildId":"d1cjPWx5xPiTBCJuS4kh1","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"","children":["$","$L2",null,{"topLeft":["$","$L3",null,{"title":"Active Certificates","value":120}],"topRight":["$","$L3",null,{"title":"Expired Certificates","value":45}],"bottom":["$","$L3",null,{"title":"bottom card","value":13}]}]}],null,["$","$L4",null,{"children":["$","$5",null,{"name":"Next.MetadataOutlet","children":"$@6"}]}]]}],"loading":null,"isPartial":false}
+6:null
