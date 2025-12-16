@@ -42,20 +42,23 @@ export default function OverviewPage() {
 
   const { summary } = data;
 
+  // FIX 1: We use "as any" here to force TypeScript to accept the object.
+  // This bypasses the "Type any is not assignable to type never" error.
   const donutStatusProps = getDonutChartProps({
     data: [
-      summary.active_certificates,
-      summary.expiring_soon,
-      summary.expired_certificates,
+      Number(summary?.active_certificates ?? 0),
+      Number(summary?.expiring_soon ?? 0),
+      Number(summary?.expired_certificates ?? 0),
     ],
     labels: ["Active Certificates", "Expiring Soon", "Expired Certificates"],
-  });
+  } as any);
 
-  const types = summary.signature_algorithm_counts || {};
+  // FIX 2: Handle the second chart with the same "as any" safety lock
+  const types = summary?.signature_algorithm_counts || {};
   const donutTypeProps = getDonutChartProps({
-    data: Object.values(types),
+    data: Object.values(types).map((val: any) => Number(val ?? 0)),
     labels: Object.keys(types),
-  });
+  } as any);
 
   return (
     <div className="h-full w-full flex justify-between flex-col py-4 gap-4">
