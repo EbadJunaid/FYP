@@ -11,11 +11,10 @@ dashboard/backend/SSL_Dashboard/__pycache__
 dashboard/backend/overview/__pycache__
 dashboard/backend/.env
 dashboard/backend/overview/migrations
-
+dashboard/backend/db.sqlite3
 
 
 dashboard/frontend/.next
 dashboard/frontend/node_modules
 dashboard/frontend/package-lock.json
 dashboard/frontend/.env.local
-
