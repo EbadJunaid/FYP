@@ -12,7 +12,7 @@ export async function fetchOverview(filters: Record<string, any> = {}) {
   const queryString = makeQueryString(filters);
   // const url = `${API_BASE}/overview/data/${qs}`;
   console.log(queryString)
-  const url = `${BASE_URL}/overview/data${queryString}`;
+  const url = `${BASE_URL}/overview/data/${queryString}`;
 
   console.log("Fetching overview from:", url);
 
@@ -38,7 +38,7 @@ export async function fetchCertificates(page = 1, pageSize = 20, filters: Record
   const baseFilters = { ...filters, page, page_size: pageSize };
   const queryString = makeQueryString(baseFilters);
   
-  const url = `${BASE_URL}/overview/certificates${queryString}`;
+  const url = `${BASE_URL}/overview/certificates/${queryString}`;
   console.log("Fetching overview from:", url);
 
   try {

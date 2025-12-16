@@ -18,3 +18,4 @@ dashboard/frontend/.next
 dashboard/frontend/node_modules
 dashboard/frontend/package-lock.json
 dashboard/frontend/.env.local
+dashboard/frontend/out
