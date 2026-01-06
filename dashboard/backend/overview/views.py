@@ -74,30 +74,30 @@ def certificate_list(request):
 
 
 
-def certificate_warnings(request):
-    """
-    Paginated endpoint returning certificates along with their zlint warnings.
-    Iterates through all lints and extracts those where result == 'warn'.
-    """
+# def certificate_warnings(request):
+#     """
+#     Paginated endpoint returning certificates along with their zlint warnings.
+#     Iterates through all lints and extracts those where result == 'warn'.
+#     """
 
-    db_conn = connect_db()
-    service = CertificateDetailService(db_conn)
+#     db_conn = connect_db()
+#     service = CertificateDetailService(db_conn)
 
-    # Pagination
-    try:
-        page = int(request.GET.get("page", 1))
-    except ValueError:
-        page = 1
+#     # Pagination
+#     try:
+#         page = int(request.GET.get("page", 1))
+#     except ValueError:
+#         page = 1
 
-    try:
-        page_size = int(request.GET.get("page_size", 20))
-    except ValueError:
-        page_size = 20
+#     try:
+#         page_size = int(request.GET.get("page_size", 20))
+#     except ValueError:
+#         page_size = 20
 
-    # Extract filters (status, issuer, country, etc.)
-    filters = filter(request)
+#     # Extract filters (status, issuer, country, etc.)
+#     filters = filter(request)
 
-    # Fetch warning-based results
-    data = service.get_certificate_warnings(page=page, page_size=page_size, **filters)
+#     # Fetch warning-based results
+#     data = service.get_certificate_warnings(page=page, page_size=page_size, **filters)
 
-    return JsonResponse(data, safe=False)
+#     return JsonResponse(data, safe=False)

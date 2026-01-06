@@ -19,3 +19,11 @@ dashboard/frontend/node_modules
 dashboard/frontend/package-lock.json
 dashboard/frontend/.env.local
 
+
+### arslan-dashboard
+
+arslan-dashboard/chatgpt
+arslan-dashboard/gemini
+arslan-dashboard/info
+arslan-dashboard/antigravity/frontend/node_modules
+arslan-dashboard/antigravity/frontend/.next

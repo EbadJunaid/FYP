@@ -12,7 +12,7 @@ export const getSummaryCards = (summary: any) => {
     { title: "Unique Issuers", value: summary.unique_issuers_count },
     { title: "Warnings", value: summary.warnings },
     { title: "Errors", value: summary.errors },
-    { title: "Fatals", value: summary.fatals },
+    // { title: "Fatals", value: summary.fatals },
 
   ];
 
