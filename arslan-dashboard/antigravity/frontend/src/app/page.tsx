@@ -111,7 +111,6 @@ function DashboardContent() {
               <GlobalHealthCard
                 score={metrics.globalHealth.score}
                 maxScore={metrics.globalHealth.maxScore}
-                trend={metrics.globalHealth.trend}
                 status={metrics.globalHealth.status}
                 lastUpdated={metrics.globalHealth.lastUpdated}
                 onClick={() => handleCardClickWithScroll('globalHealth')}
@@ -123,11 +122,18 @@ function DashboardContent() {
               <MetricCard
                 icon={<CertificateIcon className="w-6 h-6 text-primary-blue" />}
                 iconBgColor="bg-primary-blue/15"
-                value={metrics.activeCertificates.count.toLocaleString()}
+                value={
+                  <span>
+                    {metrics.activeCertificates.count.toLocaleString()}
+                    <span className="text-sm text-text-muted font-normal ml-1">
+                      out of {metrics.activeCertificates.total.toLocaleString()}
+                    </span>
+                  </span>
+                }
                 label="Active Certificates"
-                trend={metrics.activeCertificates.trend}
                 onClick={() => handleCardClickWithScroll('activeCertificates')}
                 detailsLink="/dashboard/active-vs-expired"
+                infoTooltip="Count of currently valid SSL certificates that have not expired"
               />
             )}
 
@@ -141,6 +147,7 @@ function DashboardContent() {
                 badge={metrics.expiringSoon.actionNeeded ? { text: 'Action Needed', variant: 'warning' } : undefined}
                 onClick={() => handleCardClickWithScroll('expiringSoon')}
                 detailsLink="/dashboard/active-vs-expired"
+                infoTooltip="Certificates expiring within the next 30 days that need attention"
               />
             )}
 
@@ -153,6 +160,7 @@ function DashboardContent() {
                 label="Critical Vulnerabilities"
                 onClick={() => handleCardClickWithScroll('vulnerabilities')}
                 detailsLink="/dashboard/vulnerabilities"
+                infoTooltip="Certificates with security issues detected by ZLint analysis"
               />
             )}
           </div>

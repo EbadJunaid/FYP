@@ -21,10 +21,13 @@ export interface ScanEntry {
     id: string;
     domain: string;
     scanDate: string;
+    endDate?: string;
     sslGrade: SSLGrade;
     vulnerabilities: string;
     issuer: string;
     status: CertificateStatus;
+    country?: string;
+    encryptionType?: string;
 }
 
 // Dashboard Metrics
@@ -32,13 +35,12 @@ export interface DashboardMetrics {
     globalHealth: {
         score: number;
         maxScore: number;
-        trend: number;
         status: 'SECURE' | 'AT_RISK' | 'CRITICAL';
         lastUpdated: string;
     };
     activeCertificates: {
         count: number;
-        trend: number;
+        total: number;
     };
     expiringSoon: {
         count: number;
@@ -81,6 +83,7 @@ export interface CALeaderboardEntry {
     name: string;
     count: number;
     maxCount: number;
+    percentage: number;
     color: string;
 }
 

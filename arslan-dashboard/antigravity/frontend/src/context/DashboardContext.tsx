@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useMemo, useEffect } from 'react';
 import {
     DashboardState,
     ScanEntry,
@@ -8,17 +8,19 @@ import {
     EncryptionStrength,
     CALeaderboardEntry,
     GeographicEntry,
+    DashboardMetrics,
+    FutureRisk,
+    ValidityTrendPoint,
 } from '@/types/dashboard';
 import {
-    mockDashboardMetrics,
-    mockEncryptionStrength,
-    mockFutureRisk,
-    mockCALeaderboard,
-    mockGeographicDistribution,
-    mockValidityTrend,
-    mockRecentScans,
-    generateRandomScans,
-} from '@/data/mockData';
+    fetchDashboardMetrics,
+    fetchCertificates,
+    fetchEncryptionStrength,
+    fetchFutureRisk,
+    fetchCALeaderboard,
+    fetchGeographicDistribution,
+    fetchValidityTrends,
+} from '@/controllers/pageController';
 
 // Pagination state
 interface PaginationState {
@@ -37,6 +39,7 @@ interface DashboardContextType {
     handleCardClick: (cardType: string, data?: unknown) => void;
     setPage: (page: number) => void;
     resetFilters: () => void;
+    refreshData: () => void;
 }
 
 const initialFilters: FilterOptions = {
@@ -48,27 +51,27 @@ const initialFilters: FilterOptions = {
 };
 
 const initialState: DashboardState = {
-    metrics: mockDashboardMetrics,
-    encryptionStrength: mockEncryptionStrength,
-    futureRisk: mockFutureRisk,
-    caLeaderboard: mockCALeaderboard,
-    geographicDistribution: mockGeographicDistribution,
-    validityTrend: mockValidityTrend,
-    recentScans: mockRecentScans,
+    metrics: null,
+    encryptionStrength: [],
+    futureRisk: null,
+    caLeaderboard: [],
+    geographicDistribution: [],
+    validityTrend: [],
+    recentScans: [],
     filters: initialFilters,
     search: {
         query: '',
         isActive: false,
         results: [],
     },
-    isLoading: false,
+    isLoading: true,
     error: null,
 };
 
 const initialPagination: PaginationState = {
     currentPage: 1,
     itemsPerPage: 10,
-    totalItems: mockRecentScans.length,
+    totalItems: 0,
 };
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -77,182 +80,333 @@ interface DashboardProviderProps {
     children: ReactNode;
 }
 
+// Active filter type for card clicks
+interface ActiveFilter {
+    type: 'all' | 'active' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend';
+    value?: string;
+}
+
 export function DashboardProvider({ children }: DashboardProviderProps) {
     const [state, setState] = useState<DashboardState>(initialState);
     const [pagination, setPagination] = useState<PaginationState>(initialPagination);
+    const [activeFilter, setActiveFilter] = useState<ActiveFilter>({ type: 'all' });
 
-    // Calculate paginated scans
+    // Fetch initial data from APIs
+    const loadDashboardData = useCallback(async () => {
+        setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+        try {
+            // Fetch all dashboard data in parallel
+            const [
+                metrics,
+                certificatesData,
+                encryptionData,
+                futureRiskData,
+                caData,
+                geoData,
+                trendsData,
+            ] = await Promise.all([
+                fetchDashboardMetrics(),
+                fetchCertificates({ page: 1, pageSize: 10 }),
+                fetchEncryptionStrength(),
+                fetchFutureRisk(),
+                fetchCALeaderboard(10),
+                fetchGeographicDistribution(10),
+                fetchValidityTrends(18),
+            ]);
+
+            setState((prev) => ({
+                ...prev,
+                metrics: metrics as DashboardMetrics,
+                recentScans: certificatesData.certificates,
+                encryptionStrength: encryptionData.map((e) => ({
+                    ...e,
+                    type: e.type as 'Strong' | 'Standard' | 'Modern' | 'Weak' | 'Deprecated',
+                })),
+                futureRisk: futureRiskData as FutureRisk,
+                caLeaderboard: caData as CALeaderboardEntry[],
+                geographicDistribution: geoData as GeographicEntry[],
+                validityTrend: trendsData as ValidityTrendPoint[],
+                isLoading: false,
+            }));
+
+            setPagination((prev) => ({
+                ...prev,
+                totalItems: certificatesData.pagination.total,
+            }));
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            setState((prev) => ({
+                ...prev,
+                isLoading: false,
+                error: 'Failed to load dashboard data. Please try again.',
+            }));
+        }
+    }, []);
+
+    // Load data on mount
+    useEffect(() => {
+        loadDashboardData();
+    }, [loadDashboardData]);
+
+    // Paginated scans - data is already paginated from API, no local slicing needed
     const paginatedScans = useMemo(() => {
-        const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
-        const endIndex = startIndex + pagination.itemsPerPage;
-        return state.recentScans.slice(startIndex, endIndex);
-    }, [state.recentScans, pagination.currentPage, pagination.itemsPerPage]);
+        // Return API-fetched data directly (already paginated by backend)
+        return state.recentScans;
+    }, [state.recentScans]);
 
-    // Calculate total pages
+    // Calculate total pages from API's total count
     const totalPages = useMemo(() => {
-        return Math.ceil(state.recentScans.length / pagination.itemsPerPage);
-    }, [state.recentScans.length, pagination.itemsPerPage]);
+        // Use pagination.totalItems (from API response) divided by itemsPerPage
+        return Math.max(1, Math.ceil(pagination.totalItems / pagination.itemsPerPage));
+    }, [pagination.totalItems, pagination.itemsPerPage]);
 
-    // Handle search functionality with filtering
-    const handleSearch = useCallback((query: string) => {
-        setState((prev) => {
-            if (!query.trim()) {
-                return {
-                    ...prev,
-                    search: { query: '', isActive: false, results: [] },
-                    recentScans: mockRecentScans,
-                };
-            }
-
-            const lowerQuery = query.toLowerCase();
-            const filteredScans = mockRecentScans.filter(
-                (scan) =>
-                    scan.domain.toLowerCase().includes(lowerQuery) ||
-                    scan.issuer.toLowerCase().includes(lowerQuery) ||
-                    scan.status.toLowerCase().includes(lowerQuery) ||
-                    scan.sslGrade.toLowerCase().includes(lowerQuery)
-            );
-
-            return {
+    // Handle search functionality with API call
+    const handleSearch = useCallback(async (query: string) => {
+        if (!query.trim()) {
+            // Reset to original data
+            const certificatesData = await fetchCertificates({ page: 1, pageSize: 50 });
+            setState((prev) => ({
                 ...prev,
-                search: { query, isActive: true, results: filteredScans },
-                recentScans: filteredScans,
-            };
-        });
+                search: { query: '', isActive: false, results: [] },
+                recentScans: certificatesData.certificates,
+            }));
+            setPagination((prev) => ({ ...prev, currentPage: 1 }));
+            return;
+        }
 
-        // Reset to first page on search
-        setPagination((prev) => ({ ...prev, currentPage: 1 }));
-    }, []);
-
-    // Handle filter application
-    const handleFilter = useCallback((filters: FilterOptions) => {
-        setState((prev) => {
-            let filteredScans = [...mockRecentScans];
-
-            // Filter by status
-            if (filters.status.length > 0) {
-                filteredScans = filteredScans.filter((scan) =>
-                    filters.status.includes(scan.status)
-                );
-            }
-
-            // Filter by SSL grade
-            if (filters.sslGrade.length > 0) {
-                filteredScans = filteredScans.filter((scan) =>
-                    filters.sslGrade.includes(scan.sslGrade)
-                );
-            }
-
-            // Filter by issuer
-            if (filters.issuer.length > 0) {
-                filteredScans = filteredScans.filter((scan) =>
-                    filters.issuer.some((issuer) =>
-                        scan.issuer.toLowerCase().includes(issuer.toLowerCase())
-                    )
-                );
-            }
-
-            return {
-                ...prev,
-                filters,
-                recentScans: filteredScans,
-            };
-        });
-
-        // Reset to first page on filter
-        setPagination((prev) => ({ ...prev, currentPage: 1 }));
-    }, []);
-
-    // Handle card clicks - simulates fetching related data
-    const handleCardClick = useCallback((cardType: string, data?: unknown) => {
-        console.log(`Card clicked: ${cardType}`, data);
-
-        // Simulate loading state
         setState((prev) => ({ ...prev, isLoading: true }));
 
-        // Simulate API call delay
-        setTimeout(() => {
-            let newScans: ScanEntry[] = [];
+        try {
+            const result = await fetchCertificates({ page: 1, pageSize: 50, search: query });
+            setState((prev) => ({
+                ...prev,
+                search: { query, isActive: true, results: result.certificates },
+                recentScans: result.certificates,
+                isLoading: false,
+            }));
+            setPagination((prev) => ({ ...prev, currentPage: 1 }));
+        } catch (error) {
+            console.error('Search error:', error);
+            setState((prev) => ({ ...prev, isLoading: false }));
+        }
+    }, []);
+
+    // Handle filter application with API call
+    const handleFilter = useCallback(async (filters: FilterOptions) => {
+        setState((prev) => ({ ...prev, isLoading: true, filters }));
+
+        try {
+            const result = await fetchCertificates({
+                page: 1,
+                pageSize: 50,
+                status: filters.status.length > 0 ? filters.status[0] : undefined,
+                issuer: filters.issuer.length > 0 ? filters.issuer[0] : undefined,
+            });
+
+            setState((prev) => ({
+                ...prev,
+                recentScans: result.certificates,
+                isLoading: false,
+            }));
+            setPagination((prev) => ({ ...prev, currentPage: 1 }));
+        } catch (error) {
+            console.error('Filter error:', error);
+            setState((prev) => ({ ...prev, isLoading: false }));
+        }
+    }, []);
+
+    // Handle card clicks - fetch related data with proper filters
+    const handleCardClick = useCallback(async (cardType: string, data?: unknown) => {
+        console.log(`Card clicked: ${cardType}`, data);
+        setState((prev) => ({ ...prev, isLoading: true }));
+
+        try {
+            let result;
+            const pageSize = 10; // Consistent pagination
 
             switch (cardType) {
                 case 'globalHealth':
-                    newScans = generateRandomScans(25);
+                    // Fetch ALL certificates with pagination (no filter)
+                    setActiveFilter({ type: 'all' });
+                    result = await fetchCertificates({ page: 1, pageSize });
                     break;
+
                 case 'activeCertificates':
-                    newScans = generateRandomScans(30).map((s) => ({ ...s, status: 'VALID' as const }));
+                    // Fetch only VALID certificates (not expired)
+                    setActiveFilter({ type: 'active' });
+                    result = await fetchCertificates({ page: 1, pageSize, status: 'VALID' });
                     break;
+
                 case 'expiringSoon':
-                    newScans = generateRandomScans(15).map((s) => ({ ...s, status: 'EXPIRING_SOON' as const }));
+                    // Fetch only certificates expiring within 30 days
+                    setActiveFilter({ type: 'expiringSoon' });
+                    result = await fetchCertificates({ page: 1, pageSize, status: 'EXPIRING_SOON' });
                     break;
+
                 case 'vulnerabilities':
-                    newScans = generateRandomScans(20).map((s) => ({
-                        ...s,
-                        vulnerabilities: ['1 Critical', '2 High', '3 Medium'][Math.floor(Math.random() * 3)],
-                    }));
+                    // Fetch certificates with vulnerabilities using SERVER-SIDE filtering
+                    setActiveFilter({ type: 'vulnerabilities' });
+                    result = await fetchCertificates({ page: 1, pageSize, hasVulnerabilities: true });
                     break;
+
+                case 'encryption':
                 case 'encryptionBar':
+                    // Fetch certificates with specific encryption type (e.g., "RSA 2048")
                     const encData = data as EncryptionStrength;
-                    console.log(`Filtering by encryption: ${encData?.name}`);
-                    newScans = generateRandomScans(18);
+                    setActiveFilter({ type: 'encryption', value: encData?.name });
+                    result = await fetchCertificates({
+                        page: 1,
+                        pageSize,
+                        encryptionType: encData?.name
+                    });
                     break;
+
                 case 'caLeaderboard':
+                    // Fetch certificates from specific CA
                     const caData = data as CALeaderboardEntry;
-                    newScans = generateRandomScans(22).map((s) => ({
-                        ...s,
-                        issuer: caData?.name || s.issuer,
-                    }));
+                    setActiveFilter({ type: 'ca', value: caData?.name });
+                    result = await fetchCertificates({
+                        page: 1,
+                        pageSize,
+                        issuer: caData?.name
+                    });
                     break;
+
                 case 'geographic':
+                    // Fetch certificates from specific country
                     const geoData = data as GeographicEntry;
-                    console.log(`Filtering by country: ${geoData?.country}`);
-                    newScans = generateRandomScans(16);
+                    setActiveFilter({ type: 'geographic', value: geoData?.country });
+                    result = await fetchCertificates({
+                        page: 1,
+                        pageSize,
+                        country: geoData?.country
+                    });
                     break;
+
                 case 'validityTrend':
-                    newScans = generateRandomScans(28);
+                    // Fetch certificates expiring in specific month
+                    const trendData = data as ValidityTrendPoint;
+                    setActiveFilter({ type: 'validityTrend', value: trendData?.month });
+
+                    // Parse month name and year from string like "Jan 2026"
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const parts = trendData?.month?.split(' ') || [];
+                    const monthName = parts[0];
+                    const year = parseInt(parts[1] || '2026');
+                    const monthIndex = monthNames.indexOf(monthName) + 1; // 1-based month
+
+                    result = await fetchCertificates({
+                        page: 1,
+                        pageSize,
+                        expiringMonth: monthIndex || undefined,
+                        expiringYear: year || undefined
+                    });
                     break;
-                case 'futureRisk':
-                    newScans = generateRandomScans(12).map((s) => ({
-                        ...s,
-                        status: ['WEAK', 'EXPIRING_SOON'][Math.floor(Math.random() * 2)] as 'WEAK' | 'EXPIRING_SOON',
-                    }));
-                    break;
+
                 default:
-                    newScans = mockRecentScans;
+                    setActiveFilter({ type: 'all' });
+                    result = await fetchCertificates({ page: 1, pageSize });
             }
 
             setState((prev) => ({
                 ...prev,
-                recentScans: newScans,
+                recentScans: result.certificates,
                 isLoading: false,
             }));
-
-            // Reset pagination
+            // Use API pagination total for accurate page count
             setPagination((prev) => ({
                 ...prev,
                 currentPage: 1,
-                totalItems: newScans.length,
+                itemsPerPage: 10,
+                totalItems: result.pagination?.total || result.certificates.length,
             }));
-        }, 300);
+        } catch (error) {
+            console.error('Card click error:', error);
+            setState((prev) => ({ ...prev, isLoading: false }));
+        }
     }, []);
 
-    // Set page for pagination
-    const setPage = useCallback((page: number) => {
-        setPagination((prev) => ({
-            ...prev,
-            currentPage: Math.max(1, Math.min(page, Math.ceil(prev.totalItems / prev.itemsPerPage))),
-        }));
-    }, []);
+    // Set page for pagination - fetches new page data from API
+    const setPage = useCallback(async (page: number) => {
+        const maxPage = Math.ceil(pagination.totalItems / pagination.itemsPerPage);
+        const newPage = Math.max(1, Math.min(page, maxPage));
 
-    // Reset filters
+        if (newPage === pagination.currentPage) return;
+
+        setState((prev) => ({ ...prev, isLoading: true }));
+
+        try {
+            let result;
+            const pageSize = 10;
+
+            // Fetch based on active filter type
+            switch (activeFilter.type) {
+                case 'all':
+                    result = await fetchCertificates({ page: newPage, pageSize });
+                    break;
+                case 'active':
+                    result = await fetchCertificates({ page: newPage, pageSize, status: 'VALID' });
+                    break;
+                case 'expiringSoon':
+                    result = await fetchCertificates({ page: newPage, pageSize, status: 'EXPIRING_SOON' });
+                    break;
+                case 'vulnerabilities':
+                    // Use server-side filtering for vulnerabilities
+                    result = await fetchCertificates({ page: newPage, pageSize, hasVulnerabilities: true });
+                    break;
+                case 'ca':
+                    result = await fetchCertificates({ page: newPage, pageSize, issuer: activeFilter.value });
+                    break;
+                case 'geographic':
+                    result = await fetchCertificates({ page: newPage, pageSize, country: activeFilter.value });
+                    break;
+                case 'encryption':
+                    result = await fetchCertificates({ page: newPage, pageSize, encryptionType: activeFilter.value });
+                    break;
+                case 'validityTrend':
+                    // Parse month/year from value like "Jan 2026"
+                    const vMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const vParts = (activeFilter.value as string)?.split(' ') || [];
+                    const vMonthName = vParts[0];
+                    const vYear = parseInt(vParts[1] || '2026');
+                    const vMonthIndex = vMonthNames.indexOf(vMonthName) + 1;
+                    result = await fetchCertificates({ page: newPage, pageSize, expiringMonth: vMonthIndex || undefined, expiringYear: vYear || undefined });
+                    break;
+                default:
+                    result = await fetchCertificates({ page: newPage, pageSize });
+            }
+
+            setState((prev) => ({
+                ...prev,
+                recentScans: result.certificates,
+                isLoading: false,
+            }));
+            setPagination((prev) => ({
+                ...prev,
+                currentPage: newPage,
+            }));
+        } catch (error) {
+            console.error('Pagination error:', error);
+            setState((prev) => ({ ...prev, isLoading: false }));
+        }
+    }, [activeFilter, pagination.totalItems, pagination.itemsPerPage, pagination.currentPage]);
+
+    // Reset filters and refresh data
     const resetFilters = useCallback(() => {
         setState((prev) => ({
             ...prev,
             filters: initialFilters,
             search: { query: '', isActive: false, results: [] },
-            recentScans: mockRecentScans,
         }));
         setPagination(initialPagination);
-    }, []);
+        loadDashboardData();
+    }, [loadDashboardData]);
+
+    // Manual refresh
+    const refreshData = useCallback(() => {
+        loadDashboardData();
+    }, [loadDashboardData]);
 
     return (
         <DashboardContext.Provider
@@ -266,6 +420,7 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 handleCardClick,
                 setPage,
                 resetFilters,
+                refreshData,
             }}
         >
             {children}

@@ -4,14 +4,15 @@ import React, { useEffect, useState, useMemo } from 'react';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
+import ProgressBar from '@/components/charts/ProgressBar';
 import { GlobeIcon, CertificateIcon } from '@/components/icons/Icons';
-import { fetchPageData, generateGeographicData, generatePageMetrics } from '@/controllers/pageController';
-import { ScanEntry } from '@/types/dashboard';
+import { fetchGeographicDistribution, fetchCertificates, fetchDashboardMetrics } from '@/controllers/pageController';
+import { ScanEntry, GeographicEntry } from '@/types/dashboard';
 
 export default function IssuerCountriesPage() {
     const [tableData, setTableData] = useState<ScanEntry[]>([]);
-    const [geoData, setGeoData] = useState<ReturnType<typeof generateGeographicData>>([]);
-    const [metrics, setMetrics] = useState<ReturnType<typeof generatePageMetrics> | null>(null);
+    const [geoData, setGeoData] = useState<GeographicEntry[]>([]);
+    const [metrics, setMetrics] = useState<{ total: number; countries: number; topCountry: string } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const itemsPerPage = 10;
@@ -19,10 +20,23 @@ export default function IssuerCountriesPage() {
     useEffect(() => {
         const loadData = async () => {
             setIsLoading(true);
-            const data = await fetchPageData('issuer-countries');
-            setMetrics(data.metrics);
-            setGeoData(generateGeographicData(10));
-            setTableData(data.tableData);
+            try {
+                const [dashboardMetrics, geoDistribution, certificates] = await Promise.all([
+                    fetchDashboardMetrics(),
+                    fetchGeographicDistribution(10),
+                    fetchCertificates({ page: 1, pageSize: 25 }),
+                ]);
+
+                setMetrics({
+                    total: dashboardMetrics.activeCertificates.count,
+                    countries: geoDistribution.length,
+                    topCountry: geoDistribution[0]?.country || 'N/A',
+                });
+                setGeoData(geoDistribution);
+                setTableData(certificates.certificates);
+            } catch (error) {
+                console.error('Error loading geographic data:', error);
+            }
             setIsLoading(false);
         };
         loadData();
@@ -43,22 +57,11 @@ export default function IssuerCountriesPage() {
         );
     }
 
-    const colors = [
-        'bg-primary-blue',
-        'bg-primary-purple',
-        'bg-accent-green',
-        'bg-accent-yellow',
-        'bg-primary-cyan',
-        'bg-accent-pink',
-        'bg-accent-orange',
-        'bg-text-muted',
-    ];
-
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl font-bold text-text-primary">Issuer Countries</h1>
-                <p className="text-text-muted mt-1">Geographic distribution of certificate issuers</p>
+                <p className="text-text-muted mt-1">Geographic distribution of SSL certificates</p>
             </div>
 
             {/* Metrics Row */}
@@ -72,45 +75,48 @@ export default function IssuerCountriesPage() {
                 <MetricCard
                     icon={<GlobeIcon className="w-6 h-6 text-accent-green" />}
                     iconBgColor="bg-accent-green/15"
-                    value={geoData.length}
+                    value={metrics?.countries || geoData.length}
                     label="Countries"
                 />
                 <MetricCard
                     icon={<GlobeIcon className="w-6 h-6 text-primary-purple" />}
                     iconBgColor="bg-primary-purple/15"
-                    value={geoData[0]?.country || 'N/A'}
+                    value={metrics?.topCountry || 'N/A'}
                     label="Top Country"
                 />
             </div>
 
-            {/* Country Distribution */}
-            <Card title="Certificates by Country">
-                <div className="space-y-3">
-                    {geoData.map((country, index) => (
-                        <div key={country.id} className="flex items-center gap-4">
-                            <span className="w-8 text-sm font-medium text-text-muted text-right">
-                                {index + 1}.
-                            </span>
-                            <div className="flex-1">
-                                <div
-                                    className={`h-8 rounded-lg flex items-center px-3 ${colors[index % colors.length]}`}
-                                    style={{ width: `${Math.max(country.percentage, 20)}%` }}
-                                >
-                                    <span className="text-xs font-medium text-white truncate">
-                                        {country.country} ({country.percentage}%)
-                                    </span>
-                                </div>
-                            </div>
-                            <span className="text-sm text-text-muted w-20 text-right">
-                                {country.count} certs
-                            </span>
-                        </div>
-                    ))}
+            {/* Geographic Distribution */}
+            <Card title="Issuer Countries Heat Map">
+                <div className="space-y-4">
+                    {geoData.map((geo, index) => {
+                        const colors = [
+                            'bg-primary-blue',
+                            'bg-accent-green',
+                            'bg-primary-purple',
+                            'bg-primary-cyan',
+                            'bg-accent-yellow',
+                            'bg-accent-pink',
+                            'bg-accent-orange',
+                            'bg-text-muted',
+                        ];
+                        return (
+                            <ProgressBar
+                                key={geo.id}
+                                value={geo.percentage}
+                                maxValue={100}
+                                label={geo.country}
+                                valueLabel={`${geo.percentage}%`}
+                                color={colors[index % colors.length]}
+                                height="md"
+                            />
+                        );
+                    })}
                 </div>
             </Card>
 
             {/* Table */}
-            <Card title="Certificates by Location">
+            <Card title="Certificates by Country">
                 <DataTable
                     data={paginatedData}
                     currentPage={currentPage}

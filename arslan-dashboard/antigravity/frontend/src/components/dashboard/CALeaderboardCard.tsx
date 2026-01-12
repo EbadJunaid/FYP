@@ -2,7 +2,6 @@
 
 import React from 'react';
 import Card from '@/components/Card';
-import ProgressBar from '@/components/charts/ProgressBar';
 import { CALeaderboardEntry } from '@/types/dashboard';
 
 interface CALeaderboardCardProps {
@@ -23,16 +22,25 @@ export default function CALeaderboardCard({ data, onItemClick }: CALeaderboardCa
                     <div
                         key={ca.id}
                         onClick={() => onItemClick?.(ca)}
-                        className="cursor-pointer"
+                        className="cursor-pointer group"
                     >
-                        <ProgressBar
-                            value={ca.count}
-                            maxValue={ca.maxCount}
-                            label={ca.name}
-                            valueLabel={`${ca.count}%`}
-                            color={ca.color}
-                            height="sm"
-                        />
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm text-text-primary group-hover:text-primary-blue transition-colors">
+                                {ca.name}
+                            </span>
+                            <span className="text-sm font-medium text-text-secondary">
+                                {ca.percentage}%
+                            </span>
+                        </div>
+                        <div className="h-2 bg-background rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-all duration-500 group-hover:opacity-80"
+                                style={{
+                                    width: `${Math.min(ca.percentage * 2, 100)}%`,
+                                    backgroundColor: ca.color,
+                                }}
+                            />
+                        </div>
                     </div>
                 ))}
             </div>

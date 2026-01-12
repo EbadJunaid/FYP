@@ -1,160 +1,230 @@
-// Controllers for dashboard pages - Mock data generation and logic
+// Controllers for dashboard pages - Real API integration
+// Replaces mock data with actual API calls
 
+import { apiClient, Certificate, DashboardMetrics, EncryptionStrength, ValidityTrend, CALeaderboardEntry, GeographicEntry, FutureRisk, UniqueFilters } from '@/services/apiClient';
 import { ScanEntry, SSLGrade, CertificateStatus } from '@/types/dashboard';
 
-// Generate random metrics for a page
-export function generatePageMetrics(pageType: string) {
-    const baseMetrics = {
-        total: Math.floor(Math.random() * 10000) + 1000,
-        active: Math.floor(Math.random() * 8000) + 500,
-        expired: Math.floor(Math.random() * 500) + 50,
-        expiringSoon: Math.floor(Math.random() * 200) + 20,
-        trend: (Math.random() * 10 - 5).toFixed(1),
+// Convert API Certificate to ScanEntry for table display
+function certificateToScanEntry(cert: Certificate): ScanEntry {
+    // Format date to YYYY-MM-DD (date only, no time)
+    const formatDateOnly = (dateStr: string): string => {
+        try {
+            const date = new Date(dateStr);
+            return date.toISOString().split('T')[0];
+        } catch {
+            return dateStr;
+        }
     };
 
-    switch (pageType) {
-        case 'active-vs-expired':
-            return {
-                ...baseMetrics,
-                activePercentage: ((baseMetrics.active / baseMetrics.total) * 100).toFixed(1),
-                expiredPercentage: ((baseMetrics.expired / baseMetrics.total) * 100).toFixed(1),
-            };
-        case 'validity-analytics':
-            return {
-                ...baseMetrics,
-                avgValidityDays: Math.floor(Math.random() * 365) + 30,
-                minValidityDays: Math.floor(Math.random() * 30) + 1,
-                maxValidityDays: Math.floor(Math.random() * 365) + 365,
-            };
-        case 'ca-analytics':
-            return {
-                ...baseMetrics,
-                uniqueCAs: Math.floor(Math.random() * 50) + 10,
-                topCA: ['DigiCert', 'Let\'s Encrypt', 'GlobalSign', 'Sectigo'][Math.floor(Math.random() * 4)],
-            };
-        default:
-            return baseMetrics;
+    return {
+        id: cert.id,
+        domain: cert.domain,
+        scanDate: formatDateOnly(cert.scanDate),
+        endDate: formatDateOnly(cert.validTo),
+        sslGrade: cert.grade as SSLGrade,
+        vulnerabilities: cert.vulnerabilities,
+        issuer: cert.issuer,
+        status: cert.status as CertificateStatus,
+        country: cert.country,
+        encryptionType: cert.encryptionType,
+    };
+}
+
+// Fetch dashboard metrics from API
+export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
+    try {
+        return await apiClient.getGlobalHealth();
+    } catch (error) {
+        console.error('Error fetching dashboard metrics:', error);
+        // Return default values on error
+        return {
+            globalHealth: { score: 0, maxScore: 100, status: 'CRITICAL', lastUpdated: 'N/A' },
+            activeCertificates: { count: 0, total: 0 },
+            expiringSoon: { count: 0, daysThreshold: 30, actionNeeded: false },
+            criticalVulnerabilities: { count: 0, new: 0 },
+        };
     }
 }
 
-// Generate chart data for different page types
+// Fetch certificates with filters and pagination
+export async function fetchCertificates(params?: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+    country?: string;
+    issuer?: string;
+    search?: string;
+    encryptionType?: string;
+    hasVulnerabilities?: boolean;
+    expiringMonth?: number;
+    expiringYear?: number;
+}): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
+    try {
+        const result = await apiClient.getCertificates(params);
+        return {
+            certificates: result.certificates.map(certificateToScanEntry),
+            pagination: {
+                page: result.pagination.page,
+                total: result.pagination.total,
+                totalPages: result.pagination.totalPages,
+            },
+        };
+    } catch (error) {
+        console.error('Error fetching certificates:', error);
+        return { certificates: [], pagination: { page: 1, total: 0, totalPages: 0 } };
+    }
+}
+
+// Fetch single certificate by ID
+export async function fetchCertificateById(id: string): Promise<Certificate | null> {
+    try {
+        return await apiClient.getCertificateById(id);
+    } catch (error) {
+        console.error('Error fetching certificate:', error);
+        return null;
+    }
+}
+
+// Fetch unique filter options
+export async function fetchUniqueFilters(): Promise<UniqueFilters> {
+    try {
+        return await apiClient.getUniqueFilters();
+    } catch (error) {
+        console.error('Error fetching filters:', error);
+        return { issuers: [], countries: [], statuses: [], grades: [], validationLevels: [] };
+    }
+}
+
+// Fetch encryption strength distribution
+export async function fetchEncryptionStrength(): Promise<EncryptionStrength[]> {
+    try {
+        return await apiClient.getEncryptionStrength();
+    } catch (error) {
+        console.error('Error fetching encryption strength:', error);
+        return [];
+    }
+}
+
+// Fetch validity trends
+export async function fetchValidityTrends(months: number = 12): Promise<ValidityTrend[]> {
+    try {
+        return await apiClient.getValidityTrends(months);
+    } catch (error) {
+        console.error('Error fetching validity trends:', error);
+        return [];
+    }
+}
+
+// Fetch CA leaderboard
+export async function fetchCALeaderboard(limit: number = 10): Promise<CALeaderboardEntry[]> {
+    try {
+        return await apiClient.getCAAnalytics(limit);
+    } catch (error) {
+        console.error('Error fetching CA leaderboard:', error);
+        return [];
+    }
+}
+
+// Fetch geographic distribution
+export async function fetchGeographicDistribution(limit: number = 10): Promise<GeographicEntry[]> {
+    try {
+        return await apiClient.getGeographicDistribution(limit);
+    } catch (error) {
+        console.error('Error fetching geographic distribution:', error);
+        return [];
+    }
+}
+
+// Fetch future risk prediction
+export async function fetchFutureRisk(): Promise<FutureRisk> {
+    try {
+        return await apiClient.getFutureRisk();
+    } catch (error) {
+        console.error('Error fetching future risk:', error);
+        return {
+            confidenceLevel: 0,
+            riskLevel: 'Low',
+            projectedThreats: [],
+        };
+    }
+}
+
+// Fetch vulnerabilities
+export async function fetchVulnerabilities(page: number = 1, pageSize: number = 10) {
+    try {
+        return await apiClient.getVulnerabilities(page, pageSize);
+    } catch (error) {
+        console.error('Error fetching vulnerabilities:', error);
+        return { certificates: [], summary: { critical: 0, warning: 0, total: 0 }, pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 } };
+    }
+}
+
+// Legacy functions for backwards compatibility with existing pages
+// These will use real API data
+
+export function generatePageMetrics(pageType: string) {
+    // Return empty metrics - will be fetched from API
+    return {
+        total: 0,
+        active: 0,
+        expired: 0,
+        expiringSoon: 0,
+        trend: '0',
+    };
+}
+
 export function generateChartData(pageType: string, count: number = 6) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    switch (pageType) {
-        case 'trends':
-            return months.slice(0, count).map(month => ({
-                month,
-                certificates: Math.floor(Math.random() * 500) + 100,
-                expired: Math.floor(Math.random() * 50) + 5,
-            }));
-        case 'type-distribution':
-            return [
-                { name: 'DV (Domain Validated)', value: Math.floor(Math.random() * 60) + 30, color: '#3b82f6' },
-                { name: 'OV (Organization Validated)', value: Math.floor(Math.random() * 30) + 10, color: '#10b981' },
-                { name: 'EV (Extended Validation)', value: Math.floor(Math.random() * 15) + 5, color: '#8b5cf6' },
-            ];
-        case 'signature-hash':
-            return [
-                { name: 'SHA-256', percentage: Math.floor(Math.random() * 30) + 60, color: '#10b981' },
-                { name: 'SHA-384', percentage: Math.floor(Math.random() * 20) + 10, color: '#3b82f6' },
-                { name: 'SHA-512', percentage: Math.floor(Math.random() * 10) + 5, color: '#8b5cf6' },
-                { name: 'SHA-1 (Deprecated)', percentage: Math.floor(Math.random() * 5) + 1, color: '#ef4444' },
-            ];
-        default:
-            return months.slice(0, count).map(month => ({
-                month,
-                value: Math.floor(Math.random() * 1000) + 100,
-            }));
-    }
+    // Return empty data - will be fetched from API
+    return [];
 }
 
-// Generate table data for pages
 export function generateTableData(pageType: string, count: number = 10): ScanEntry[] {
-    const domains = [
-        'api.example.com', 'secure.banking.io', 'shop.store.net', 'app.saas.io',
-        'portal.enterprise.com', 'cdn.media.net', 'auth.identity.io', 'dashboard.admin.com',
-        'staging.dev.io', 'production.live.net', 'mail.corporate.com', 'blog.tech.org',
-        'support.help.io', 'docs.api.dev', 'status.monitor.com',
-    ];
-
-    const issuers = ['DigiCert Inc.', 'GlobalSign', "Let's Encrypt", 'Sectigo', 'Entrust Datacard', 'GoDaddy', 'Comodo'];
-    const grades: SSLGrade[] = ['A+', 'A', 'A-', 'B+', 'B', 'C', 'F'];
-    const statuses: CertificateStatus[] = ['VALID', 'VALID', 'VALID', 'EXPIRED', 'WEAK', 'EXPIRING_SOON'];
-    const vulns = ['0 Found', '1 Low', '2 Medium', '1 High', '3 Critical'];
-
-    return Array.from({ length: count }, (_, i) => ({
-        id: `${pageType}-${i + 1}`,
-        domain: domains[Math.floor(Math.random() * domains.length)],
-        scanDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-        }),
-        sslGrade: grades[Math.floor(Math.random() * grades.length)],
-        vulnerabilities: vulns[Math.floor(Math.random() * vulns.length)],
-        issuer: issuers[Math.floor(Math.random() * issuers.length)],
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-    }));
+    // Return empty data - will be fetched from API
+    return [];
 }
 
-// Generate geographic data
 export function generateGeographicData(count: number = 10) {
-    const countries = [
-        'United States', 'United Kingdom', 'Germany', 'France', 'Japan',
-        'Canada', 'Australia', 'Netherlands', 'Singapore', 'India',
-        'Brazil', 'South Korea', 'Ireland', 'Sweden', 'Switzerland',
-    ];
-
-    return countries.slice(0, count).map((country, i) => ({
-        id: `country-${i}`,
-        country,
-        count: Math.floor(Math.random() * 500) + 50,
-        percentage: Math.floor(Math.random() * 30) + (count - i) * 5,
-    })).sort((a, b) => b.percentage - a.percentage);
+    return [];
 }
 
-// Generate CA leaderboard data
 export function generateCAData(count: number = 8) {
-    const cas = [
-        'DigiCert Inc.', 'Let\'s Encrypt', 'GlobalSign', 'Sectigo (Comodo)',
-        'Entrust Datacard', 'GoDaddy', 'Amazon Trust Services', 'Google Trust Services',
-    ];
-
-    return cas.slice(0, count).map((name, i) => ({
-        id: `ca-${i}`,
-        name,
-        count: Math.floor(Math.random() * 30) + (count - i) * 10,
-        certificates: Math.floor(Math.random() * 500) + 100,
-    })).sort((a, b) => b.count - a.count);
+    return [];
 }
 
-// Generate SAN analytics data
 export function generateSANData(count: number = 10) {
-    return Array.from({ length: count }, (_, i) => ({
-        id: `san-${i}`,
-        domain: `*.example${i + 1}.com`,
-        sanCount: Math.floor(Math.random() * 20) + 1,
-        type: ['Wildcard', 'Multi-domain', 'Single'][Math.floor(Math.random() * 3)],
-        coverage: Math.floor(Math.random() * 50) + 10,
-    }));
+    return [];
 }
 
-// Async mock fetch function - simulates API call
+// Async fetch function for page data (now uses real API)
 export async function fetchPageData(pageType: string): Promise<{
     metrics: ReturnType<typeof generatePageMetrics>;
     chartData: ReturnType<typeof generateChartData>;
     tableData: ScanEntry[];
 }> {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 300));
+    try {
+        // Fetch real data from API
+        const [metricsData, certificatesData] = await Promise.all([
+            fetchDashboardMetrics(),
+            fetchCertificates({ page: 1, pageSize: 25 }),
+        ]);
 
-    return {
-        metrics: generatePageMetrics(pageType),
-        chartData: generateChartData(pageType),
-        tableData: generateTableData(pageType, 25),
-    };
+        return {
+            metrics: {
+                total: certificatesData.pagination.total,
+                active: metricsData.activeCertificates.count,
+                expired: metricsData.expiredCertificates?.count || 0,
+                expiringSoon: metricsData.expiringSoon.count,
+                trend: '0',
+            },
+            chartData: [],
+            tableData: certificatesData.certificates,
+        };
+    } catch (error) {
+        console.error('Error fetching page data:', error);
+        return {
+            metrics: generatePageMetrics(pageType),
+            chartData: [],
+            tableData: [],
+        };
+    }
 }

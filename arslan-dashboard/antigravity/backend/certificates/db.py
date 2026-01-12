@@ -2,15 +2,16 @@
 from pymongo import MongoClient
 from django.conf import settings
 
-# This utility ensures we don't create a new connection on every request
+# MongoDB Connection Singleton
 class MongoDBClient:
     _client = None
 
     @classmethod
     def get_db(cls):
         if cls._client is None:
-            # In a production MVC, these would be in settings.py or .env
+            # Connect to MongoDB
             cls._client = MongoClient("mongodb://localhost:27017/")
-        return cls._client['antigravity']
+        # Use the correct database name
+        return cls._client['latest-pk-domains']
 
 db = MongoDBClient.get_db()

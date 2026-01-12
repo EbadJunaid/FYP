@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { ScanEntry, SSLGrade, CertificateStatus } from '@/types/dashboard';
 import { GlobeIcon } from '@/components/icons/Icons';
 import Pagination from '@/components/Pagination';
@@ -14,6 +15,7 @@ interface DataTableProps {
     totalPages: number;
     onPageChange: (page: number) => void;
     showPagination?: boolean;
+    enableNavigation?: boolean; // Navigate to certificate detail on click
 }
 
 // SSL Grade Badge Component
@@ -88,10 +90,18 @@ export default function DataTable({
     totalPages,
     onPageChange,
     showPagination = true,
+    enableNavigation = true,
 }: DataTableProps) {
+    const router = useRouter();
+
     const handleRowClick = (entry: ScanEntry) => {
         console.log('Row clicked:', entry);
         onRowClick?.(entry);
+
+        // Navigate to certificate detail page if enabled
+        if (enableNavigation && entry.id) {
+            router.push(`/certificate/${entry.id}`);
+        }
     };
 
     return (
@@ -105,16 +115,25 @@ export default function DataTable({
                                 Domain
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
-                                Scan Date
+                                Start Date
+                            </th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
+                                End Date
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 SSL Grade
+                            </th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
+                                Encryption
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 Vulnerabilities
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 Issuer
+                            </th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
+                                Country
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 Status
@@ -124,7 +143,7 @@ export default function DataTable({
                     <tbody>
                         {data.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="py-8 text-center text-text-muted">
+                                <td colSpan={9} className="py-8 text-center text-text-muted">
                                     No data available
                                 </td>
                             </tr>
@@ -147,13 +166,24 @@ export default function DataTable({
                                         <span className="text-sm text-text-secondary">{entry.scanDate}</span>
                                     </td>
                                     <td className="py-4 px-4">
+                                        <span className="text-sm text-text-secondary">{entry.endDate || 'N/A'}</span>
+                                    </td>
+                                    <td className="py-4 px-4">
                                         <GradeBadge grade={entry.sslGrade} />
+                                    </td>
+                                    <td className="py-4 px-4">
+                                        <span className="text-xs font-mono text-text-secondary bg-background px-2 py-1 rounded">
+                                            {entry.encryptionType || 'Unknown'}
+                                        </span>
                                     </td>
                                     <td className="py-4 px-4">
                                         <VulnBadge text={entry.vulnerabilities} />
                                     </td>
                                     <td className="py-4 px-4">
                                         <span className="text-sm text-text-secondary">{entry.issuer}</span>
+                                    </td>
+                                    <td className="py-4 px-4">
+                                        <span className="text-sm text-text-secondary">{entry.country || 'Unknown'}</span>
                                     </td>
                                     <td className="py-4 px-4">
                                         <StatusBadge status={entry.status} />

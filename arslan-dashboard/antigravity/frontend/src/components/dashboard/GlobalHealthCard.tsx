@@ -7,7 +7,7 @@ import { TrendUpIcon } from '@/components/icons/Icons';
 interface GlobalHealthCardProps {
     score: number;
     maxScore: number;
-    trend: number;
+    trend?: number;
     status: 'SECURE' | 'AT_RISK' | 'CRITICAL';
     lastUpdated: string;
     onClick?: () => void;

@@ -13,7 +13,7 @@ export default function GeographicDistributionCard({ data, onItemClick }: Geogra
     return (
         <Card
             title="Geographic Distribution"
-            subtitle="Server Locations"
+            subtitle="Domain Countries"
             className="hover-lift h-full"
             detailsLink="/dashboard/issuer-countries"
         >

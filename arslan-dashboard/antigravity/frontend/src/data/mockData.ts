@@ -15,13 +15,12 @@ export const mockDashboardMetrics: DashboardMetrics = {
     globalHealth: {
         score: 85,
         maxScore: 100,
-        trend: 2.4,
         status: 'SECURE',
         lastUpdated: '2m ago',
     },
     activeCertificates: {
         count: 1248,
-        trend: 2.4,
+        total: 1300,
     },
     expiringSoon: {
         count: 12,
@@ -90,11 +89,11 @@ export const mockFutureRisk: FutureRisk = {
 
 // CA Leaderboard
 export const mockCALeaderboard: CALeaderboardEntry[] = [
-    { id: 'digicert', name: 'DigiCert Inc.', count: 86, maxCount: 100, color: '#3b82f6' },
-    { id: 'globalsign', name: 'GlobalSign', count: 94, maxCount: 100, color: '#10b981' },
-    { id: 'entrust', name: 'Entrust Datacard', count: 91, maxCount: 100, color: '#8b5cf6' },
-    { id: 'letsencrypt', name: "Let's Encrypt", count: 85, maxCount: 100, color: '#06b6d4' },
-    { id: 'godaddy', name: 'GoDaddy', count: 72, maxCount: 100, color: '#f59e0b' },
+    { id: 'digicert', name: 'DigiCert Inc.', count: 86, maxCount: 100, percentage: 25.5, color: '#3b82f6' },
+    { id: 'globalsign', name: 'GlobalSign', count: 94, maxCount: 100, percentage: 22.3, color: '#10b981' },
+    { id: 'entrust', name: 'Entrust Datacard', count: 91, maxCount: 100, percentage: 18.7, color: '#8b5cf6' },
+    { id: 'letsencrypt', name: "Let's Encrypt", count: 85, maxCount: 100, percentage: 15.8, color: '#06b6d4' },
+    { id: 'godaddy', name: 'GoDaddy', count: 72, maxCount: 100, percentage: 10.2, color: '#f59e0b' },
 ];
 
 // Geographic Distribution

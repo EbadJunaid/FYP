@@ -6,13 +6,13 @@ import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import ProgressBar from '@/components/charts/ProgressBar';
 import { CertificateIcon, GlobeIcon } from '@/components/icons/Icons';
-import { fetchPageData, generateCAData, generatePageMetrics } from '@/controllers/pageController';
-import { ScanEntry } from '@/types/dashboard';
+import { fetchCALeaderboard, fetchCertificates, fetchDashboardMetrics } from '@/controllers/pageController';
+import { ScanEntry, CALeaderboardEntry } from '@/types/dashboard';
 
 export default function CAAnalyticsPage() {
     const [tableData, setTableData] = useState<ScanEntry[]>([]);
-    const [caData, setCAData] = useState<ReturnType<typeof generateCAData>>([]);
-    const [metrics, setMetrics] = useState<ReturnType<typeof generatePageMetrics> | null>(null);
+    const [caData, setCAData] = useState<CALeaderboardEntry[]>([]);
+    const [metrics, setMetrics] = useState<{ total: number; uniqueCAs: number; topCA: string } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const itemsPerPage = 10;
@@ -20,10 +20,23 @@ export default function CAAnalyticsPage() {
     useEffect(() => {
         const loadData = async () => {
             setIsLoading(true);
-            const data = await fetchPageData('ca-analytics');
-            setMetrics(data.metrics);
-            setCAData(generateCAData(8));
-            setTableData(data.tableData);
+            try {
+                const [dashboardMetrics, caLeaderboard, certificates] = await Promise.all([
+                    fetchDashboardMetrics(),
+                    fetchCALeaderboard(8),
+                    fetchCertificates({ page: 1, pageSize: 25 }),
+                ]);
+
+                setMetrics({
+                    total: dashboardMetrics.activeCertificates.count,
+                    uniqueCAs: caLeaderboard.length,
+                    topCA: caLeaderboard[0]?.name || 'N/A',
+                });
+                setCAData(caLeaderboard);
+                setTableData(certificates.certificates);
+            } catch (error) {
+                console.error('Error loading CA analytics:', error);
+            }
             setIsLoading(false);
         };
         loadData();
@@ -35,7 +48,7 @@ export default function CAAnalyticsPage() {
     }, [tableData, currentPage]);
 
     const totalPages = Math.ceil(tableData.length / itemsPerPage);
-    const maxCount = Math.max(...caData.map(c => c.count));
+    const maxCount = caData.length > 0 ? Math.max(...caData.map(c => c.count)) : 1;
 
     if (isLoading) {
         return (
@@ -63,13 +76,13 @@ export default function CAAnalyticsPage() {
                 <MetricCard
                     icon={<GlobeIcon className="w-6 h-6 text-accent-green" />}
                     iconBgColor="bg-accent-green/15"
-                    value={(metrics as { uniqueCAs?: number })?.uniqueCAs || caData.length}
+                    value={metrics?.uniqueCAs || caData.length}
                     label="Unique CAs"
                 />
                 <MetricCard
                     icon={<CertificateIcon className="w-6 h-6 text-primary-purple" />}
                     iconBgColor="bg-primary-purple/15"
-                    value={(metrics as { topCA?: string })?.topCA || caData[0]?.name || 'N/A'}
+                    value={metrics?.topCA || 'N/A'}
                     label="Top CA"
                 />
             </div>
@@ -94,7 +107,7 @@ export default function CAAnalyticsPage() {
                                 value={ca.count}
                                 maxValue={maxCount}
                                 label={ca.name}
-                                valueLabel={`${ca.certificates} certs`}
+                                valueLabel={`${ca.count} certs`}
                                 color={colors[index % colors.length]}
                                 height="md"
                             />
