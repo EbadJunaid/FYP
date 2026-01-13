@@ -127,3 +127,12 @@ class AnalyticsController:
                 }
             ]
         }
+
+
+class NotificationController:
+    """Controller for notification-related operations"""
+    
+    @staticmethod
+    def get_notifications() -> Dict:
+        """Get all notifications from real-time certificate data"""
+        return CertificateModel.get_notifications()

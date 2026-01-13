@@ -16,6 +16,7 @@ export default function GeographicDistributionCard({ data, onItemClick }: Geogra
             subtitle="Domain Countries"
             className="hover-lift h-full"
             detailsLink="/dashboard/issuer-countries"
+            infoTooltip="Certificate distribution by domain country (derived from TLD). Click on a country to filter certificates from that region."
         >
             <div className="space-y-3">
                 {data.map((item) => (

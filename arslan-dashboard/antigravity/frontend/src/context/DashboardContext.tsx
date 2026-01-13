@@ -34,6 +34,8 @@ interface DashboardContextType {
     pagination: PaginationState;
     paginatedScans: ScanEntry[];
     totalPages: number;
+    tableTitle: string; // Dynamic table title based on active filter
+    activeFilter: ActiveFilter; // Exposed for download modal
     handleSearch: (query: string) => void;
     handleFilter: (filters: FilterOptions) => void;
     handleCardClick: (cardType: string, data?: unknown) => void;
@@ -80,8 +82,8 @@ interface DashboardProviderProps {
     children: ReactNode;
 }
 
-// Active filter type for card clicks
-interface ActiveFilter {
+// Active filter type for card clicks (exported for DownloadModal)
+export interface ActiveFilter {
     type: 'all' | 'active' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend';
     value?: string;
 }
@@ -408,6 +410,31 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
         loadDashboardData();
     }, [loadDashboardData]);
 
+    // Compute dynamic table title based on active filter
+    const tableTitle = useMemo(() => {
+        switch (activeFilter.type) {
+            case 'active':
+                return 'Active Certificates';
+            case 'expiringSoon':
+                return 'Expiring Soon Certificates';
+            case 'vulnerabilities':
+                return 'Certificates with Vulnerabilities';
+            case 'ca':
+                return activeFilter.value === 'Others'
+                    ? 'Other CAs Certificates'
+                    : `${activeFilter.value || 'CA'} Certificates`;
+            case 'geographic':
+                return `${activeFilter.value || 'Country'} Certificates`;
+            case 'encryption':
+                return `${activeFilter.value || 'Encryption'} Certificates`;
+            case 'validityTrend':
+                return `Certificates Expiring ${activeFilter.value || 'in Selected Month'}`;
+            case 'all':
+            default:
+                return 'Recent Scans';
+        }
+    }, [activeFilter]);
+
     return (
         <DashboardContext.Provider
             value={{
@@ -415,6 +442,8 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 pagination,
                 paginatedScans,
                 totalPages,
+                tableTitle,
+                activeFilter,
                 handleSearch,
                 handleFilter,
                 handleCardClick,

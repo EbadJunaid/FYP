@@ -1,8 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import GaugeChart from '@/components/charts/GaugeChart';
 import { TrendUpIcon } from '@/components/icons/Icons';
+
+// Info icon component
+const InfoIcon = ({ className = '' }: { className?: string }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
 
 interface GlobalHealthCardProps {
     score: number;
@@ -21,6 +28,8 @@ export default function GlobalHealthCard({
     lastUpdated,
     onClick,
 }: GlobalHealthCardProps) {
+    const [showTooltip, setShowTooltip] = useState(false);
+
     const getStatusBadge = () => {
         switch (status) {
             case 'SECURE':
@@ -58,8 +67,24 @@ export default function GlobalHealthCard({
             className={`bg-card-bg border border-card-border rounded-2xl p-5 hover-lift transition-all duration-200 ${onClick ? 'cursor-pointer' : ''}`}
             onClick={onClick}
         >
-            {/* Title */}
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-4">GLOBAL HEALTH</p>
+            {/* Title with Info Icon */}
+            <div className="flex items-center justify-between mb-4">
+                <p className="text-xs text-text-muted uppercase tracking-wider">GLOBAL HEALTH</p>
+                <div
+                    className="relative"
+                    onMouseEnter={() => setShowTooltip(true)}
+                    onMouseLeave={() => setShowTooltip(false)}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <InfoIcon className="w-4 h-4 text-text-muted hover:text-primary-blue cursor-help transition-colors" />
+                    {showTooltip && (
+                        <div className="absolute z-50 right-0 top-full mt-2 w-52 px-3 py-2 bg-background border border-card-border rounded-lg shadow-lg text-xs text-text-secondary">
+                            <div className="absolute -top-1 right-2 w-2 h-2 bg-background border-l border-t border-card-border rotate-45" />
+                            Overall SSL health score based on certificate grades, expiration status, and vulnerability count.
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {/* Main Content Row */}
             <div className="flex items-center justify-between">

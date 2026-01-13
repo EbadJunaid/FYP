@@ -8,10 +8,11 @@ import { ValidityTrendPoint } from '@/types/dashboard';
 interface ValidityTrendCardProps {
     data: ValidityTrendPoint[];
     onClick?: () => void;
+    onDataPointClick?: (dataPoint: ValidityTrendPoint) => void;
     isFullWidth?: boolean;
 }
 
-export default function ValidityTrendCard({ data, onClick, isFullWidth = false }: ValidityTrendCardProps) {
+export default function ValidityTrendCard({ data, onClick, onDataPointClick, isFullWidth = false }: ValidityTrendCardProps) {
     const [showFullData, setShowFullData] = useState(false);
 
     // Handle responsive data display
@@ -36,13 +37,17 @@ export default function ValidityTrendCard({ data, onClick, isFullWidth = false }
         <Card
             title="Validity Trend"
             subtitle={subtitle}
-            onClick={onClick}
-            isClickable={!!onClick}
+            onClick={!onDataPointClick ? onClick : undefined}
+            isClickable={!onDataPointClick && !!onClick}
             className="hover-lift h-full"
             detailsLink="/dashboard/validity-analytics"
+            infoTooltip="Certificate expiration trends over months. Click on a data point to filter certificates expiring in that month."
         >
             <div className="h-[200px]">
-                <LineChartComponent data={displayData} />
+                <LineChartComponent
+                    data={displayData}
+                    onDataPointClick={onDataPointClick}
+                />
             </div>
         </Card>
     );

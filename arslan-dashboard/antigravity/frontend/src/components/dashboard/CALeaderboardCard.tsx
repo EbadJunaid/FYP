@@ -16,6 +16,7 @@ export default function CALeaderboardCard({ data, onItemClick }: CALeaderboardCa
             subtitle="Certificate Authority Ranking"
             className="hover-lift h-full"
             detailsLink="/dashboard/ca-analytics"
+            infoTooltip="Top certificate authorities by issuance count. Click on a CA to filter certificates issued by that authority."
         >
             <div className="space-y-3">
                 {data.map((ca) => (

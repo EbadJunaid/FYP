@@ -8,6 +8,7 @@ import { ScanEntry } from '@/types/dashboard';
 
 interface RecentScansCardProps {
     data: ScanEntry[];
+    title?: string; // Dynamic title based on active filter
     onRowClick?: (entry: ScanEntry) => void;
     onFilterClick?: () => void;
     onDownloadClick?: () => void;
@@ -19,6 +20,7 @@ interface RecentScansCardProps {
 
 export default function RecentScansCard({
     data,
+    title = 'Recent Scans', // Default title
     onRowClick,
     onFilterClick,
     onDownloadClick,
@@ -28,7 +30,7 @@ export default function RecentScansCard({
 }: RecentScansCardProps) {
     return (
         <Card
-            title="Recent Scans"
+            title={title}
             headerAction={
                 <div className="flex items-center gap-2">
                     <button
@@ -47,6 +49,7 @@ export default function RecentScansCard({
                     </button>
                 </div>
             }
+            infoTooltip="List of SSL certificates with key details. Click on a row to view certificate details."
         >
             <DataTable
                 data={data}

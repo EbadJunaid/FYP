@@ -740,3 +740,150 @@ class CertificateModel:
             }
             for i, (country, count) in enumerate(sorted_countries)
         ]
+
+    @classmethod
+    def get_notifications(cls) -> Dict:
+        """
+        Get real-time notification data based on certificate status.
+        Uses efficient aggregation for counting.
+        """
+        from datetime import datetime, timezone, timedelta
+        
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        plus_2_days = (now + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        plus_7_days = (now + timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # Use $facet for efficient multi-aggregation in single query
+        pipeline = [
+            {'$facet': {
+                'expiring_2_days': [
+                    {'$match': {
+                        'parsed.validity.end': {'$gte': now_str, '$lte': plus_2_days}
+                    }},
+                    {'$count': 'count'}
+                ],
+                'expiring_7_days': [
+                    {'$match': {
+                        'parsed.validity.end': {'$gte': now_str, '$lte': plus_7_days}
+                    }},
+                    {'$count': 'count'}
+                ],
+                'vulnerabilities': [
+                    {'$match': {
+                        'zlint.errors_present': True,
+                        'parsed.validity.end': {'$gt': now_str}
+                    }},
+                    {'$count': 'count'}
+                ],
+                'weak_encryption': [
+                    {'$match': {
+                        'parsed.subject_key_info.key_algorithm.name': 'RSA',
+                        'parsed.subject_key_info.rsa_public_key.length': {'$lt': 2048}
+                    }},
+                    {'$count': 'count'}
+                ],
+                'newly_expired': [
+                    {'$match': {
+                        'parsed.validity.end': {'$gte': yesterday, '$lt': now_str}
+                    }},
+                    {'$count': 'count'}
+                ]
+            }}
+        ]
+        
+        result = list(cls.collection.aggregate(pipeline))
+        
+        if not result:
+            return {'notifications': [], 'unreadCount': 0, 'totalCount': 0}
+        
+        facet_result = result[0]
+        
+        # Extract counts (default to 0 if empty)
+        def get_count(key: str) -> int:
+            arr = facet_result.get(key, [])
+            return arr[0]['count'] if arr else 0
+        
+        expiring_2_days = get_count('expiring_2_days')
+        expiring_7_days = get_count('expiring_7_days')
+        vulnerabilities = get_count('vulnerabilities')
+        weak_encryption = get_count('weak_encryption')
+        newly_expired = get_count('newly_expired')
+        
+        notifications = []
+        timestamp = now.isoformat()
+        
+        # Build notification list (only add if count > 0)
+        if expiring_2_days > 0:
+            notifications.append({
+                'id': 'expiring-2-days',
+                'type': 'error',
+                'category': 'expiring',
+                'title': f'{expiring_2_days} certificate{"s" if expiring_2_days > 1 else ""} expiring in 1-2 days',
+                'description': 'Immediate attention required',
+                'count': expiring_2_days,
+                'filterParams': {'status': 'EXPIRING_SOON', 'days': 2},
+                'timestamp': timestamp,
+                'read': False
+            })
+        
+        if expiring_7_days > expiring_2_days:  # Exclude already counted 2-day ones
+            remaining = expiring_7_days - expiring_2_days
+            if remaining > 0:
+                notifications.append({
+                    'id': 'expiring-7-days',
+                    'type': 'warning',
+                    'category': 'expiring',
+                    'title': f'{remaining} certificate{"s" if remaining > 1 else ""} expiring in 3-7 days',
+                    'description': 'Plan renewal soon',
+                    'count': remaining,
+                    'filterParams': {'status': 'EXPIRING_SOON', 'days': 7},
+                    'timestamp': timestamp,
+                    'read': False
+                })
+        
+        if vulnerabilities > 0:
+            notifications.append({
+                'id': 'vulnerabilities',
+                'type': 'error',
+                'category': 'security',
+                'title': f'{vulnerabilities} certificate{"s" if vulnerabilities > 1 else ""} with vulnerabilities',
+                'description': 'ZLint detected security issues',
+                'count': vulnerabilities,
+                'filterParams': {'has_vulnerabilities': True},
+                'timestamp': timestamp,
+                'read': False
+            })
+        
+        if weak_encryption > 0:
+            notifications.append({
+                'id': 'weak-encryption',
+                'type': 'warning',
+                'category': 'security',
+                'title': f'{weak_encryption} certificate{"s" if weak_encryption > 1 else ""} with weak encryption',
+                'description': 'RSA key length below 2048 bits',
+                'count': weak_encryption,
+                'filterParams': {'encryption_type': 'RSA weak'},
+                'timestamp': timestamp,
+                'read': False
+            })
+        
+        if newly_expired > 0:
+            notifications.append({
+                'id': 'newly-expired',
+                'type': 'error',
+                'category': 'expired',
+                'title': f'{newly_expired} certificate{"s" if newly_expired > 1 else ""} expired recently',
+                'description': 'Expired in the last 24 hours',
+                'count': newly_expired,
+                'filterParams': {'status': 'EXPIRED'},
+                'timestamp': timestamp,
+                'read': False
+            })
+        
+        return {
+            'notifications': notifications,
+            'unreadCount': len(notifications),
+            'totalCount': len(notifications)
+        }

@@ -4,18 +4,28 @@ import React, { useState } from 'react';
 import { ScanEntry } from '@/types/dashboard';
 import { DownloadIcon } from '@/components/icons/Icons';
 
+// API base URL for downloads
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+
+interface ActiveFilter {
+    type: 'all' | 'active' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend';
+    value?: string;
+}
+
 interface DownloadModalProps {
     isOpen: boolean;
     onClose: () => void;
     currentPageData: ScanEntry[];
-    onDownloadAll: () => void;
+    activeFilter: ActiveFilter;
+    totalCount?: number;
 }
 
 export default function DownloadModal({
     isOpen,
     onClose,
     currentPageData,
-    onDownloadAll,
+    activeFilter,
+    totalCount,
 }: DownloadModalProps) {
     const [isDownloading, setIsDownloading] = useState(false);
 
@@ -58,13 +68,95 @@ export default function DownloadModal({
         onClose();
     };
 
+    const buildDownloadUrl = (): string => {
+        const params = new URLSearchParams();
+
+        // Map activeFilter to backend query params
+        switch (activeFilter.type) {
+            case 'active':
+                params.append('status', 'VALID');
+                break;
+            case 'expiringSoon':
+                params.append('status', 'EXPIRING_SOON');
+                break;
+            case 'vulnerabilities':
+                params.append('has_vulnerabilities', 'true');
+                break;
+            case 'ca':
+                if (activeFilter.value) {
+                    params.append('issuer', activeFilter.value);
+                }
+                break;
+            case 'geographic':
+                if (activeFilter.value) {
+                    params.append('country', activeFilter.value);
+                }
+                break;
+            case 'encryption':
+                if (activeFilter.value) {
+                    params.append('encryption_type', activeFilter.value);
+                }
+                break;
+            case 'validityTrend':
+                if (activeFilter.value) {
+                    // Parse month/year from value like "Jan 2026"
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const parts = activeFilter.value.split(' ');
+                    const monthName = parts[0];
+                    const year = parseInt(parts[1] || '2026');
+                    const monthIndex = monthNames.indexOf(monthName) + 1;
+                    if (monthIndex > 0) {
+                        params.append('expiring_month', monthIndex.toString());
+                        params.append('expiring_year', year.toString());
+                    }
+                }
+                break;
+            case 'all':
+            default:
+                // No filter params = all certificates
+                break;
+        }
+
+        const queryString = params.toString();
+        return `${API_BASE_URL}/certificates/download/${queryString ? `?${queryString}` : ''}`;
+    };
+
     const handleDownloadAll = async () => {
         setIsDownloading(true);
         try {
-            await onDownloadAll();
+            // Trigger browser download by navigating to the streaming endpoint
+            const downloadUrl = buildDownloadUrl();
+            window.location.href = downloadUrl;
+
+            // Small delay to allow download to start
+            await new Promise(resolve => setTimeout(resolve, 1000));
         } finally {
             setIsDownloading(false);
             onClose();
+        }
+    };
+
+    const getFilterDescription = (): string => {
+        switch (activeFilter.type) {
+            case 'active':
+                return 'All active certificates';
+            case 'expiringSoon':
+                return 'Certificates expiring soon';
+            case 'vulnerabilities':
+                return 'Certificates with vulnerabilities';
+            case 'ca':
+                return activeFilter.value === 'Others'
+                    ? 'Other CAs certificates'
+                    : `${activeFilter.value || 'CA'} certificates`;
+            case 'geographic':
+                return `${activeFilter.value || 'Country'} certificates`;
+            case 'encryption':
+                return `${activeFilter.value || 'Encryption'} certificates`;
+            case 'validityTrend':
+                return `Certificates expiring ${activeFilter.value || 'in selected month'}`;
+            case 'all':
+            default:
+                return 'All certificates in database';
         }
     };
 
@@ -113,10 +205,13 @@ export default function DownloadModal({
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="font-medium text-primary-blue">All Certificates</p>
+                                <p className="font-medium text-primary-blue">Complete Data</p>
                                 <p className="text-sm text-text-muted">
-                                    {isDownloading ? 'Downloading...' : 'Full database export'}
+                                    {isDownloading ? 'Starting download...' : getFilterDescription()}
                                 </p>
+                                {totalCount && !isDownloading && (
+                                    <p className="text-xs text-text-muted mt-1">~{totalCount.toLocaleString()} certificates</p>
+                                )}
                             </div>
                             {isDownloading ? (
                                 <svg className="w-5 h-5 text-primary-blue animate-spin" fill="none" viewBox="0 0 24 24">
@@ -143,3 +238,4 @@ export default function DownloadModal({
         </div>
     );
 }
+

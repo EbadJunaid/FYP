@@ -209,6 +209,29 @@ class ApiClient {
     }> {
         return this.fetch(`/vulnerabilities/?page=${page}&page_size=${pageSize}`);
     }
+
+    async getNotifications(): Promise<NotificationResponse> {
+        return this.fetch<NotificationResponse>('/notifications/');
+    }
+}
+
+// Notification types
+export interface NotificationItem {
+    id: string;
+    type: 'error' | 'warning' | 'success' | 'info';
+    category: string;
+    title: string;
+    description: string;
+    count: number;
+    filterParams: Record<string, unknown>;
+    timestamp: string;
+    read: boolean;
+}
+
+export interface NotificationResponse {
+    notifications: NotificationItem[];
+    unreadCount: number;
+    totalCount: number;
 }
 
 // Export singleton instance

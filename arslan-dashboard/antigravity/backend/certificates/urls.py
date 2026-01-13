@@ -5,6 +5,7 @@ from .views import (
     GlobalHealthView,
     CertificateListView,
     CertificateDetailView,
+    CertificateDownloadView,
     UniqueFiltersView,
     EncryptionStrengthView,
     ValidityTrendsView,
@@ -12,6 +13,7 @@ from .views import (
     GeographicDistributionView,
     FutureRiskView,
     VulnerabilitiesView,
+    NotificationView,
 )
 
 urlpatterns = [
@@ -23,6 +25,7 @@ urlpatterns = [
     
     # Certificate CRUD APIs
     path('certificates/', CertificateListView.as_view(), name='certificate_list'),
+    path('certificates/download/', CertificateDownloadView.as_view(), name='certificate_download'),
     path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
     
     # Analytics APIs
@@ -33,4 +36,7 @@ urlpatterns = [
     path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
     path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
     path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
+    
+    # Notifications API
+    path('notifications/', NotificationView.as_view(), name='notifications'),
 ]

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/context/ThemeContext';
+import { apiClient, NotificationItem } from '@/services/apiClient';
 import {
     SearchIcon,
     BellIcon,
@@ -16,6 +17,7 @@ interface HeaderProps {
     onMenuClick: () => void;
     onSearch: (query: string) => void;
     onFilterClick: () => void;
+    onNotificationClick?: (notification: NotificationItem) => void;
 }
 
 // Page title mapping
@@ -38,52 +40,15 @@ const pageTitles: Record<string, string> = {
     '/dashboard/shared-public-keys': 'Shared Public Keys',
 };
 
-// Notification data type
-interface Notification {
-    id: string;
-    type: 'error' | 'warning' | 'success';
-    title: string;
-    description: string;
-    time: string;
-}
-
-// Mock notifications
-const mockNotifications: Notification[] = [
-    {
-        id: '1',
-        type: 'error',
-        title: 'Critical vulnerability detected',
-        description: 'example.com • 2 min ago',
-        time: '2 min ago',
-    },
-    {
-        id: '2',
-        type: 'warning',
-        title: 'Certificate expiring in 7 days',
-        description: 'api.example.com • 1 hour ago',
-        time: '1 hour ago',
-    },
-    {
-        id: '3',
-        type: 'success',
-        title: 'Scan completed successfully',
-        description: 'blog.example.com • 3 hours ago',
-        time: '3 hours ago',
-    },
-    {
-        id: '4',
-        type: 'warning',
-        title: '3 new vulnerabilities found',
-        description: 'staging.app.io • 5 hours ago',
-        time: '5 hours ago',
-    },
-];
-
-export default function Header({ onMenuClick, onSearch, onFilterClick }: HeaderProps) {
+export default function Header({ onMenuClick, onSearch, onFilterClick, onNotificationClick }: HeaderProps) {
     const pathname = usePathname();
     const { theme, toggleTheme } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
     const [showNotifications, setShowNotifications] = useState(false);
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+    const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
     const searchInputRef = useRef<HTMLInputElement>(null);
     const notificationRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +57,37 @@ export default function Header({ onMenuClick, onSearch, onFilterClick }: HeaderP
 
     // Get current page title dynamically
     const currentPageTitle = pageTitles[pathname] || 'Dashboard';
+
+    // Load read notification IDs from localStorage
+    useEffect(() => {
+        const storedReadIds = localStorage.getItem('readNotificationIds');
+        if (storedReadIds) {
+            setReadNotificationIds(new Set(JSON.parse(storedReadIds)));
+        }
+    }, []);
+
+    // Fetch notifications from API
+    const fetchNotifications = useCallback(async () => {
+        setIsLoadingNotifications(true);
+        try {
+            const response = await apiClient.getNotifications();
+            setNotifications(response.notifications);
+            // Calculate unread count (excluding already read)
+            const unread = response.notifications.filter(n => !readNotificationIds.has(n.id)).length;
+            setUnreadCount(unread);
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+        } finally {
+            setIsLoadingNotifications(false);
+        }
+    }, [readNotificationIds]);
+
+    // Fetch on mount and every 5 minutes
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [fetchNotifications]);
 
     // Ctrl+K keyboard shortcut to focus search
     useEffect(() => {
@@ -142,6 +138,40 @@ export default function Header({ onMenuClick, onSearch, onFilterClick }: HeaderP
         onSearch(searchQuery);
     };
 
+    // Mark notification as read
+    const markAsRead = (notificationId: string) => {
+        const newReadIds = new Set(readNotificationIds);
+        newReadIds.add(notificationId);
+        setReadNotificationIds(newReadIds);
+        localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(newReadIds)));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+    };
+
+    // Mark all notifications as read
+    const markAllAsRead = () => {
+        const allIds = new Set(notifications.map(n => n.id));
+        setReadNotificationIds(allIds);
+        localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(allIds)));
+        setUnreadCount(0);
+    };
+
+    // Handle notification click
+    const handleNotificationItemClick = (notification: NotificationItem) => {
+        markAsRead(notification.id);
+        setShowNotifications(false);
+        if (onNotificationClick) {
+            onNotificationClick(notification);
+        }
+    };
+
+    // Remove notification (dismiss from view)
+    const removeNotification = (e: React.MouseEvent, notificationId: string) => {
+        e.stopPropagation();
+        markAsRead(notificationId);
+        // Optionally hide from list (UI only, will reappear on next fetch if still relevant)
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    };
+
     const getNotificationIcon = (type: string) => {
         switch (type) {
             case 'error':
@@ -167,6 +197,8 @@ export default function Header({ onMenuClick, onSearch, onFilterClick }: HeaderP
                 return 'bg-card-border';
         }
     };
+
+    const isRead = (notificationId: string) => readNotificationIds.has(notificationId);
 
     return (
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-card-border">
@@ -239,8 +271,12 @@ export default function Header({ onMenuClick, onSearch, onFilterClick }: HeaderP
                             aria-label="Notifications"
                         >
                             <BellIcon size={20} />
-                            {/* Notification Badge */}
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-accent-red rounded-full" />
+                            {/* Notification Badge with count */}
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-accent-red text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </span>
+                            )}
                         </button>
 
                         {/* Notifications Dropdown */}
@@ -248,33 +284,68 @@ export default function Header({ onMenuClick, onSearch, onFilterClick }: HeaderP
                             <div className="absolute right-0 top-full mt-2 w-80 bg-card-bg border border-card-border rounded-xl shadow-xl animate-fade-in z-50">
                                 <div className="flex items-center justify-between px-4 py-3 border-b border-card-border">
                                     <h3 className="text-sm font-semibold text-text-primary">
-                                        Notifications ({mockNotifications.length})
+                                        Notifications ({notifications.length})
                                     </h3>
-                                    <button className="text-xs text-primary-blue hover:text-primary-purple transition-colors">
-                                        Mark all read
-                                    </button>
+                                    {unreadCount > 0 && (
+                                        <button
+                                            onClick={markAllAsRead}
+                                            className="text-xs text-primary-blue hover:text-primary-purple transition-colors"
+                                        >
+                                            Mark all read
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
-                                    {mockNotifications.map((notification) => (
-                                        <div
-                                            key={notification.id}
-                                            className="flex gap-3 p-3 rounded-lg hover:bg-background cursor-pointer transition-colors"
-                                        >
-                                            <div className={`w-8 h-8 rounded-full ${getNotificationBg(notification.type)} flex items-center justify-center flex-shrink-0`}>
-                                                {getNotificationIcon(notification.type)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm text-text-primary">{notification.title}</p>
-                                                <p className="text-xs text-text-muted mt-0.5">{notification.description}</p>
-                                            </div>
+                                    {isLoadingNotifications ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <div className="w-5 h-5 border-2 border-primary-blue border-t-transparent rounded-full animate-spin" />
                                         </div>
-                                    ))}
+                                    ) : notifications.length === 0 ? (
+                                        <div className="text-center py-8 text-text-muted text-sm">
+                                            No notifications
+                                        </div>
+                                    ) : (
+                                        notifications.map((notification) => (
+                                            <div
+                                                key={notification.id}
+                                                className={`flex gap-3 p-3 rounded-lg hover:bg-background cursor-pointer transition-colors group ${isRead(notification.id) ? 'opacity-60' : ''
+                                                    }`}
+                                                onClick={() => handleNotificationItemClick(notification)}
+                                            >
+                                                <div className={`w-8 h-8 rounded-full ${getNotificationBg(notification.type)} flex items-center justify-center flex-shrink-0`}>
+                                                    {getNotificationIcon(notification.type)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-text-primary">{notification.title}</p>
+                                                    <p className="text-xs text-text-muted mt-0.5">{notification.description}</p>
+                                                </div>
+                                                {/* Remove button */}
+                                                <button
+                                                    onClick={(e) => removeNotification(e, notification.id)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 text-text-muted hover:text-accent-red transition-all"
+                                                    title="Dismiss"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
-                                <div className="px-4 py-3 border-t border-card-border">
-                                    <button className="w-full text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors">
-                                        View all notifications
-                                    </button>
-                                </div>
+                                {notifications.length > 0 && (
+                                    <div className="px-4 py-3 border-t border-card-border">
+                                        <button
+                                            onClick={() => {
+                                                // Refresh notifications
+                                                fetchNotifications();
+                                            }}
+                                            className="w-full text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
+                                        >
+                                            Refresh notifications
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

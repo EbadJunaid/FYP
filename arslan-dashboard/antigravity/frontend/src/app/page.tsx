@@ -7,6 +7,8 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import MobileDrawer from '@/components/layout/MobileDrawer';
 import FilterModal from '@/components/FilterModal';
+import DownloadModal from '@/components/DownloadModal';
+import { NotificationItem } from '@/services/apiClient';
 
 // Dashboard Cards
 import GlobalHealthCard from '@/components/dashboard/GlobalHealthCard';
@@ -29,6 +31,8 @@ function DashboardContent() {
     paginatedScans,
     totalPages,
     pagination,
+    tableTitle,
+    activeFilter,
     handleSearch,
     handleFilter,
     handleCardClick,
@@ -37,6 +41,7 @@ function DashboardContent() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
 
   const { metrics, encryptionStrength, futureRisk, caLeaderboard, geographicDistribution, validityTrend, filters } = state;
 
@@ -58,27 +63,27 @@ function DashboardContent() {
     router.push('/dashboard/trends');
   };
 
-  // Handle download scans
+  // Handle download scans - opens modal
   const handleDownloadScans = () => {
-    const csvContent = [
-      ['Domain', 'Scan Date', 'SSL Grade', 'Vulnerabilities', 'Issuer', 'Status'],
-      ...state.recentScans.map(scan => [
-        scan.domain,
-        scan.scanDate,
-        scan.sslGrade,
-        scan.vulnerabilities,
-        scan.issuer,
-        scan.status
-      ])
-    ].map(row => row.join(',')).join('\n');
+    setDownloadModalOpen(true);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ssl-scans-report.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
+  // Handle notification click - filter table based on notification type
+  const handleNotificationClick = (notification: NotificationItem) => {
+    switch (notification.category) {
+      case 'expiring':
+        handleCardClickWithScroll('expiringSoon');
+        break;
+      case 'security':
+        handleCardClickWithScroll('vulnerabilities');
+        break;
+      case 'expired':
+        // Could add expired filter if needed
+        handleCardClickWithScroll('expiringSoon');
+        break;
+      default:
+        break;
+    }
   };
 
   return (
@@ -100,6 +105,7 @@ function DashboardContent() {
           onMenuClick={() => setMobileMenuOpen(true)}
           onSearch={handleSearch}
           onFilterClick={() => setFilterModalOpen(true)}
+          onNotificationClick={handleNotificationClick}
         />
 
         {/* Main Content */}
@@ -218,7 +224,7 @@ function DashboardContent() {
             <div className="md:col-span-2 xl:col-span-1">
               <ValidityTrendCard
                 data={validityTrend}
-                onClick={() => handleCardClickWithScroll('validityTrend')}
+                onDataPointClick={(dataPoint) => handleCardClickWithScroll('validityTrend', dataPoint)}
               />
             </div>
           </div>
@@ -227,6 +233,7 @@ function DashboardContent() {
           <div ref={tableRef}>
             <RecentScansCard
               data={paginatedScans}
+              title={tableTitle}
               onRowClick={(entry) => console.log('Scan row clicked:', entry)}
               onFilterClick={() => setFilterModalOpen(true)}
               onDownloadClick={handleDownloadScans}
@@ -244,6 +251,15 @@ function DashboardContent() {
         onClose={() => setFilterModalOpen(false)}
         filters={filters}
         onApplyFilters={handleFilter}
+      />
+
+      {/* Download Modal */}
+      <DownloadModal
+        isOpen={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+        currentPageData={paginatedScans}
+        activeFilter={activeFilter}
+        totalCount={pagination.totalItems}
       />
     </div>
   );

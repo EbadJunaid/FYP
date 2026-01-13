@@ -116,6 +116,7 @@ export default function FutureRiskCard({ data }: FutureRiskCardProps) {
                 }
                 className="hover-lift h-full"
                 onViewDetails={handleViewDetails}
+                infoTooltip="AI-predicted future security risks based on current certificate configurations and industry trends."
             >
                 <div className="space-y-4">
                     {/* Donut Chart */}

@@ -21,6 +21,7 @@ export default function EncryptionStrengthCard({
             title="Encryption Strength Distribution"
             className="hover-lift h-full"
             detailsLink="/dashboard/signature-hash"
+            infoTooltip="Distribution of encryption algorithms and key lengths used by certificates. Click on a bar to filter certificates by that algorithm."
         >
             <div className="h-full min-h-[320px]">
                 <BarChartComponent data={data} onBarClick={onBarClick} />

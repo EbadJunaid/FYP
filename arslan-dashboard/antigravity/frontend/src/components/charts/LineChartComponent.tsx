@@ -15,13 +15,14 @@ import { ValidityTrendPoint } from '@/types/dashboard';
 interface LineChartComponentProps {
     data: ValidityTrendPoint[];
     onClick?: () => void;
+    onDataPointClick?: (dataPoint: ValidityTrendPoint) => void;
     className?: string;
 }
 
 // Custom Tooltip Component
 const CustomTooltip = ({ active, payload, label }: {
     active?: boolean;
-    payload?: Array<{ value: number }>;
+    payload?: Array<{ value: number; payload: ValidityTrendPoint }>;
     label?: string;
 }) => {
     if (active && payload && payload.length) {
@@ -31,23 +32,55 @@ const CustomTooltip = ({ active, payload, label }: {
                 <p className="text-sm font-semibold text-primary-blue">
                     {payload[0].value} expirations
                 </p>
+                <p className="text-xs text-accent-yellow mt-1">Click to filter</p>
             </div>
         );
     }
     return null;
 };
 
+// Custom active dot with click handler
+interface ActiveDotProps {
+    cx?: number;
+    cy?: number;
+    payload?: ValidityTrendPoint;
+    onDataPointClick?: (dataPoint: ValidityTrendPoint) => void;
+}
+
+const ClickableActiveDot = ({ cx, cy, payload, onDataPointClick }: ActiveDotProps) => {
+    if (!cx || !cy) return null;
+
+    return (
+        <circle
+            cx={cx}
+            cy={cy}
+            r={8}
+            fill="#3b82f6"
+            stroke="white"
+            strokeWidth={3}
+            className="cursor-pointer"
+            onClick={(e) => {
+                e.stopPropagation();
+                if (payload && onDataPointClick) {
+                    onDataPointClick(payload);
+                }
+            }}
+        />
+    );
+};
+
 export default function LineChartComponent({
     data,
     onClick,
+    onDataPointClick,
     className = '',
 }: LineChartComponentProps) {
     return (
         <div
-            className={`w-full h-full min-h-[180px] ${onClick ? 'cursor-pointer' : ''} ${className}`}
-            onClick={onClick}
+            className={`w-full h-full min-h-[180px] ${className}`}
+            onClick={!onDataPointClick ? onClick : undefined}
         >
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart
                     data={data}
                     margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
@@ -82,17 +115,22 @@ export default function LineChartComponent({
                         strokeWidth={2}
                         fill="url(#areaGradient)"
                         dot={{
-                            r: 4,
+                            r: 5,
                             fill: '#3b82f6',
                             stroke: '#1e293b',
                             strokeWidth: 2,
+                            className: onDataPointClick ? 'cursor-pointer' : '',
                         }}
-                        activeDot={{
-                            r: 6,
-                            fill: '#3b82f6',
-                            stroke: 'white',
-                            strokeWidth: 2,
-                        }}
+                        activeDot={
+                            onDataPointClick
+                                ? <ClickableActiveDot onDataPointClick={onDataPointClick} />
+                                : {
+                                    r: 6,
+                                    fill: '#3b82f6',
+                                    stroke: 'white',
+                                    strokeWidth: 2,
+                                }
+                        }
                     />
                 </AreaChart>
             </ResponsiveContainer>

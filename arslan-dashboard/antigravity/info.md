@@ -24,6 +24,16 @@ This document provides comprehensive explanations of how each dashboard componen
 17. [Critical Vulnerabilities Card - Why Is It Slower?](#17-critical-vulnerabilities-card---why-is-it-slower)
 18. [CA Leaderboard Card - Why Not All CAs Displayed?](#18-ca-leaderboard-card---why-not-all-cas-displayed)
 19. [Geographic Distribution Card - How It Works](#19-geographic-distribution-card---how-it-works)
+20. [Validity Trends Card - How Data Is Fetched](#20-validity-trends-card---how-data-is-fetched)
+21. [Validity Trends: Count vs Full Certificate Data](#21-validity-trends-count-vs-full-certificate-data)
+22. [Card Clickability: Card vs Content](#22-card-clickability-card-vs-content)
+23. [Info Icons: Why Only on Some Cards?](#23-info-icons-why-only-on-some-cards)
+24. [Current Pagination Approach - Offset-Based](#24-current-pagination-approach---offset-based-pagination)
+25. [Better Pagination Alternatives](#25-better-pagination-alternatives-for-large-datasets)
+26. [Migration Strategy: Changing Pagination](#26-migration-strategy-changing-pagination-without-breaking-existing-logic)
+27. [Caching Strategy for Millions of Certificates](#27-caching-strategy-for-millions-of-certificates)
+28. [Download Implementation - Complete Data vs This Page](#28-download-implementation---complete-data-vs-this-page-only)
+29. [Notification System - Suggestions and Implementation](#29-notification-system---suggestions-and-implementation)
 
 ---
 
@@ -1116,3 +1126,895 @@ pipeline = [
 ]
 # Then map TLDs to countries in Python (much smaller dataset)
 ```
+
+---
+
+## 20. Validity Trends Card - How Data Is Fetched
+
+### Data Source and Query
+
+The Validity Trends card shows how many certificates expire/expired in each calendar month. The data is fetched using `CertificateModel.get_validity_trends()`:
+
+```python
+@classmethod
+def get_validity_trends(cls, months_before: int = 4, months_after: int = 4) -> List[Dict]:
+    """Get certificate expiration trends by calendar month"""
+    from calendar import monthrange
+    from dateutil.relativedelta import relativedelta
+    
+    trends = []
+    now = datetime.now(timezone.utc)
+    
+    for i in range(-months_before, months_after + 1):
+        target_date = now + relativedelta(months=i)
+        year = target_date.year
+        month = target_date.month
+        
+        # Get first and last day of the month
+        _, days_in_month = monthrange(year, month)
+        month_start = datetime(year, month, 1, 0, 0, 0, tzinfo=timezone.utc)
+        month_end = datetime(year, month, days_in_month, 23, 59, 59, tzinfo=timezone.utc)
+        
+        # Count certificates expiring in this month
+        count = cls.collection.count_documents({
+            'parsed.validity.end': {
+                '$gte': month_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                '$lte': month_end.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+        })
+        
+        trends.append({
+            'month': month_start.strftime('%b %Y'),  # e.g., "Jan 2026"
+            'expirations': count,
+            'year': year,
+            'monthNum': month,
+            'isCurrent': (year == now.year and month == now.month)
+        })
+    
+    return trends
+```
+
+### Step-by-Step Breakdown
+
+1. **Calculate Month Range**: Starting from 4 months before current to 4 months after (total 9 months)
+2. **For Each Month**: Calculate calendar boundaries (1st to last day)
+3. **Count Query**: Use `count_documents()` to count certificates where `parsed.validity.end` falls within that month
+4. **Return Format**: Returns month label ("Jan 2026"), count, and metadata
+
+---
+
+## 21. Validity Trends: Count vs Full Certificate Data
+
+### Question: "Since you're fetching count by dates, don't you already have the full data?"
+
+**No**, the `get_validity_trends()` method **only returns counts**, not the full certificate documents:
+
+```python
+# This returns COUNT only (integer)
+count = cls.collection.count_documents({
+    'parsed.validity.end': {'$gte': month_start, '$lte': month_end}
+})
+```
+
+### Why Count-Only?
+
+1. **Performance**: Counting is O(1) with indexes, fetching full documents is O(n)
+2. **Memory**: A count uses ~bytes, full documents use ~KB each × thousands
+3. **Display Purpose**: The chart only needs the number for the Y-axis
+
+### When You Click a Month
+
+When a user clicks on a month in the Validity Trend chart, a **separate query** is made with pagination:
+
+```python
+# This returns FULL DOCUMENTS with pagination
+result = CertificateModel.get_all(
+    page=1,
+    page_size=10,
+    expiring_month=1,    # January
+    expiring_year=2026   # 2026
+)
+# Returns: { certificates: [...], pagination: {...} }
+```
+
+This is the same pattern used for other cards:
+- **Display**: Count-only query for fast chart rendering
+- **Click/Filter**: Full paginated query for table display
+
+---
+
+## 22. Card Clickability: Card vs Content
+
+### Question: "The validity card itself is clickable, not the curve. But CA Leaderboard content is clickable?"
+
+You are correct! There are **two clickability patterns** in the dashboard:
+
+### Pattern 1: Card-Level Clickability (Validity Trends, Global Health)
+```tsx
+<Card
+    onClick={() => handleCardClick('validityTrend')}
+    isClickable={true}  // Entire card is clickable
+>
+    <AreaChart data={validityTrend} />
+</Card>
+```
+- **Clicking anywhere on the card** (including chart area) triggers the same action
+- Common for overview/summary cards
+
+### Pattern 2: Content-Level Clickability (CA Leaderboard, Encryption Strength)
+```tsx
+<Card isClickable={false}>  {/* Card NOT clickable */}
+    {data.map(item => (
+        <div
+            onClick={() => handleCardClick('ca', item)}  {/* Each item clickable */}
+            className="cursor-pointer hover:bg-..."
+        >
+            {item.name}
+        </div>
+    ))}
+</Card>
+```
+- **Clicking specific items** (e.g., "Let's Encrypt", "RSA 2048") triggers filtered action
+- Each click passes different data to the handler
+
+### Why Different Patterns?
+
+| Card Type | Click Behavior | Reason |
+|-----------|---------------|--------|
+| **Validity Trends** | Card-level | Chart shows aggregate trends; clicking shows all certs (or TODO: point-specific) |
+| **CA Leaderboard** | Content-level | Each CA is a distinct filter; clicking "Let's Encrypt" shows only those certs |
+| **Encryption Strength** | Content-level | Each algorithm is a distinct filter |
+| **Global Health** | Card-level | Single aggregate metric; shows all certs |
+| **Geographic** | Content-level | Each country is a distinct filter |
+
+### Current Implementation Issue
+
+Currently, the Validity Trends card is **card-level clickable**, meaning clicking anywhere shows all certs in some month range. To make **individual month points clickable** (like CA Leaderboard), the chart needs `onClick` handlers on data points:
+
+```tsx
+<Area
+    dataKey="expirations"
+    onClick={(data) => handleMonthClick(data.month)}  // Per-point click
+/>
+```
+
+---
+
+## 23. Info Icons: Why Only on Some Cards?
+
+### Question: "Why are info icons only on Active, Expiring Soon, and Vulnerabilities cards?"
+
+The info icons with tooltips were initially added to the **MetricCard** component only:
+
+```tsx
+// MetricCard.tsx - Has infoTooltip prop
+export default function MetricCard({
+    infoTooltip,  // ✅ Added
+    ...
+}: MetricCardProps) {
+```
+
+### Current State
+
+| Card | Uses Component | Has Info Icon |
+|------|----------------|---------------|
+| Global Health | `GlobalHealthCard` | ❌ Not yet |
+| Active Certificates | `MetricCard` | ✅ Yes |
+| Expiring Soon | `MetricCard` | ✅ Yes |
+| Critical Vulnerabilities | `MetricCard` | ✅ Yes |
+| Encryption Strength | `Card` + custom | ❌ Not yet |
+| Future Prediction | `Card` + custom | ❌ Not yet |
+| CA Leaderboard | `Card` + custom | ❌ Not yet |
+| Geographic Distribution | `Card` + custom | ❌ Not yet |
+| Validity Trends | `Card` + custom | ❌ Not yet |
+| Recent Scans Table | `Card` + custom | ❌ Not yet |
+
+### Solution: Add to All Cards
+
+The `Card` component already supports `infoTooltip`:
+```tsx
+// Card.tsx - Already has infoTooltip prop
+<Card
+    title="CA Leaderboard"
+    infoTooltip="Top certificate authorities by issuance count"
+>
+```
+
+To add info icons to all cards, simply pass the `infoTooltip` prop when using each card component.
+
+---
+
+## 24. Current Pagination Approach - Offset-Based Pagination
+
+### What Type of Pagination Are We Using?
+
+We are currently using **Offset-Based Pagination** (also called "skip/limit" pagination):
+
+```python
+# models.py - get_all method
+skip = (page - 1) * page_size  # e.g., page 2 → skip 10
+cursor = cls.collection.find(query).skip(skip).limit(page_size)
+```
+
+### How It Works
+
+1. **User requests page N** → Frontend calls `/api/certificates?page=N&page_size=10`
+2. **Backend calculates offset** → `skip = (N - 1) * 10`
+3. **MongoDB query** → `db.certificates.find({...}).skip(skip).limit(10)`
+4. **Return results** → 10 certificates + total count for pagination UI
+
+### Why Offset Pagination is Problematic for Millions of Certificates
+
+| Problem | Explanation | Impact at Scale |
+|---------|-------------|-----------------|
+| **O(n) complexity** | MongoDB must scan ALL documents before `skip` offset | Page 100,000 = scan 1M+ docs first |
+| **Memory pressure** | Large skip values load docs into memory then discard | Server memory spikes |
+| **Inconsistency** | If data changes between pages, you may see duplicates or miss items | Data integrity issues |
+| **Slow deep pages** | Page 1 = fast, Page 10,000 = very slow | Poor UX for pagination |
+
+### Real Performance Example
+
+```
+Page 1    (skip 0):     ~5ms     ✅ Fast
+Page 100  (skip 1000):  ~50ms    ⚠️ Noticeable
+Page 1000 (skip 10000): ~500ms   ❌ Slow
+Page 10000 (skip 100000): ~5s+   ❌ Unusable
+```
+
+### When Is Offset Pagination Acceptable?
+
+✅ **Good for:**
+- Small datasets (< 100,000 records)
+- Users typically view only first few pages
+- Simple implementation needs
+- Admin dashboards with limited data
+
+❌ **Not ideal for:**
+- Millions of certificates
+- Deep pagination (page 1000+)
+- Real-time data that changes frequently
+- High-concurrency systems
+
+---
+
+## 25. Better Pagination Alternatives for Large Datasets
+
+### Option 1: Cursor-Based (Keyset) Pagination ⭐ RECOMMENDED
+
+Instead of "skip N records", use "get records after this ID":
+
+```python
+# Cursor-based approach
+def get_all_cursor(cls, last_id: str = None, page_size: int = 10):
+    query = {}
+    if last_id:
+        query['_id'] = {'$gt': ObjectId(last_id)}
+    
+    cursor = cls.collection.find(query).sort('_id', 1).limit(page_size)
+    certificates = list(cursor)
+    
+    next_cursor = str(certificates[-1]['_id']) if certificates else None
+    return {'certificates': certificates, 'next_cursor': next_cursor}
+```
+
+**Advantages:**
+- O(1) performance regardless of page depth
+- Uses index efficiently (`_id` is always indexed)
+- Consistent results even if data changes
+- Scales to billions of records
+
+**Frontend Usage:**
+```tsx
+// First page
+GET /api/certificates?page_size=10
+
+// Next page (use cursor from previous response)
+GET /api/certificates?after=507f1f77bcf86cd799439011&page_size=10
+```
+
+### Option 2: Time-Based Cursor (For Chronological Data)
+
+If certificates are often queried by date:
+
+```python
+def get_all_by_date(cls, before_date: str = None, page_size: int = 10):
+    query = {}
+    if before_date:
+        query['parsed.validity.end'] = {'$lt': before_date}
+    
+    cursor = cls.collection.find(query).sort('parsed.validity.end', -1).limit(page_size)
+    return list(cursor)
+```
+
+### Option 3: Search After (Elasticsearch-style)
+
+For complex sorting with multiple fields:
+
+```python
+# Sort by (expiry_date, _id) for deterministic results
+query = {}
+if search_after:
+    query['$or'] = [
+        {'parsed.validity.end': {'$lt': search_after[0]}},
+        {
+            'parsed.validity.end': search_after[0],
+            '_id': {'$gt': ObjectId(search_after[1])}
+        }
+    ]
+```
+
+### Comparison Table
+
+| Technique | Deep Page Speed | Implementation | Jump to Page | Consistency |
+|-----------|-----------------|----------------|--------------|-------------|
+| Offset (current) | O(n) slow | ⭐ Easy | ✅ Yes | ❌ Poor |
+| Cursor-based | O(1) fast | ⭐⭐ Medium | ❌ No | ✅ Good |
+| Time-based | O(1) fast | ⭐⭐ Medium | ❌ No | ✅ Good |
+| Search After | O(1) fast | ⭐⭐⭐ Complex | ❌ No | ✅ Good |
+
+---
+
+## 26. Migration Strategy: Changing Pagination Without Breaking Existing Logic
+
+### Step 1: Add New Cursor-Based Endpoint (Non-Breaking)
+
+```python
+# views.py - Add new endpoint, keep old one
+class CertificateListCursorView(View):
+    """New cursor-based pagination (v2)"""
+    def get(self, request):
+        after_id = request.GET.get('after')
+        page_size = int(request.GET.get('page_size', 10))
+        
+        result = CertificateController.get_certificates_cursor(
+            after_id=after_id,
+            page_size=page_size,
+            # ... other filters
+        )
+        return json_response(result)
+```
+
+### Step 2: Update Controller
+
+```python
+# controllers.py
+@staticmethod
+def get_certificates_cursor(after_id=None, page_size=10, **filters):
+    return CertificateModel.get_all_cursor(
+        after_id=after_id,
+        page_size=page_size,
+        **filters
+    )
+```
+
+### Step 3: Update Model
+
+```python
+# models.py
+@classmethod
+def get_all_cursor(cls, after_id=None, page_size=10, **kwargs):
+    query = cls._build_query(**kwargs)  # Reuse existing filter logic
+    
+    if after_id:
+        query['_id'] = {'$gt': ObjectId(after_id)}
+    
+    cursor = cls.collection.find(query).sort('_id', 1).limit(page_size + 1)
+    docs = list(cursor)
+    
+    has_more = len(docs) > page_size
+    certificates = [cls.serialize_certificate(d) for d in docs[:page_size]]
+    
+    return {
+        'certificates': certificates,
+        'pagination': {
+            'has_more': has_more,
+            'next_cursor': str(docs[-2]['_id']) if has_more else None,
+            'page_size': page_size
+        }
+    }
+```
+
+### Step 4: Update Frontend (Gradual Migration)
+
+```tsx
+// Option A: Keep numbered pagination UI, use cursor internally
+// Store cursor for each "page" in state
+
+// Option B: Switch to "Load More" button
+interface CursorPagination {
+    hasMore: boolean;
+    nextCursor: string | null;
+}
+
+const loadMore = async () => {
+    const result = await apiClient.getCertificatesCursor({
+        after: pagination.nextCursor,
+        pageSize: 10,
+        ...activeFilters
+    });
+    setData(prev => [...prev, ...result.certificates]);
+    setPagination(result.pagination);
+};
+```
+
+### Step 5: Deprecation Timeline
+
+1. **Week 1-2**: Add cursor endpoint alongside existing
+2. **Week 3-4**: Update frontend to use cursor for deep pages
+3. **Week 5-6**: Monitor performance and fix issues
+4. **Week 7+**: Deprecate offset endpoint for large queries
+
+---
+
+## 27. Caching Strategy for Millions of Certificates
+
+### Why Caching Is Essential
+
+Without caching, every dashboard load = 10+ API calls × DB queries = slow and resource-intensive.
+
+### Caching Layers Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    USER BROWSER                          │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │  Client-Side Cache (React Query / SWR / State)  │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                    CDN / Edge Cache                      │
+│  (CloudFlare, Vercel Edge, AWS CloudFront)              │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                   BACKEND SERVER                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │   Server-Side Cache (Redis / Memcached)         │    │
+│  └─────────────────────────────────────────────────┘    │
+│                           │                              │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │   MongoDB Query Cache (Application-level)       │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                    MONGODB                               │
+│  (WiredTiger cache, index cache)                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Recommendation: Client-Side + Server-Side (Hybrid)
+
+#### Layer 1: Client-Side Caching (React Query or SWR) ⭐ EASIEST
+
+**Why React Query/SWR:**
+- Automatic caching with stale-while-revalidate
+- Deduplication of concurrent requests
+- Background refetching
+- Built-in loading/error states
+
+**Implementation:**
+
+```tsx
+// Install: npm install @tanstack/react-query
+
+// _app.tsx or providers
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            staleTime: 5 * 60 * 1000,      // 5 minutes
+            cacheTime: 30 * 60 * 1000,     // 30 minutes
+            refetchOnWindowFocus: false,
+        },
+    },
+});
+
+// Usage in component
+const { data, isLoading, error } = useQuery({
+    queryKey: ['certificates', { page, status, issuer }],
+    queryFn: () => apiClient.getCertificates({ page, status, issuer }),
+});
+```
+
+**Cache Keys:**
+```tsx
+// Different keys = different cache entries
+['certificates', { page: 1, status: 'active' }]
+['certificates', { page: 1, status: 'expiring_soon' }]
+['certificates', { page: 2, status: 'active' }]
+```
+
+#### Layer 2: Server-Side Caching (Redis) ⭐ RECOMMENDED FOR SCALE
+
+**Why Redis:**
+- Sub-millisecond reads
+- Shared across all server instances
+- TTL-based expiration
+- Industry standard
+
+**Implementation:**
+
+```python
+# cache.py
+import redis
+import json
+import hashlib
+
+class CacheService:
+    def __init__(self):
+        self.redis = redis.Redis(host='localhost', port=6379, db=0)
+    
+    def _make_key(self, prefix: str, params: dict) -> str:
+        """Generate cache key from params"""
+        sorted_params = json.dumps(params, sort_keys=True)
+        hash_val = hashlib.md5(sorted_params.encode()).hexdigest()[:12]
+        return f"{prefix}:{hash_val}"
+    
+    def get(self, prefix: str, params: dict):
+        key = self._make_key(prefix, params)
+        data = self.redis.get(key)
+        return json.loads(data) if data else None
+    
+    def set(self, prefix: str, params: dict, value: dict, ttl: int = 300):
+        key = self._make_key(prefix, params)
+        self.redis.setex(key, ttl, json.dumps(value))
+    
+    def invalidate(self, prefix: str):
+        """Invalidate all keys with prefix"""
+        for key in self.redis.scan_iter(f"{prefix}:*"):
+            self.redis.delete(key)
+
+cache = CacheService()
+
+# Usage in models.py
+@classmethod
+def get_all(cls, **kwargs):
+    # Try cache first
+    cached = cache.get('certificates_list', kwargs)
+    if cached:
+        return cached
+    
+    # Query database
+    result = cls._query_database(**kwargs)
+    
+    # Store in cache (5 minute TTL)
+    cache.set('certificates_list', kwargs, result, ttl=300)
+    
+    return result
+```
+
+#### TTL Recommendations
+
+| Data Type | TTL | Reason |
+|-----------|-----|--------|
+| Dashboard metrics | 5 min | Changes infrequently |
+| Certificate list | 2-5 min | May change with new scans |
+| CA leaderboard | 15 min | Very stable data |
+| Geographic distribution | 30 min | Almost static |
+| Validity trends | 15 min | Changes monthly |
+| Single certificate | 1 hour | Rarely changes |
+
+### Easiest Implementation Path
+
+1. **Start with React Query** (client-side) - 2 hours of work
+2. **Add HTTP caching headers** - 30 minutes
+3. **Add Redis later** if needed - 4-8 hours
+
+**HTTP Cache Headers (Quick Win):**
+
+```python
+# views.py
+from django.views.decorators.cache import cache_control
+
+class DashboardMetricsView(View):
+    @method_decorator(cache_control(max_age=300, public=True))
+    def get(self, request):
+        # Response cached by browser/CDN for 5 minutes
+        return json_response(metrics)
+```
+
+### Summary: What to Use
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Quick implementation | Client-side (React Query/SWR) |
+| Production scale | Redis + React Query |
+| Static data (CA list) | CDN/Edge cache |
+| Real-time needs | Skip caching, optimize queries |
+| Budget constraints | HTTP cache headers + React Query |
+
+---
+
+## 28. Download Implementation - Complete Data vs This Page Only
+
+### Overview
+
+The download button should offer two options:
+1. **This Page Only**: Generate CSV client-side from current table data
+2. **Complete Data**: Stream full CSV from backend for all filtered certificates
+
+### Backend Implementation
+
+**Streaming CSV Generator** (handles millions without memory issues):
+
+```python
+# views.py
+from django.http import StreamingHttpResponse
+import csv
+from io import StringIO
+
+class CertificateDownloadView(View):
+    def get(self, request):
+        # Get filter params
+        status = request.GET.get('status')
+        issuer = request.GET.get('issuer')
+        # ... other filters
+        
+        # Create streaming response
+        response = StreamingHttpResponse(
+            self._generate_csv(status=status, issuer=issuer),
+            content_type='text/csv'
+        )
+        response['Content-Disposition'] = 'attachment; filename="certificates.csv"'
+        return response
+    
+    def _generate_csv(self, **filters):
+        """Generator for streaming CSV rows"""
+        # Yield header row
+        yield self._csv_row([
+            'Domain', 'Start Date', 'End Date', 'SSL Grade', 
+            'Encryption', 'Issuer', 'Country', 'Status', 'Vulnerabilities'
+        ])
+        
+        # Stream data in batches
+        batch_size = 1000
+        query = CertificateModel.build_download_query(**filters)
+        cursor = CertificateModel.collection.find(query).batch_size(batch_size)
+        
+        for doc in cursor:
+            cert = CertificateModel.serialize_certificate(doc)
+            yield self._csv_row([
+                cert.get('domain', 'N/A'),
+                cert.get('validFrom', 'N/A'),
+                cert.get('validTo', 'N/A'),
+                cert.get('sslGrade', 'N/A'),
+                cert.get('encryptionType', 'N/A'),
+                cert.get('issuer', 'N/A'),
+                cert.get('country', 'N/A'),
+                cert.get('status', 'N/A'),
+                cert.get('vulnerabilityCount', 0)
+            ])
+    
+    def _csv_row(self, row):
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(row)
+        return output.getvalue()
+```
+
+### Frontend Modal and Download Logic
+
+```tsx
+// DownloadModal.tsx
+interface DownloadModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    currentPageData: ScanEntry[];
+    activeFilter: { type: string; value?: string };
+}
+
+const handleDownloadThisPage = () => {
+    // Generate CSV client-side
+    const csv = generateCSV(currentPageData);
+    downloadBlob(csv, 'certificates-page.csv', 'text/csv');
+};
+
+const handleDownloadAll = async () => {
+    // Trigger backend download with current filters
+    const params = new URLSearchParams();
+    if (activeFilter.type === 'active') params.append('status', 'VALID');
+    if (activeFilter.type === 'ca') params.append('issuer', activeFilter.value);
+    // ... map other filters
+    
+    window.location.href = `/api/certificates/download/?${params}`;
+};
+```
+
+This approach ensures:
+- No memory issues with millions of records
+- Streaming response starts immediately
+- Client downloads progressively
+- Filters are respected
+
+---
+
+## 29. Notification System - Suggestions and Implementation
+
+### What to Fetch and Display in Notifications
+
+The notification system should provide **real-time alerts** derived from database queries, helping users stay informed about critical certificate issues without manually checking.
+
+### Suggested Notification Types
+
+| Type | Priority | Description | DB Query |
+|------|----------|-------------|----------|
+| **Expiring in 1-2 Days** | 🔴 Critical | Certs expiring within 48 hours | `parsed.validity.end` between now and +2 days |
+| **Expiring in 7 Days** | 🟠 High | Certs expiring within a week | `parsed.validity.end` between now and +7 days |
+| **Critical Vulnerabilities** | 🔴 Critical | Certs with `zlint.errors_present: true` | `zlint.errors_present: true` |
+| **Weak Encryption** | 🟠 High | RSA < 2048 or deprecated algorithms | `rsa_public_key.length < 2048` |
+| **Newly Expired** | 🔴 Critical | Certs expired in last 24 hours | `parsed.validity.end` between -24h and now |
+| **Recently Scanned Issues** | 🟡 Medium | New issues found in recent scans | New records with vulnerabilities |
+
+### API Design: `/api/notifications`
+
+#### Response Structure
+
+```json
+{
+    "notifications": [
+        {
+            "id": "expiring-1-2-days",
+            "type": "critical",
+            "category": "expiring",
+            "title": "5 certificates expiring in 1-2 days",
+            "description": "Immediate attention required",
+            "count": 5,
+            "filterParams": {
+                "status": "EXPIRING_SOON",
+                "days": 2
+            },
+            "timestamp": "2026-01-13T16:42:50Z",
+            "read": false
+        },
+        {
+            "id": "vulnerabilities",
+            "type": "error",
+            "category": "security",
+            "title": "12 certificates with vulnerabilities",
+            "description": "ZLint detected issues",
+            "count": 12,
+            "filterParams": {
+                "has_vulnerabilities": true
+            },
+            "timestamp": "2026-01-13T15:30:00Z",
+            "read": false
+        }
+    ],
+    "unreadCount": 4,
+    "totalCount": 6
+}
+```
+
+### Database Queries for Notifications
+
+#### 1. Certificates Expiring in 1-2 Days
+
+```python
+from datetime import datetime, timezone, timedelta
+
+now = datetime.now(timezone.utc)
+two_days = now + timedelta(days=2)
+
+expiring_critical = collection.count_documents({
+    'parsed.validity.end': {
+        '$gte': now.isoformat(),
+        '$lte': two_days.isoformat()
+    }
+})
+```
+
+#### 2. Certificates Expiring in 7 Days
+
+```python
+seven_days = now + timedelta(days=7)
+expiring_soon = collection.count_documents({
+    'parsed.validity.end': {
+        '$gte': now.isoformat(),
+        '$lte': seven_days.isoformat()
+    }
+})
+```
+
+#### 3. Certificates with Vulnerabilities
+
+```python
+vulnerable = collection.count_documents({
+    'zlint.errors_present': True,
+    'parsed.validity.end': {'$gt': now.isoformat()}  # Still active
+})
+```
+
+#### 4. Weak Encryption (RSA < 2048)
+
+```python
+weak_rsa = collection.count_documents({
+    'parsed.subject_key_info.key_algorithm.name': 'RSA',
+    'parsed.subject_key_info.rsa_public_key.length': {'$lt': 2048}
+})
+```
+
+#### 5. Newly Expired (Last 24 Hours)
+
+```python
+yesterday = now - timedelta(days=1)
+newly_expired = collection.count_documents({
+    'parsed.validity.end': {
+        '$gte': yesterday.isoformat(),
+        '$lt': now.isoformat()
+    }
+})
+```
+
+### Notification Features to Implement
+
+| Feature | Description |
+|---------|-------------|
+| **Badge Count** | Show unread notification count on bell icon |
+| **Click Action** | Filter table to show related certificates |
+| **Mark Read** | Track read status (localStorage or DB) |
+| **Mark All Read** | Clear all notification badges |
+| **Remove/Dismiss** | Delete individual notifications |
+| **View All** | Expand to show full notification list |
+| **Auto-Refresh** | Poll for new notifications every 5 minutes |
+
+### Suggested Implementation Approach
+
+1. **Backend Endpoint**: `/api/notifications` - Aggregate counts from DB
+2. **No Persistence Needed**: Derive notifications from real-time certificate data
+3. **Read Status**: Store in localStorage (simple) or user preferences table (multi-device)
+4. **Efficient Queries**: Use indexed fields (`parsed.validity.end`, `zlint.errors_present`)
+5. **Caching**: Cache notification counts for 1-2 minutes to reduce DB load
+
+### Frontend Integration
+
+```tsx
+// On notification click
+const handleNotificationClick = (notif: Notification) => {
+    // Apply filter based on notification type
+    if (notif.category === 'expiring') {
+        handleCardClick('expiringSoon', { days: notif.filterParams.days });
+    } else if (notif.category === 'security') {
+        handleCardClick('vulnerabilities');
+    }
+    // Mark as read
+    markNotificationRead(notif.id);
+    // Close dropdown
+    setShowNotifications(false);
+};
+```
+
+### Performance Considerations
+
+- **Index Required**: Ensure `parsed.validity.end` is indexed for fast expiring queries
+- **Batch Queries**: Fetch all notification counts in single API call
+- **Aggregation Pipeline**: Use MongoDB aggregation for efficient counting
+- **Limit Queries**: Cap at 1000 documents for count accuracy
+
+### Sample Aggregation Pipeline
+
+```python
+pipeline = [
+    {'$facet': {
+        'expiring_2_days': [
+            {'$match': {'parsed.validity.end': {'$gte': now, '$lte': plus_2_days}}},
+            {'$count': 'count'}
+        ],
+        'expiring_7_days': [
+            {'$match': {'parsed.validity.end': {'$gte': now, '$lte': plus_7_days}}},
+            {'$count': 'count'}
+        ],
+        'vulnerabilities': [
+            {'$match': {'zlint.errors_present': True, 'parsed.validity.end': {'$gt': now}}},
+            {'$count': 'count'}
+        ]
+    }}
+]
+```
+
+This approach provides real-time, actionable notifications based on actual certificate data.
