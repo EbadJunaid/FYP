@@ -447,3 +447,20 @@ export const GlobeIcon: React.FC<IconProps> = ({ className = '', size = 24 }) =>
         />
     </svg>
 );
+
+// Chart Pie Icon (for percentages/rates)
+export const ChartPieIcon: React.FC<IconProps> = ({ className = '', size = 24 }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+    >
+        <path
+            d="M11 2V22C5.94 21.49 2 17.22 2 12C2 6.78 5.94 2.51 11 2ZM13.5 2V11H22.5C21.99 6.08 18.42 2.49 13.5 2ZM13.5 13V22C18.15 21.53 21.94 17.92 22.5 13.28L13.5 13Z"
+            fill="currentColor"
+        />
+    </svg>
+);

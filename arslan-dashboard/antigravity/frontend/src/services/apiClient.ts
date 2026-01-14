@@ -155,6 +155,13 @@ class ApiClient {
         hasVulnerabilities?: boolean;
         expiringMonth?: number;
         expiringYear?: number;
+        // Global filter params
+        startDate?: string;
+        endDate?: string;
+        countries?: string[];
+        issuers?: string[];
+        statuses?: string[];
+        validationLevels?: string[];
     }): Promise<CertificateListResponse> {
         const queryParams = new URLSearchParams();
         if (params?.page) queryParams.append('page', params.page.toString());
@@ -167,6 +174,13 @@ class ApiClient {
         if (params?.hasVulnerabilities) queryParams.append('has_vulnerabilities', 'true');
         if (params?.expiringMonth) queryParams.append('expiring_month', params.expiringMonth.toString());
         if (params?.expiringYear) queryParams.append('expiring_year', params.expiringYear.toString());
+        // Global filter params
+        if (params?.startDate) queryParams.append('start_date', params.startDate);
+        if (params?.endDate) queryParams.append('end_date', params.endDate);
+        if (params?.countries?.length) queryParams.append('countries', params.countries.join(','));
+        if (params?.issuers?.length) queryParams.append('issuers', params.issuers.join(','));
+        if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
+        if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
 
         const query = queryParams.toString();
         return this.fetch<CertificateListResponse>(`/certificates/${query ? `?${query}` : ''}`);
@@ -181,21 +195,67 @@ class ApiClient {
         return this.fetch<UniqueFilters>('/unique-filters/');
     }
 
-    // Analytics
-    async getEncryptionStrength(): Promise<EncryptionStrength[]> {
-        return this.fetch<EncryptionStrength[]>('/encryption-strength/');
+    // Global filter params type
+    // Analytics - with optional global filter params
+    async getEncryptionStrength(params?: {
+        startDate?: string;
+        endDate?: string;
+        countries?: string[];
+        issuers?: string[];
+        statuses?: string[];
+        validationLevels?: string[];
+    }): Promise<EncryptionStrength[]> {
+        const queryParams = new URLSearchParams();
+        if (params?.startDate) queryParams.append('start_date', params.startDate);
+        if (params?.endDate) queryParams.append('end_date', params.endDate);
+        if (params?.countries?.length) queryParams.append('countries', params.countries.join(','));
+        if (params?.issuers?.length) queryParams.append('issuers', params.issuers.join(','));
+        if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
+        if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
+        const query = queryParams.toString();
+        return this.fetch<EncryptionStrength[]>(`/encryption-strength/${query ? `?${query}` : ''}`);
     }
 
     async getValidityTrends(months: number = 12): Promise<ValidityTrend[]> {
         return this.fetch<ValidityTrend[]>(`/validity-trends/?months=${months}`);
     }
 
-    async getCAAnalytics(limit: number = 10): Promise<CALeaderboardEntry[]> {
-        return this.fetch<CALeaderboardEntry[]>(`/ca-analytics/?limit=${limit}`);
+    async getCAAnalytics(limit: number = 10, params?: {
+        startDate?: string;
+        endDate?: string;
+        countries?: string[];
+        issuers?: string[];
+        statuses?: string[];
+        validationLevels?: string[];
+    }): Promise<CALeaderboardEntry[]> {
+        const queryParams = new URLSearchParams();
+        queryParams.append('limit', limit.toString());
+        if (params?.startDate) queryParams.append('start_date', params.startDate);
+        if (params?.endDate) queryParams.append('end_date', params.endDate);
+        if (params?.countries?.length) queryParams.append('countries', params.countries.join(','));
+        if (params?.issuers?.length) queryParams.append('issuers', params.issuers.join(','));
+        if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
+        if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
+        return this.fetch<CALeaderboardEntry[]>(`/ca-analytics/?${queryParams.toString()}`);
     }
 
-    async getGeographicDistribution(limit: number = 10): Promise<GeographicEntry[]> {
-        return this.fetch<GeographicEntry[]>(`/geographic-distribution/?limit=${limit}`);
+    async getGeographicDistribution(limit: number = 10, params?: {
+        startDate?: string;
+        endDate?: string;
+        countries?: string[];
+        issuers?: string[];
+        statuses?: string[];
+        validationLevels?: string[];
+    }): Promise<GeographicEntry[]> {
+        const queryParams = new URLSearchParams();
+        queryParams.append('limit', limit.toString());
+        if (params?.startDate) queryParams.append('start_date', params.startDate);
+        if (params?.endDate) queryParams.append('end_date', params.endDate);
+        if (params?.countries?.length) queryParams.append('countries', params.countries.join(','));
+        if (params?.issuers?.length) queryParams.append('issuers', params.issuers.join(','));
+        if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
+        if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
+        return this.fetch<GeographicEntry[]>(`/geographic-distribution/?${queryParams.toString()}`);
     }
 
     async getFutureRisk(): Promise<FutureRisk> {

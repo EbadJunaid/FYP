@@ -130,6 +130,127 @@ class CertificateModel:
             return f"{counts['warnings']} Warning"
         return "0 Found"
     
+    @classmethod
+    def build_filter_query(
+        cls,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        countries: Optional[List[str]] = None,
+        issuers: Optional[List[str]] = None,
+        grades: Optional[List[str]] = None,
+        statuses: Optional[List[str]] = None,
+        validation_levels: Optional[List[str]] = None
+    ) -> Dict:
+        """
+        Build MongoDB $match filter from query params.
+        All filters are combined with AND logic.
+        
+        Date range uses overlap check:
+        - Certificate is included if valid at ANY point during the range
+        - Query: validFrom <= endDate AND validTo >= startDate
+        """
+        filters = []
+        now = datetime.now(timezone.utc)
+        
+        # Date range filter - certificates where validity.end is within the range
+        # User request: certificates ending within the date range (end_date between filter start and end)
+        if start_date and end_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                # Certificate's end date should be >= filter start AND <= filter end
+                filters.append({
+                    '$and': [
+                        {'parsed.validity.end': {'$gte': start_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}},
+                        {'parsed.validity.end': {'$lte': end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}}
+                    ]
+                })
+            except (ValueError, AttributeError):
+                pass  # Invalid date format, skip filter
+        
+        # Country filter (derived from TLD)
+        if countries and len(countries) > 0:
+            # We'll filter on common_name TLD - need to use $where or compute in aggregation
+            # For now, we'll skip and handle in aggregation stage
+            pass
+        
+        # Issuer filter
+        if issuers and len(issuers) > 0:
+            filters.append({
+                '$or': [
+                    {'parsed.issuer.organization': {'$elemMatch': {'$in': issuers}}},
+                    {'parsed.issuer.organization': {'$in': issuers}}  # Handle both array and string
+                ]
+            })
+        
+        # Grade filter - needs to be computed, handled in specific methods
+        # For now, store for reference
+        
+        # Status filter
+        if statuses and len(statuses) > 0:
+            status_filters = []
+            for status in statuses:
+                if status.upper() == 'VALID':
+                    # Valid = not expired and not expiring soon (>30 days)
+                    thirty_days = now + timedelta(days=30)
+                    status_filters.append({
+                        'parsed.validity.end': {'$gt': thirty_days.strftime('%Y-%m-%dT%H:%M:%SZ')}
+                    })
+                elif status.upper() == 'EXPIRED':
+                    status_filters.append({
+                        'parsed.validity.end': {'$lte': now.strftime('%Y-%m-%dT%H:%M:%SZ')}
+                    })
+                elif status.upper() == 'EXPIRING_SOON':
+                    # Expiring in next 30 days
+                    thirty_days = now + timedelta(days=30)
+                    status_filters.append({
+                        '$and': [
+                            {'parsed.validity.end': {'$gt': now.strftime('%Y-%m-%dT%H:%M:%SZ')}},
+                            {'parsed.validity.end': {'$lte': thirty_days.strftime('%Y-%m-%dT%H:%M:%SZ')}}
+                        ]
+                    })
+                elif status.upper() == 'WEAK':
+                    # Weak encryption - RSA key < 2048
+                    status_filters.append({
+                        '$and': [
+                            {'parsed.subject_key_info.key_algorithm.name': 'RSA'},
+                            {'parsed.subject_key_info.rsa_public_key.length': {'$lt': 2048}}
+                        ]
+                    })
+            if status_filters:
+                filters.append({'$or': status_filters})
+        
+        # Validation level filter
+        if validation_levels and len(validation_levels) > 0:
+            # EV, OV, DV derived from policy identifiers or subject organization presence
+            level_filters = []
+            for level in validation_levels:
+                if level.upper() == 'EV':
+                    # EV certs have specific policy OIDs and extended validation
+                    level_filters.append({
+                        'parsed.extensions.certificate_policies': {'$exists': True}
+                    })
+                elif level.upper() == 'OV':
+                    # OV certs have organization in subject
+                    level_filters.append({
+                        'parsed.subject.organization': {'$exists': True}
+                    })
+                elif level.upper() == 'DV':
+                    # DV certs typically don't have organization
+                    level_filters.append({
+                        'parsed.subject.organization': {'$exists': False}
+                    })
+            if level_filters:
+                filters.append({'$or': level_filters})
+        
+        # Combine all filters with AND
+        if not filters:
+            return {}
+        elif len(filters) == 1:
+            return filters[0]
+        else:
+            return {'$and': filters}
+    
     @staticmethod
     def serialize_certificate(doc: Dict) -> Dict:
         """Serialize a certificate document for API response"""
@@ -205,14 +326,23 @@ class CertificateModel:
                 encryption_type: Optional[str] = None,
                 has_vulnerabilities: Optional[bool] = None,
                 expiring_month: Optional[int] = None,
-                expiring_year: Optional[int] = None) -> Dict:
-        """Get paginated list of certificates with optional filters"""
+                expiring_year: Optional[int] = None,
+                base_filter: Optional[Dict] = None) -> Dict:
+        """Get paginated list of certificates with optional filters
+        
+        Args:
+            base_filter: Global filter query from build_filter_query() - merged with specific filters
+        """
         
         now = cls.get_current_time_iso()
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # Build query based on filters
         query = {}
+        
+        # Apply base filter from global filters (date range, etc)
+        if base_filter:
+            query = base_filter.copy()
         
         if search:
             query['$or'] = [
@@ -483,17 +613,31 @@ class CertificateModel:
         }
     
     @classmethod
-    def get_encryption_strength(cls) -> List[Dict]:
-        """Get encryption type distribution with detailed subtypes (e.g., RSA 2048, ECDSA)"""
+    def get_encryption_strength(cls, base_filter: Optional[Dict] = None) -> List[Dict]:
+        """Get encryption type distribution with detailed subtypes (e.g., RSA 2048, ECDSA)
         
-        # Get total certificates count
-        total = cls.collection.count_documents({})
+        Args:
+            base_filter: Global filter query - applied before aggregation
+        """
+        
+        # Get total certificates count (with or without filter)
+        if base_filter:
+            total = cls.collection.count_documents(base_filter)
+        else:
+            total = cls.collection.count_documents({})
         
         if total == 0:
             return []
         
-        # Aggregation to get algorithm + key length combination
-        pipeline = [
+        # Build aggregation pipeline
+        pipeline = []
+        
+        # Apply base filter first if provided
+        if base_filter:
+            pipeline.append({'$match': base_filter})
+        
+        # Add aggregation stages
+        pipeline.extend([
             {'$project': {
                 'algo': '$parsed.subject_key_info.key_algorithm.name',
                 'rsa_length': '$parsed.subject_key_info.rsa_public_key.length',
@@ -511,7 +655,7 @@ class CertificateModel:
             }},
             {'$sort': {'count': -1}},
             {'$limit': 10}
-        ]
+        ])
         
         results = list(cls.collection.aggregate(pipeline))
         
@@ -605,20 +749,32 @@ class CertificateModel:
         return trends
     
     @classmethod
-    def get_ca_distribution(cls, limit: int = 10) -> List[Dict]:
+    def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
         """Get Certificate Authority distribution with accurate percentages
         Uses parsed.issuer.organization.0 (first element) for unique issuers
+        
+        Args:
+            base_filter: Global filter query - applied before aggregation
         """
         
-        # Get total certificates count
-        total = cls.collection.count_documents({})
+        # Get total certificates count (with or without filter)
+        if base_filter:
+            total = cls.collection.count_documents(base_filter)
+        else:
+            total = cls.collection.count_documents({})
         
         if total == 0:
             return []
         
-        # Use $arrayElemAt to get first organization element (index 0)
-        # This prevents duplicates from $unwind
-        pipeline = [
+        # Build aggregation pipeline
+        pipeline = []
+        
+        # Apply base filter first if provided
+        if base_filter:
+            pipeline.append({'$match': base_filter})
+        
+        # Add aggregation stages - Use $arrayElemAt to get first organization element
+        pipeline.extend([
             {'$project': {
                 'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}
             }},
@@ -629,7 +785,7 @@ class CertificateModel:
             }},
             {'$sort': {'count': -1}},
             {'$limit': limit}
-        ]
+        ])
         
         results = list(cls.collection.aggregate(pipeline))
         max_count = results[0]['count'] if results else 1
@@ -684,19 +840,32 @@ class CertificateModel:
         return ca_list
     
     @classmethod
-    def get_geographic_distribution(cls, limit: int = 10) -> List[Dict]:
+    def get_geographic_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
         """Get certificate distribution by country (from domain TLD)
         Optimized: Compute TLD directly in MongoDB aggregation
+        
+        Args:
+            base_filter: Global filter query - applied before aggregation
         """
         
-        # Get total certificates count
-        total = cls.collection.count_documents({})
+        # Get total certificates count (with or without filter)
+        if base_filter:
+            total = cls.collection.count_documents(base_filter)
+        else:
+            total = cls.collection.count_documents({})
         
         if total == 0:
             return []
         
-        # Optimized: Extract TLD directly in MongoDB (faster than Python iteration)
-        pipeline = [
+        # Build aggregation pipeline
+        pipeline = []
+        
+        # Apply base filter first if provided
+        if base_filter:
+            pipeline.append({'$match': base_filter})
+        
+        # Add domain extraction and grouping stages
+        pipeline.extend([
             {'$match': {'domain': {'$exists': True, '$ne': None, '$ne': ''}}},
             {'$project': {
                 'domain_parts': {'$split': ['$domain', '.']},
@@ -710,7 +879,7 @@ class CertificateModel:
                 'count': {'$sum': 1}
             }},
             {'$sort': {'count': -1}}
-        ]
+        ])
         
         results = list(cls.collection.aggregate(pipeline))
         

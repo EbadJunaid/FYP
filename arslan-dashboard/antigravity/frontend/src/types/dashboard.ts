@@ -51,6 +51,9 @@ export interface DashboardMetrics {
         count: number;
         new: number;
     };
+    expiredCertificates?: {
+        count: number;
+    };
 }
 
 // Encryption Strength Data

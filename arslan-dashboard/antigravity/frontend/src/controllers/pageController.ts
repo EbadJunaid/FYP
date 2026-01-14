@@ -46,6 +46,16 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
     }
 }
 
+// Global filter params type
+export interface GlobalFilterParams {
+    startDate?: string;
+    endDate?: string;
+    countries?: string[];
+    issuers?: string[];
+    statuses?: string[];
+    validationLevels?: string[];
+}
+
 // Fetch certificates with filters and pagination
 export async function fetchCertificates(params?: {
     page?: number;
@@ -58,7 +68,7 @@ export async function fetchCertificates(params?: {
     hasVulnerabilities?: boolean;
     expiringMonth?: number;
     expiringYear?: number;
-}): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
+} & GlobalFilterParams): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
     try {
         const result = await apiClient.getCertificates(params);
         return {
@@ -96,9 +106,9 @@ export async function fetchUniqueFilters(): Promise<UniqueFilters> {
 }
 
 // Fetch encryption strength distribution
-export async function fetchEncryptionStrength(): Promise<EncryptionStrength[]> {
+export async function fetchEncryptionStrength(params?: GlobalFilterParams): Promise<EncryptionStrength[]> {
     try {
-        return await apiClient.getEncryptionStrength();
+        return await apiClient.getEncryptionStrength(params);
     } catch (error) {
         console.error('Error fetching encryption strength:', error);
         return [];
@@ -116,9 +126,9 @@ export async function fetchValidityTrends(months: number = 12): Promise<Validity
 }
 
 // Fetch CA leaderboard
-export async function fetchCALeaderboard(limit: number = 10): Promise<CALeaderboardEntry[]> {
+export async function fetchCALeaderboard(limit: number = 10, params?: GlobalFilterParams): Promise<CALeaderboardEntry[]> {
     try {
-        return await apiClient.getCAAnalytics(limit);
+        return await apiClient.getCAAnalytics(limit, params);
     } catch (error) {
         console.error('Error fetching CA leaderboard:', error);
         return [];
@@ -126,9 +136,9 @@ export async function fetchCALeaderboard(limit: number = 10): Promise<CALeaderbo
 }
 
 // Fetch geographic distribution
-export async function fetchGeographicDistribution(limit: number = 10): Promise<GeographicEntry[]> {
+export async function fetchGeographicDistribution(limit: number = 10, params?: GlobalFilterParams): Promise<GeographicEntry[]> {
     try {
-        return await apiClient.getGeographicDistribution(limit);
+        return await apiClient.getGeographicDistribution(limit, params);
     } catch (error) {
         console.error('Error fetching geographic distribution:', error);
         return [];

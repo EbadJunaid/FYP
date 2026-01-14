@@ -203,29 +203,76 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
         }
     }, []);
 
-    // Handle filter application with API call
+    // Handle filter application with API call - refetch ALL cards and table with all filter params
     const handleFilter = useCallback(async (filters: FilterOptions) => {
         setState((prev) => ({ ...prev, isLoading: true, filters }));
 
+        // Clear page cache when filter changes
+        pageCacheRef.current.clear();
+        setActiveFilter({ type: 'all' });
+
         try {
-            const result = await fetchCertificates({
-                page: 1,
-                pageSize: 50,
-                status: filters.status.length > 0 ? filters.status[0] : undefined,
-                issuer: filters.issuer.length > 0 ? filters.issuer[0] : undefined,
-            });
+            // Build ALL global filter params
+            const globalFilterParams = {
+                startDate: filters.dateRange.start ? filters.dateRange.start.toISOString() : undefined,
+                endDate: filters.dateRange.end ? filters.dateRange.end.toISOString() : undefined,
+                issuers: filters.issuer?.length > 0 ? filters.issuer : undefined,
+                statuses: filters.status?.length > 0 ? filters.status : undefined,
+                // Note: sslGrade maps to 'grades' in backend, but we use direct filter for now
+                // validationLevel not yet in FilterOptions - can be added later
+            };
+
+            // Check if ANY filter is active
+            const hasFilters =
+                globalFilterParams.startDate ||
+                globalFilterParams.endDate ||
+                globalFilterParams.issuers?.length ||
+                globalFilterParams.statuses?.length;
+
+            // Fetch ALL data in parallel with ALL filter params applied
+            const [
+                certificatesData,
+                encryptionData,
+                caData,
+                geoData,
+            ] = await Promise.all([
+                fetchCertificates({
+                    page: 1,
+                    pageSize: 10,
+                    // Pass global filter params for backend filtering
+                    startDate: globalFilterParams.startDate,
+                    endDate: globalFilterParams.endDate,
+                    issuers: globalFilterParams.issuers,
+                    statuses: globalFilterParams.statuses,
+                }),
+                // Refetch analytics with ALL filter params if any filter is set
+                hasFilters ? fetchEncryptionStrength(globalFilterParams) : Promise.resolve(state.encryptionStrength),
+                hasFilters ? fetchCALeaderboard(10, globalFilterParams) : Promise.resolve(state.caLeaderboard),
+                hasFilters ? fetchGeographicDistribution(10, globalFilterParams) : Promise.resolve(state.geographicDistribution),
+            ]);
 
             setState((prev) => ({
                 ...prev,
-                recentScans: result.certificates,
+                recentScans: certificatesData.certificates,
+                encryptionStrength: hasFilters ? encryptionData.map((e) => ({
+                    ...e,
+                    type: e.type as 'Strong' | 'Standard' | 'Modern' | 'Weak' | 'Deprecated',
+                })) : prev.encryptionStrength,
+                caLeaderboard: hasFilters ? caData as CALeaderboardEntry[] : prev.caLeaderboard,
+                geographicDistribution: hasFilters ? geoData as GeographicEntry[] : prev.geographicDistribution,
                 isLoading: false,
             }));
-            setPagination((prev) => ({ ...prev, currentPage: 1 }));
+
+            setPagination((prev) => ({
+                ...prev,
+                currentPage: 1,
+                totalItems: certificatesData.pagination.total,
+            }));
         } catch (error) {
             console.error('Filter error:', error);
             setState((prev) => ({ ...prev, isLoading: false }));
         }
-    }, []);
+    }, [state.encryptionStrength, state.caLeaderboard, state.geographicDistribution]);
 
     // Handle card clicks - fetch related data with proper filters
     const handleCardClick = useCallback(async (cardType: string, data?: unknown) => {

@@ -14,6 +14,10 @@
 10. [Redis Installation & Troubleshooting Guide](#10-redis-installation--troubleshooting-guide)
 11. [Caching Behavior FAQ - Detailed Explanations](#11-caching-behavior-faq---detailed-explanations)
 12. [Staleness Checking - How It Really Works](#12-staleness-checking---how-it-really-works)
+13. [Notifications and Filters - Caching Implementation](#13-notifications-and-filters---caching-implementation)
+14. [How to Verify Caching is Working](#14-how-to-verify-caching-is-working)
+15. [Pagination Scroll Issue - Causes and Fix](#15-pagination-scroll-issue---causes-and-fix)
+
 
 ---
 
@@ -1376,3 +1380,464 @@ Based on your feedback, we're reducing TTLs:
 | Future Risk | 15 min | 5 min |
 | Notifications | 2 min | 1 min |
 | Unique Filters | 30 min | 5 min |
+
+---
+
+## 13. Notifications and Filters - Caching Implementation
+
+### Notifications Caching
+
+The notifications feature uses a hybrid caching approach for optimal performance:
+
+#### Backend (Redis) Implementation
+
+```python
+# controllers.py - NotificationController
+cached = cache.get('notifications', {})
+if cached:
+    return cached
+result = CertificateModel.get_notifications()
+cache.set('notifications', {}, result)  # TTL: 1 minute
+```
+
+**Redis TTL:** 1 minute (60 seconds)
+
+Why short TTL? Notifications are time-sensitive:
+- Certificates expiring in 48 hours could change any moment
+- New vulnerabilities may be discovered
+- Certificates could expire between requests
+
+#### Frontend (Client-Side) Implementation
+
+```typescript
+// Header.tsx - Notification fetching
+const fetchNotifications = useCallback(async () => {
+    const response = await apiClient.getNotifications();
+    setNotifications(response.notifications);
+    // Calculate unread (excluding already read)
+    const unread = response.notifications.filter(n => !readNotificationIds.has(n.id)).length;
+    setUnreadCount(unread);
+}, [readNotificationIds]);
+
+// Fetch on mount and every 5 minutes
+useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+}, [fetchNotifications]);
+```
+
+**Key behaviors:**
+| Feature | Implementation |
+|---------|----------------|
+| Initial fetch | On component mount |
+| Auto-refresh | Every 5 minutes (interval) |
+| Manual refresh | "Refresh" button calls fetchNotifications() |
+| Read status | Stored in localStorage (persists across sessions) |
+| Dismissed items | Client-side only (removed from list until refresh) |
+
+#### Caching Flow
+
+```
+User opens dashboard
+    └─▶ Header mounts
+        └─▶ fetchNotifications() called
+            └─▶ API request: GET /api/notifications
+                └─▶ Backend: Check Redis cache
+                    ├─▶ HIT: Return cached (< 1 min old)
+                    └─▶ MISS: Run MongoDB aggregation
+                        └─▶ Cache result in Redis (TTL: 60s)
+                        └─▶ Return to frontend
+
+User clicks "Refresh Notifications"
+    └─▶ fetchNotifications() called (bypasses frontend interval)
+        └─▶ API request: GET /api/notifications
+            └─▶ Backend: Check Redis
+                └─▶ If > 1 min passed: Fresh aggregation
+                └─▶ Return updated notifications
+
+5 minutes pass
+    └─▶ setInterval triggers fetchNotifications()
+        └─▶ Same flow as above
+```
+
+---
+
+### Filters Caching
+
+Filter options use aggressive caching since they change infrequently:
+
+#### Backend (Redis) Implementation
+
+```python
+# controllers.py - FiltersController
+cached = cache.get('unique_filters', {})
+if cached:
+    return cached
+result = CertificateModel.get_unique_filters()
+cache.set('unique_filters', {}, result)  # TTL: 5 minutes
+```
+
+**Redis TTL:** 5 minutes (300 seconds)
+
+Why 5 minutes? Filter options are:
+- Countries: Rarely change
+- Issuers: New CAs added infrequently
+- Validation Levels: Static (DV, OV, EV)
+- Statuses: Static (VALID, EXPIRED, EXPIRING_SOON, WEAK)
+
+#### Frontend (Client-Side) Implementation
+
+```typescript
+// FilterModal.tsx - Dynamic filter loading
+useEffect(() => {
+    if (isOpen) {
+        const loadFilters = async () => {
+            setIsLoadingFilters(true);
+            const filterOptions = await fetchUniqueFilters();
+            setApiCountries(filterOptions.countries || []);
+            setApiIssuers(filterOptions.issuers || []);
+            setApiValidationLevels(filterOptions.validationLevels || ['DV', 'OV', 'EV']);
+            setIsLoadingFilters(false);
+        };
+        loadFilters();
+    }
+}, [isOpen]);
+```
+
+**Key behaviors:**
+| Feature | Implementation |
+|---------|----------------|
+| When fetched | Only when filter modal opens |
+| Cached until | Modal closes (local state) + Redis TTL |
+| Fallback | Hardcoded defaults if API fails |
+
+#### Caching Flow
+
+```
+User clicks "Filter" button
+    └─▶ FilterModal opens (isOpen = true)
+        └─▶ useEffect triggers loadFilters()
+            └─▶ API request: GET /api/unique-filters
+                └─▶ Backend: Check Redis cache
+                    ├─▶ HIT: Return cached (< 5 min old)
+                    └─▶ MISS: Run MongoDB aggregations
+                        ├─▶ Get unique issuers (limit 50)
+                        ├─▶ Get unique countries from TLDs
+                        └─▶ Cache result in Redis (TTL: 300s)
+                        └─▶ Return to frontend
+
+User closes and reopens Filter modal
+    └─▶ useEffect triggers again
+        └─▶ API request
+            └─▶ If < 5 min passed: Redis cache HIT
+            └─▶ Instant response with cached data
+
+User applies filters
+    └─▶ Selected filters sent as query params
+        └─▶ /api/certificates?country=US&issuer=DigiCert
+        └─▶ Results cached with unique cache key per filter combo
+```
+
+---
+
+### Filter Application Flow
+
+When filters are applied, they update the certificates query:
+
+```typescript
+// DashboardContext.tsx
+const handleFilter = useCallback(async (filters: FilterOptions) => {
+    setState((prev) => ({ ...prev, isLoading: true, filters }));
+    
+    const result = await fetchCertificates({
+        page: 1,
+        pageSize: 50,
+        status: filters.status.length > 0 ? filters.status[0] : undefined,
+        issuer: filters.issuer.length > 0 ? filters.issuer[0] : undefined,
+    });
+    
+    setState((prev) => ({
+        ...prev,
+        recentScans: result.certificates,
+        isLoading: false,
+    }));
+}, []);
+```
+
+Each unique filter combination gets its own Redis cache entry:
+
+```
+Cache keys (examples):
+ssl_guardian:certificates:abc123  → page=1, no filters
+ssl_guardian:certificates:def456  → page=1, country=US
+ssl_guardian:certificates:ghi789  → page=1, issuer=DigiCert
+ssl_guardian:certificates:jkl012  → page=1, country=US, issuer=DigiCert
+```
+
+---
+
+### Summary: Notifications vs Filters Caching
+
+| Aspect | Notifications | Filters |
+|--------|--------------|---------|
+| Redis TTL | 1 minute | 5 minutes |
+| Frontend refresh | 5 min interval | On modal open only |
+| Data volatility | High (time-sensitive) | Low (rarely changes) |
+| Cache key | Static | Static |
+| Read tracking | localStorage | N/A |
+| Dismissed items | Client state | N/A |
+
+---
+
+### Testing Notifications Caching
+
+```bash
+# Monitor Redis
+redis-cli MONITOR
+
+# Load dashboard
+# Should see: GET ssl_guardian:notifications:...
+
+# Wait > 1 minute, click "Refresh Notifications"
+# Should see: GET (miss), SET (new cache)
+
+# Click immediately again
+# Should see: GET (hit) - no new SET
+```
+
+---
+
+### Testing Filters Caching
+
+```bash
+# Monitor Redis
+redis-cli MONITOR
+
+# Click "Filter" button
+# Should see: GET ssl_guardian:unique_filters:...
+
+# Close and reopen filter modal (within 5 min)
+# Should see: GET (hit) - cached response
+
+# Wait > 5 minutes, open filter modal
+# Should see: GET (miss), SET (new cache)
+```
+
+---
+
+## 14. How to Verify Caching is Working
+
+This section provides step-by-step instructions to verify that both client-side (SWR) and server-side (Redis) caching are functioning correctly.
+
+### 14.1 Client-Side (SWR) Cache Verification
+
+#### Method 1: Network Tab (Chrome DevTools)
+
+1. **Open DevTools** → Network tab → Filter by "Fetch/XHR"
+2. **Navigate to a page** (e.g., Active vs Expired)
+3. **Initial Load**: You should see API calls like:
+   - `GET /api/dashboard/global-health/`
+   - `GET /api/certificates?status=...`
+4. **Change filter/pagination**: New calls appear
+5. **Go back to previous filter/page**: 
+   - ✅ **Cache HIT**: No new API call (data served from SWR memory cache)
+   - ❌ **Cache MISS**: New API call appears
+
+#### Method 2: Console Logs
+
+Add this to your SWR config to see cache behavior:
+
+```typescript
+const { data } = useSWR(key, fetcher, {
+    onSuccess: (data) => console.log(`[SWR] Cache HIT for key: ${key}`),
+    onError: (error) => console.log(`[SWR] Fetch error for key: ${key}`, error),
+});
+```
+
+#### Method 3: SWR DevTools
+
+Install [SWR DevTools Chrome Extension](https://chrome.google.com/webstore/detail/swr-devtools) to visually inspect:
+- All cached keys
+- Data stored per key
+- Revalidation status
+
+### 14.2 Server-Side (Redis) Cache Verification
+
+#### Method 1: Redis CLI MONITOR
+
+```bash
+# Start monitoring all Redis commands
+redis-cli MONITOR
+
+# In another terminal, trigger an API call
+# You'll see:
+# 1679654321.123456 [0 127.0.0.1:54321] "GET" "ssl_guardian:metrics:..."
+# 1679654321.123457 [0 127.0.0.1:54321] "SETEX" "ssl_guardian:metrics:..." "300" "..."
+```
+
+#### Method 2: Inspect Cached Keys
+
+```bash
+# List all SSL Guardian cache keys
+redis-cli KEYS "ssl_guardian:*"
+
+# Check TTL of a specific key
+redis-cli TTL "ssl_guardian:metrics:..."
+
+# Get value of a cached key
+redis-cli GET "ssl_guardian:metrics:..."
+```
+
+#### Method 3: Simulate Cache Hit/Miss
+
+```bash
+# 1. Delete a specific cache key
+redis-cli DEL "ssl_guardian:certificates:page_1:..."
+
+# 2. Make API call - observe MONITOR for GET (miss) then SET (new cache)
+
+# 3. Make same API call again - observe GET (hit), no new SET
+```
+
+### 14.3 Testing Navigation and Refresh
+
+| Action | Expected SWR Behavior | Expected Redis Behavior |
+|--------|----------------------|------------------------|
+| Navigate away and back (within SWR dedupingInterval) | Cache HIT - no API call | N/A (SWR serves from memory) |
+| Hard refresh (Ctrl+F5) | Fresh fetch | GET from Redis (if within TTL) |
+| Soft refresh (F5) | `revalidateOnFocus` behavior | GET from Redis (if within TTL) |
+| Wait > TTL, then request | Stale-while-revalidate | GET (miss), SET (new cache) |
+
+### 14.4 Active vs Expired Page - Specific Checks
+
+```typescript
+// SWR keys used in Active vs Expired page:
+'active-vs-expired-metrics'           // Dashboard metrics
+'certificates|all|1'                  // All certificates, page 1
+'certificates|active|1'               // Active certificates, page 1
+'certificates|expired|2'              // Expired certificates, page 2
+```
+
+**Verification steps:**
+1. Load page → observe initial API calls
+2. Click "Active" tab → new call for `certificates|active|1`
+3. Click "Expired" tab → new call for `certificates|expired|1`
+4. Click "Active" tab again → **NO new call** (SWR cache hit)
+5. Click pagination next → call for `certificates|active|2`
+6. Click pagination prev → **NO new call** (SWR cache hit)
+
+---
+
+## 15. Pagination Scroll Issue - Causes and Fix
+
+### 15.1 The Problem
+
+When clicking next/previous pagination buttons, the page would:
+1. ❌ Scroll to top of page
+2. ❌ Cause a visible "flash" as entire component re-rendered
+3. ❌ Lose scroll position, disrupting user flow
+
+### 15.2 Root Causes
+
+#### Cause 1: `scrollIntoView()` on Pagination
+
+Original code called scroll on every table data change:
+
+```typescript
+// PROBLEMATIC CODE
+const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    loadTableData(filter, page);
+    // This line caused unwanted scroll on pagination!
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+```
+
+**Fix**: Only scroll on filter change, not pagination:
+
+```typescript
+// FIXED CODE
+const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // NO scroll here - just update data
+};
+
+const handleFilterChange = (newFilter: FilterType) => {
+    setFilter(newFilter);
+    setCurrentPage(1);
+    // Scroll ONLY on filter change
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+```
+
+#### Cause 2: Component Remounting
+
+If `key` prop changes on parent component, React unmounts and remounts:
+
+```tsx
+// PROBLEMATIC - key changes cause remount
+<Card key={filter + currentPage}>
+    <DataTable ... />
+</Card>
+
+// FIXED - stable key or no key
+<Card>
+    <DataTable ... />
+</Card>
+```
+
+#### Cause 3: Synchronous State Updates Blocking UI
+
+Multiple `setState` calls can cause layout thrashing:
+
+```typescript
+// PROBLEMATIC
+const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setIsLoading(true);  // Causes re-render
+    loadTableData();     // Another state change
+};
+
+// FIXED - use useTransition for non-urgent updates
+const [isPending, startTransition] = useTransition();
+
+const handlePageChange = (page: number) => {
+    startTransition(() => {
+        setCurrentPage(page);
+    });
+};
+```
+
+### 15.3 SWR's `keepPreviousData` Option
+
+This prevents the table from going blank during loading:
+
+```typescript
+const { data } = useSWR(key, fetcher, {
+    keepPreviousData: true,  // Shows old data while loading new
+});
+```
+
+**Before**: Table shows "Loading..." on every page change
+**After**: Table shows previous page data with opacity fade
+
+### 15.4 Visual Feedback Without Full Reload
+
+```tsx
+<div className={`transition-opacity duration-200 ${isLoading ? 'opacity-50' : 'opacity-100'}`}>
+    <DataTable ... />
+</div>
+```
+
+This dims the table while loading new data, indicating progress without disrupting layout.
+
+### 15.5 Debugging Pagination Issues
+
+1. **Check Network tab**: Is API being called on every click?
+2. **React DevTools**: Is component unmounting/remounting?
+3. **Console log**: Add `console.log('render')` in component body
+4. **Profile**: Use React Profiler to see what's causing re-renders
+
+---
+

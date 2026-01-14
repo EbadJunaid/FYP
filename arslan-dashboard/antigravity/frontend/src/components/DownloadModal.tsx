@@ -8,7 +8,7 @@ import { DownloadIcon } from '@/components/icons/Icons';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface ActiveFilter {
-    type: 'all' | 'active' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend';
+    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend';
     value?: string;
 }
 
@@ -75,6 +75,9 @@ export default function DownloadModal({
         switch (activeFilter.type) {
             case 'active':
                 params.append('status', 'VALID');
+                break;
+            case 'expired':
+                params.append('status', 'EXPIRED');
                 break;
             case 'expiringSoon':
                 params.append('status', 'EXPIRING_SOON');

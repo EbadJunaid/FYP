@@ -40,10 +40,14 @@ class CertificateListView(View):
     """
     GET /api/certificates
     Returns paginated list of certificates with optional filters
-    Query params: page, page_size, status, country, issuer, search, encryption_type, has_vulnerabilities, expiring_month, expiring_year
+    Query params: page, page_size, status, country, issuer, search, encryption_type, 
+                  has_vulnerabilities, expiring_month, expiring_year,
+                  start_date, end_date, countries, issuers, statuses, validation_levels
     """
     def get(self, request):
         try:
+            from .controllers import GlobalFilterParams
+            
             # Get query parameters
             page = int(request.GET.get('page', 1))
             page_size = int(request.GET.get('page_size', 10))
@@ -60,6 +64,33 @@ class CertificateListView(View):
             expiring_month = int(expiring_month_str) if expiring_month_str else None
             expiring_year = int(expiring_year_str) if expiring_year_str else None
             
+            # Global filter params - date range
+            start_date = request.GET.get('start_date')
+            end_date = request.GET.get('end_date')
+            
+            # Global filter params - multi-select arrays (comma-separated)
+            countries_str = request.GET.get('countries', '')
+            issuers_str = request.GET.get('issuers', '')
+            statuses_str = request.GET.get('statuses', '')
+            validation_levels_str = request.GET.get('validation_levels', '')
+            
+            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+            # Build global filters if any filter params provided
+            global_filters = None
+            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+                global_filters = GlobalFilterParams(
+                    start_date=start_date,
+                    end_date=end_date,
+                    countries=countries,
+                    issuers=issuers_list,
+                    statuses=statuses_list,
+                    validation_levels=validation_levels
+                )
+            
             result = CertificateController.get_certificates(
                 page=page,
                 page_size=page_size,
@@ -70,7 +101,8 @@ class CertificateListView(View):
                 encryption_type=encryption_type,
                 has_vulnerabilities=has_vulnerabilities if has_vulnerabilities else None,
                 expiring_month=expiring_month,
-                expiring_year=expiring_year
+                expiring_year=expiring_year,
+                global_filters=global_filters
             )
             return json_response(result)
         except Exception as e:
@@ -112,10 +144,39 @@ class EncryptionStrengthView(View):
     """
     GET /api/encryption-strength
     Returns encryption type distribution for charts
+    Query params: start_date, end_date, countries, issuers, statuses, validation_levels
     """
     def get(self, request):
         try:
-            data = AnalyticsController.get_encryption_distribution()
+            from .controllers import GlobalFilterParams
+            
+            # Parse global filter params - date range
+            start_date = request.GET.get('start_date')
+            end_date = request.GET.get('end_date')
+            
+            # Parse multi-select arrays (comma-separated)
+            countries_str = request.GET.get('countries', '')
+            issuers_str = request.GET.get('issuers', '')
+            statuses_str = request.GET.get('statuses', '')
+            validation_levels_str = request.GET.get('validation_levels', '')
+            
+            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+            global_filters = None
+            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+                global_filters = GlobalFilterParams(
+                    start_date=start_date,
+                    end_date=end_date,
+                    countries=countries,
+                    issuers=issuers_list,
+                    statuses=statuses_list,
+                    validation_levels=validation_levels
+                )
+            
+            data = AnalyticsController.get_encryption_distribution(global_filters=global_filters)
             return json_response(data)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
@@ -146,12 +207,41 @@ class CAAnalyticsView(View):
     """
     GET /api/ca-analytics
     Returns Certificate Authority distribution for leaderboard
-    Query params: limit (default 10)
+    Query params: limit, start_date, end_date, countries, issuers, statuses, validation_levels
     """
     def get(self, request):
         try:
+            from .controllers import GlobalFilterParams
+            
             limit = int(request.GET.get('limit', 10))
-            data = AnalyticsController.get_ca_leaderboard(limit=limit)
+            
+            # Parse global filter params - date range
+            start_date = request.GET.get('start_date')
+            end_date = request.GET.get('end_date')
+            
+            # Parse multi-select arrays (comma-separated)
+            countries_str = request.GET.get('countries', '')
+            issuers_str = request.GET.get('issuers', '')
+            statuses_str = request.GET.get('statuses', '')
+            validation_levels_str = request.GET.get('validation_levels', '')
+            
+            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+            global_filters = None
+            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+                global_filters = GlobalFilterParams(
+                    start_date=start_date,
+                    end_date=end_date,
+                    countries=countries,
+                    issuers=issuers_list,
+                    statuses=statuses_list,
+                    validation_levels=validation_levels
+                )
+            
+            data = AnalyticsController.get_ca_leaderboard(limit=limit, global_filters=global_filters)
             return json_response(data)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
@@ -162,12 +252,41 @@ class GeographicDistributionView(View):
     """
     GET /api/geographic-distribution
     Returns certificate distribution by country
-    Query params: limit (default 10)
+    Query params: limit, start_date, end_date, countries, issuers, statuses, validation_levels
     """
     def get(self, request):
         try:
+            from .controllers import GlobalFilterParams
+            
             limit = int(request.GET.get('limit', 10))
-            data = AnalyticsController.get_geographic_distribution(limit=limit)
+            
+            # Parse global filter params - date range
+            start_date = request.GET.get('start_date')
+            end_date = request.GET.get('end_date')
+            
+            # Parse multi-select arrays (comma-separated)
+            countries_str = request.GET.get('countries', '')
+            issuers_str = request.GET.get('issuers', '')
+            statuses_str = request.GET.get('statuses', '')
+            validation_levels_str = request.GET.get('validation_levels', '')
+            
+            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+            global_filters = None
+            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+                global_filters = GlobalFilterParams(
+                    start_date=start_date,
+                    end_date=end_date,
+                    countries=countries,
+                    issuers=issuers_list,
+                    statuses=statuses_list,
+                    validation_levels=validation_levels
+                )
+            
+            data = AnalyticsController.get_geographic_distribution(limit=limit, global_filters=global_filters)
             return json_response(data)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)

@@ -313,28 +313,6 @@ export default function FilterModal({
                                 </div>
                             </div>
 
-                            {/* Vulnerability Severity */}
-                            <div>
-                                <label className="block text-sm font-medium text-text-primary mb-3">
-                                    Vulnerability Severity
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {severities.map((severity) => (
-                                        <button
-                                            key={severity}
-                                            onClick={() => handleSeverityToggle(severity)}
-                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                        ${localFilters.vulnerabilityType.includes(severity)
-                                                    ? 'bg-primary-blue text-white'
-                                                    : 'bg-background text-text-secondary hover:bg-card-border'
-                                                }`}
-                                        >
-                                            {severity}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
                             {/* Validation Level */}
                             <div>
                                 <label className="block text-sm font-medium text-text-primary mb-3">

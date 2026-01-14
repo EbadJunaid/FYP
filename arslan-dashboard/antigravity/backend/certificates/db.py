@@ -12,6 +12,8 @@ class MongoDBClient:
             # Connect to MongoDB
             cls._client = MongoClient("mongodb://localhost:27017/")
         # Use the correct database name
-        return cls._client['latest-pk-domains']
+        # return cls._client['latest-pk-domains']
+        return cls._client['Tranco_data_Multi']
+
 
 db = MongoDBClient.get_db()
