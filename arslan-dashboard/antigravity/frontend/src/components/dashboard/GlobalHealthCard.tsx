@@ -25,6 +25,7 @@ export default function GlobalHealthCard({
     maxScore,
     trend,
     status,
+    
     lastUpdated,
     onClick,
 }: GlobalHealthCardProps) {
@@ -111,10 +112,10 @@ export default function GlobalHealthCard({
                         showValue={false}
                     />
                     {/* Trend Indicator - Below the gauge */}
-                    <div className="flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded bg-accent-green/20 text-accent-green text-[10px] font-medium">
+                    {/* <div className="flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded bg-accent-green/20 text-accent-green text-[10px] font-medium">
                         <TrendUpIcon size={10} />
                         <span>+{trend}%</span>
-                    </div>
+                    </div> */}
                 </div>
             </div>
         </div>

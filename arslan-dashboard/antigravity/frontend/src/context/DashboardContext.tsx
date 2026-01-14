@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useMemo, useEffect, useRef } from 'react';
 import {
     DashboardState,
     ScanEntry,
@@ -92,6 +92,15 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
     const [state, setState] = useState<DashboardState>(initialState);
     const [pagination, setPagination] = useState<PaginationState>(initialPagination);
     const [activeFilter, setActiveFilter] = useState<ActiveFilter>({ type: 'all' });
+
+    // Page cache to avoid re-fetching previously loaded pages
+    // Key format: "filterType:filterValue:page" -> cached result
+    const pageCacheRef = useRef<Map<string, { certificates: ScanEntry[]; total: number }>>(new Map());
+
+    // Generate cache key from current filter and page
+    const getCacheKey = useCallback((filterType: string, filterValue: string | undefined, page: number) => {
+        return `${filterType}:${filterValue || 'none'}:${page}`;
+    }, []);
 
     // Fetch initial data from APIs
     const loadDashboardData = useCallback(async () => {
@@ -323,11 +332,20 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 itemsPerPage: 10,
                 totalItems: result.pagination?.total || result.certificates.length,
             }));
+
+            // Clear old cache and store page 1 for new filter
+            pageCacheRef.current.clear();
+            const cacheKey = getCacheKey(activeFilter.type, activeFilter.value, 1);
+            pageCacheRef.current.set(cacheKey, {
+                certificates: result.certificates,
+                total: result.pagination?.total || result.certificates.length,
+            });
+            console.log(`[PAGE CACHE SET] ${cacheKey} (card click page 1)`);
         } catch (error) {
             console.error('Card click error:', error);
             setState((prev) => ({ ...prev, isLoading: false }));
         }
-    }, []);
+    }, [getCacheKey]);
 
     // Set page for pagination - fetches new page data from API
     const setPage = useCallback(async (page: number) => {
@@ -336,6 +354,25 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
 
         if (newPage === pagination.currentPage) return;
 
+        // Check page cache first
+        const cacheKey = getCacheKey(activeFilter.type, activeFilter.value, newPage);
+        const cachedData = pageCacheRef.current.get(cacheKey);
+
+        if (cachedData) {
+            // Use cached data - instant response, no API call
+            console.log(`[PAGE CACHE HIT] ${cacheKey}`);
+            setState((prev) => ({
+                ...prev,
+                recentScans: cachedData.certificates,
+            }));
+            setPagination((prev) => ({
+                ...prev,
+                currentPage: newPage,
+            }));
+            return;
+        }
+
+        console.log(`[PAGE CACHE MISS] ${cacheKey} - fetching from API`);
         setState((prev) => ({ ...prev, isLoading: true }));
 
         try {
@@ -388,11 +425,18 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 ...prev,
                 currentPage: newPage,
             }));
+
+            // Store in page cache
+            pageCacheRef.current.set(cacheKey, {
+                certificates: result.certificates,
+                total: result.pagination?.total || result.certificates.length,
+            });
+            console.log(`[PAGE CACHE SET] ${cacheKey}`);
         } catch (error) {
             console.error('Pagination error:', error);
             setState((prev) => ({ ...prev, isLoading: false }));
         }
-    }, [activeFilter, pagination.totalItems, pagination.itemsPerPage, pagination.currentPage]);
+    }, [activeFilter, pagination.totalItems, pagination.itemsPerPage, pagination.currentPage, getCacheKey]);
 
     // Reset filters and refresh data
     const resetFilters = useCallback(() => {
@@ -402,6 +446,9 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
             search: { query: '', isActive: false, results: [] },
         }));
         setPagination(initialPagination);
+        // Clear page cache on reset
+        pageCacheRef.current.clear();
+        console.log('[PAGE CACHE CLEAR] Reset filters');
         loadDashboardData();
     }, [loadDashboardData]);
 

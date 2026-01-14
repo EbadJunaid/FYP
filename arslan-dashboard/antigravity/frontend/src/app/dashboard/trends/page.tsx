@@ -85,7 +85,7 @@ export default function TrendsPage() {
             {/* Trend Chart */}
             <Card title="Certificate Trend (12 Months)">
                 <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorCerts" x1="0" y1="0" x2="0" y2="1">

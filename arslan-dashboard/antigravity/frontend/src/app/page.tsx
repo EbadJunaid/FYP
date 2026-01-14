@@ -118,7 +118,7 @@ function DashboardContent() {
                 score={metrics.globalHealth.score}
                 maxScore={metrics.globalHealth.maxScore}
                 status={metrics.globalHealth.status}
-                lastUpdated={metrics.globalHealth.lastUpdated}
+                lastUpdated={new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
                 onClick={() => handleCardClickWithScroll('globalHealth')}
               />
             )}

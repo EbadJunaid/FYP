@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
+import SWRProvider from "@/providers/SWRProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -22,9 +23,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} antialiased bg-background text-foreground`}>
-        <ThemeProvider defaultTheme="dark">
-          {children}
-        </ThemeProvider>
+        <SWRProvider>
+          <ThemeProvider defaultTheme="dark">
+            {children}
+          </ThemeProvider>
+        </SWRProvider>
       </body>
     </html>
   );
