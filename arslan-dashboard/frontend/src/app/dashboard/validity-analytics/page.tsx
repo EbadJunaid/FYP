@@ -177,9 +177,13 @@ export default function ValidityAnalyticsPage() {
         };
     }, [filter, currentPage]);
 
+    // Scroll to table on search
     useEffect(() => {
         if (searchQuery) {
             setCurrentPage(1);
+            setTimeout(() => {
+                tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         }
     }, [searchQuery]);
 
@@ -631,7 +635,7 @@ export default function ValidityAnalyticsPage() {
                                             : 'bg-card-bg text-text-secondary border border-card-border hover:bg-card-border'
                                             }`}
                                     >
-                                        {f === 'all' ? 'All' : f === 'expiring30' ? 'Expiring Soon' : '90 Days'}
+                                        {f === 'all' ? 'All' : f === 'expiring30' ? '30 Days' : '90 Days'}
                                     </button>
                                 ))}
                             </div>

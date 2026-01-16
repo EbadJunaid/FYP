@@ -17,6 +17,11 @@ from .views import (
     ValidityStatsView,
     ValidityDistributionView,
     IssuanceTimelineView,
+    # Signature and Hashes page views
+    SignatureStatsView,
+    HashTrendsView,
+    IssuerAlgorithmMatrixView,
+    CertificateExportView,
 )
 
 urlpatterns = [
@@ -29,6 +34,7 @@ urlpatterns = [
     # Certificate CRUD APIs
     path('certificates/', CertificateListView.as_view(), name='certificate_list'),
     path('certificates/download/', CertificateDownloadView.as_view(), name='certificate_download'),
+    path('certificates/export/', CertificateExportView.as_view(), name='certificate_export'),
     path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
     
     # Analytics APIs
@@ -44,6 +50,11 @@ urlpatterns = [
     path('validity-stats/', ValidityStatsView.as_view(), name='validity_stats'),
     path('validity-distribution/', ValidityDistributionView.as_view(), name='validity_distribution'),
     path('issuance-timeline/', IssuanceTimelineView.as_view(), name='issuance_timeline'),
+    
+    # Signature and Hashes APIs
+    path('signature-stats/', SignatureStatsView.as_view(), name='signature_stats'),
+    path('hash-trends/', HashTrendsView.as_view(), name='hash_trends'),
+    path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
     
     # Notifications API
     path('notifications/', NotificationView.as_view(), name='notifications'),

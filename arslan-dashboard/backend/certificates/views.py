@@ -104,6 +104,14 @@ class CertificateListView(View):
                     validation_levels=validation_levels
                 )
             
+            # Signature/Hash page specific filters
+            signature_algorithm = request.GET.get('signature_algorithm')
+            weak_hash = request.GET.get('weak_hash', '').lower() == 'true'
+            self_signed_filter = request.GET.get('self_signed', '').lower() == 'true'
+            key_size_str = request.GET.get('key_size')
+            key_size = int(key_size_str) if key_size_str else None
+            hash_type = request.GET.get('hash_type')
+            
             result = CertificateController.get_certificates(
                 page=page,
                 page_size=page_size,
@@ -119,6 +127,11 @@ class CertificateListView(View):
                 validity_bucket=validity_bucket,
                 issued_month=issued_month,
                 issued_year=issued_year,
+                signature_algorithm=signature_algorithm,
+                weak_hash=weak_hash if weak_hash else None,
+                self_signed=self_signed_filter if self_signed_filter else None,
+                key_size=key_size,
+                hash_type=hash_type,
                 global_filters=global_filters
             )
             return json_response(result)
@@ -368,7 +381,9 @@ class CertificateDownloadView(View):
     """
     GET /api/certificates/download
     Streams CSV download of certificates with optional filters
-    Query params: status, country, issuer, search, encryption_type, has_vulnerabilities, expiring_month, expiring_year
+    Query params: status, country, issuer, search, encryption_type, has_vulnerabilities, 
+                  expiring_month, expiring_year, issued_month, issued_year,
+                  weak_hash, self_signed, signature_algorithm, hash_type, validity_bucket, expiring_days
     Handles millions of records via streaming without memory issues
     """
     def get(self, request):
@@ -385,15 +400,38 @@ class CertificateDownloadView(View):
         search = request.GET.get('search')
         encryption_type = request.GET.get('encryption_type')
         has_vulnerabilities = request.GET.get('has_vulnerabilities', '').lower() == 'true'
+        
+        # Expiring/issued date filters
         expiring_month_str = request.GET.get('expiring_month')
         expiring_year_str = request.GET.get('expiring_year')
         expiring_month = int(expiring_month_str) if expiring_month_str else None
         expiring_year = int(expiring_year_str) if expiring_year_str else None
         
+        issued_month_str = request.GET.get('issued_month')
+        issued_year_str = request.GET.get('issued_year')
+        issued_month = int(issued_month_str) if issued_month_str else None
+        issued_year = int(issued_year_str) if issued_year_str else None
+        
+        # Signature page specific filters
+        weak_hash = request.GET.get('weak_hash', '').lower() == 'true'
+        self_signed = request.GET.get('self_signed', '').lower() == 'true'
+        signature_algorithm = request.GET.get('signature_algorithm')
+        hash_type = request.GET.get('hash_type')
+        validity_bucket = request.GET.get('validity_bucket')
+        expiring_days_str = request.GET.get('expiring_days')
+        expiring_days = int(expiring_days_str) if expiring_days_str else None
+        
         # Generate filename based on filter
         filename = 'certificates'
         if status:
             filename = f'{status.lower()}_certificates'
+        elif weak_hash:
+            filename = 'weak_hash_certificates'
+        elif self_signed:
+            filename = 'self_signed_certificates'
+        elif signature_algorithm:
+            safe_algo = signature_algorithm.replace('-', '_')[:20]
+            filename = f'{safe_algo}_certificates'
         elif issuer:
             safe_issuer = issuer.replace(' ', '_').replace("'", '')[:20]
             filename = f'{safe_issuer}_certificates'
@@ -409,7 +447,15 @@ class CertificateDownloadView(View):
                 encryption_type=encryption_type,
                 has_vulnerabilities=has_vulnerabilities if has_vulnerabilities else None,
                 expiring_month=expiring_month,
-                expiring_year=expiring_year
+                expiring_year=expiring_year,
+                issued_month=issued_month,
+                issued_year=issued_year,
+                weak_hash=weak_hash if weak_hash else None,
+                self_signed=self_signed if self_signed else None,
+                signature_algorithm=signature_algorithm,
+                hash_type=hash_type,
+                validity_bucket=validity_bucket,
+                expiring_days=expiring_days
             ),
             content_type='text/csv'
         )
@@ -497,6 +543,65 @@ class CertificateDownloadView(View):
         
         if filters.get('has_vulnerabilities'):
             query['zlint.errors_present'] = True
+        
+        # Signature page specific filters
+        
+        # Filter by issued month/year
+        if filters.get('issued_month') and filters.get('issued_year'):
+            _, last_day = monthrange(filters['issued_year'], filters['issued_month'])
+            month_start = f"{filters['issued_year']}-{filters['issued_month']:02d}-01T00:00:00Z"
+            month_end = f"{filters['issued_year']}-{filters['issued_month']:02d}-{last_day:02d}T23:59:59Z"
+            query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
+        
+        # Filter by weak hash (SHA-1, MD5)
+        if filters.get('weak_hash'):
+            if '$or' not in query:
+                query['$or'] = [
+                    {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
+                    {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
+                ]
+        
+        # Filter by self-signed
+        if filters.get('self_signed'):
+            query['parsed.signature.self_signed'] = True
+        
+        # Filter by exact signature algorithm (e.g., "SHA256-RSA")
+        if filters.get('signature_algorithm'):
+            query['parsed.signature_algorithm.name'] = filters['signature_algorithm']
+        
+        # Filter by hash type (e.g., "SHA-256")
+        if filters.get('hash_type'):
+            hash_patterns = {
+                'SHA-256': '^SHA256',
+                'SHA-384': '^SHA384',
+                'SHA-512': '^SHA512',
+                'SHA-1': '^SHA1|^SHA-1',
+                'MD5': '^MD5'
+            }
+            pattern = hash_patterns.get(filters['hash_type'], f"^{filters['hash_type'].replace('-', '')}")
+            query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
+        
+        # Filter by validity bucket (duration in days)
+        if filters.get('validity_bucket'):
+            bucket_ranges = {
+                '0-90': (0, 90),
+                '90-365': (90, 365),
+                '365-730': (365, 730),
+                '730+': (730, 9999)
+            }
+            if filters['validity_bucket'] in bucket_ranges:
+                min_days, max_days = bucket_ranges[filters['validity_bucket']]
+                min_seconds = min_days * 86400
+                max_seconds = max_days * 86400
+                query['parsed.validity.length'] = {'$gte': min_seconds, '$lt': max_seconds}
+        
+        # Filter by expiring days
+        if filters.get('expiring_days'):
+            target_date = (datetime.now(timezone.utc) + timedelta(days=filters['expiring_days'])).strftime('%Y-%m-%dT%H:%M:%SZ')
+            query['parsed.validity.end'] = {
+                '$gt': now,  # Not yet expired
+                '$lte': target_date  # Within expiring_days window
+            }
         
         # Stream data in batches (batch_size for MongoDB cursor)
         cursor = CertificateModel.collection.find(query).batch_size(1000)
@@ -604,3 +709,181 @@ def hello_mongo_view(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+# ----- New views for Signature and Hashes page -----
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SignatureStatsView(View):
+    """
+    GET /api/signature-stats
+    Returns comprehensive signature and hash statistics.
+    Includes algorithm distribution, hash distribution, key sizes, compliance rate, strength score.
+    Cached for 5 minutes.
+    """
+    def get(self, request):
+        try:
+            from .models import CertificateModel
+            from .cache_service import cache
+            
+            # Check cache first
+            cache_key = 'signature_stats'
+            cached = cache.get(cache_key, {})
+            if cached:
+                return json_response(cached)
+            
+            # Get fresh data from model
+            result = CertificateModel.get_signature_stats()
+            
+            # Cache for 5 minutes
+            cache.set(cache_key, {}, result, ttl=300)
+            
+            return json_response(result)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class HashTrendsView(View):
+    """
+    GET /api/hash-trends
+    Returns hash algorithm adoption trends over time.
+    Query params: months (default 36), granularity ('quarterly' or 'yearly')
+    Cached for 10 minutes.
+    """
+    def get(self, request):
+        try:
+            from .models import CertificateModel
+            from .cache_service import cache
+            
+            months = int(request.GET.get('months', 36))
+            granularity = request.GET.get('granularity', 'quarterly')
+            
+            # Validate granularity
+            if granularity not in ['quarterly', 'yearly']:
+                granularity = 'quarterly'
+            
+            # Check cache first
+            cache_params = {'months': months, 'granularity': granularity}
+            cached = cache.get('hash_trends', cache_params)
+            if cached:
+                return json_response(cached)
+            
+            # Get fresh data from model
+            result = CertificateModel.get_hash_trends(months=months, granularity=granularity)
+            
+            # Cache for 10 minutes
+            cache.set('hash_trends', cache_params, result, ttl=600)
+            
+            return json_response(result)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class IssuerAlgorithmMatrixView(View):
+    """
+    GET /api/issuer-algorithm-matrix
+    Returns matrix of issuer x algorithm combinations with counts.
+    Cached for 10 minutes.
+    """
+    def get(self, request):
+        try:
+            from .models import CertificateModel
+            from .cache_service import cache
+            
+            limit = int(request.GET.get('limit', 10))
+            
+            # Check cache first
+            cache_params = {'limit': limit}
+            cached = cache.get('issuer_matrix', cache_params)
+            if cached:
+                return json_response(cached)
+            
+            # Get fresh data from model
+            result = CertificateModel.get_issuer_algorithm_matrix(limit=limit)
+            
+            # Cache for 10 minutes
+            cache.set('issuer_matrix', cache_params, result, ttl=600)
+            
+            return json_response(result)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CertificateExportView(View):
+    """
+    GET /api/certificates/export
+    Export certificates as CSV with optional filters.
+    Uses the same filters as CertificateListView to ensure filtered downloads.
+    """
+    def get(self, request):
+        try:
+            import csv
+            from django.http import HttpResponse
+            from .models import CertificateModel
+            
+            # Get filter parameters (same as CertificateListView)
+            status = request.GET.get('status')
+            country = request.GET.get('country')
+            issuer = request.GET.get('issuer')
+            search = request.GET.get('search')
+            encryption_type = request.GET.get('encryption_type')
+            
+            # Signature/Hash page specific filters
+            signature_algorithm = request.GET.get('signature_algorithm')
+            weak_hash = request.GET.get('weak_hash', '').lower() == 'true'
+            self_signed = request.GET.get('self_signed', '').lower() == 'true'
+            key_size_str = request.GET.get('key_size')
+            key_size = int(key_size_str) if key_size_str else None
+            hash_type = request.GET.get('hash_type')
+            
+            # Build query with filters (without pagination for export)
+            result = CertificateModel.get_all(
+                page=1,
+                page_size=10000,  # Get up to 10k records for export
+                status=status,
+                country=country,
+                issuer=issuer,
+                search=search,
+                encryption_type=encryption_type,
+                signature_algorithm=signature_algorithm,
+                weak_hash=weak_hash if weak_hash else None,
+                self_signed=self_signed if self_signed else None,
+                key_size=key_size,
+                hash_type=hash_type
+            )
+            
+            # Create CSV response
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="certificates.csv"'
+            
+            writer = csv.writer(response)
+            
+            # Write header
+            writer.writerow([
+                'Domain', 'Issuer', 'Status', 'Valid From', 'Valid To',
+                'Encryption Type', 'Signature Algorithm', 'Key Size',
+                'Country', 'Grade', 'Self-Signed'
+            ])
+            
+            # Write data rows
+            for cert in result.get('certificates', []):
+                writer.writerow([
+                    cert.get('domain', ''),
+                    cert.get('issuer', ''),
+                    cert.get('status', ''),
+                    cert.get('validFrom', ''),
+                    cert.get('validTo', ''),
+                    cert.get('encryptionType', ''),
+                    cert.get('signatureAlgorithm', ''),
+                    cert.get('keySize', ''),
+                    cert.get('country', ''),
+                    cert.get('grade', ''),
+                    cert.get('selfSigned', False)
+                ])
+            
+            return response
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)

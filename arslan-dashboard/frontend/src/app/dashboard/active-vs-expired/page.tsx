@@ -59,14 +59,63 @@ export default function ActiveVsExpiredPage() {
     const [downloadModalOpen, setDownloadModalOpen] = useState(false);
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
+    const [isRestoring, setIsRestoring] = useState(true);
+
+    const STORAGE_KEY = 'active-vs-expired-state';
 
     // Get search query from context
     const { searchQuery } = useSearch();
 
-    // Reset page to 1 when search changes
+    // Restore state from sessionStorage on mount
+    useEffect(() => {
+        try {
+            const savedState = sessionStorage.getItem(STORAGE_KEY);
+            if (savedState) {
+                const { filter: savedFilter, page: savedPage, scrollY: savedScrollY } = JSON.parse(savedState);
+                if (savedFilter) setFilter(savedFilter);
+                if (savedPage) setCurrentPage(savedPage);
+                if (savedScrollY) {
+                    setTimeout(() => window.scrollTo(0, savedScrollY), 100);
+                }
+                sessionStorage.removeItem(STORAGE_KEY);
+            }
+        } catch (e) {
+            console.error('Error restoring page state:', e);
+        }
+        setIsRestoring(false);
+    }, []);
+
+    // Save state before navigation
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            const stateToSave = { filter, page: currentPage, scrollY: window.scrollY };
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+        };
+
+        const handleLinkClick = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const link = target.closest('a');
+            if (link && link.href && !link.href.includes('active-vs-expired')) {
+                handleBeforeUnload();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('click', handleLinkClick);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('click', handleLinkClick);
+        };
+    }, [filter, currentPage]);
+
+    // Scroll to table on search
     useEffect(() => {
         if (searchQuery) {
             setCurrentPage(1);
+            setTimeout(() => {
+                tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         }
     }, [searchQuery]);
 

@@ -8,7 +8,7 @@ import { DownloadIcon } from '@/components/icons/Icons';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface ActiveFilter {
-    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth';
+    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap';
     value?: string;
 }
 
@@ -146,6 +146,36 @@ export default function DownloadModal({
                     }
                 }
                 break;
+            // Signature page filters
+            case 'weakHash':
+                params.append('weak_hash', 'true');
+                break;
+            case 'selfSigned':
+                params.append('self_signed', 'true');
+                break;
+            case 'signatureAlgorithm':
+                if (activeFilter.value) {
+                    params.append('signature_algorithm', activeFilter.value);
+                }
+                break;
+            case 'hashType':
+                if (activeFilter.value) {
+                    params.append('hash_type', activeFilter.value);
+                }
+                break;
+            case 'keySize':
+                if (activeFilter.value) {
+                    params.append('encryption_type', activeFilter.value);
+                }
+                break;
+            case 'heatmap':
+                // Heatmap format: "issuer::algorithm" (using :: as delimiter)
+                if (activeFilter.value) {
+                    const [issuer, algorithm] = activeFilter.value.split('::');
+                    if (issuer) params.append('issuer', issuer);
+                    if (algorithm) params.append('encryption_type', algorithm.replace('-', ' '));
+                }
+                break;
             case 'all':
             default:
                 // No filter params = all certificates
@@ -189,6 +219,19 @@ export default function DownloadModal({
                 return `${activeFilter.value || 'Encryption'} certificates`;
             case 'validityTrend':
                 return `Certificates expiring ${activeFilter.value || 'in selected month'}`;
+            // Signature page filters
+            case 'weakHash':
+                return 'Weak hash certificates (MD5/SHA-1)';
+            case 'selfSigned':
+                return 'Self-signed certificates';
+            case 'signatureAlgorithm':
+                return `${activeFilter.value || 'Algorithm'} certificates`;
+            case 'hashType':
+                return `${activeFilter.value || 'Hash'} certificates`;
+            case 'keySize':
+                return `${activeFilter.value || 'Key size'} certificates`;
+            case 'heatmap':
+                return `${activeFilter.value?.replace('::', ' - ') || 'Heatmap'} certificates`;
             case 'all':
             default:
                 return 'All certificates in database';

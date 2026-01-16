@@ -72,6 +72,13 @@ export async function fetchCertificates(params?: {
     validityBucket?: string;
     issuedMonth?: number;
     issuedYear?: number;
+    // Signature/Hash page filters
+    signature_algorithm?: string;
+    weak_hash?: string;
+    self_signed?: string;
+    key_size?: number;
+    hash_type?: string;
+    encryption_type?: string;  // Alternative naming
 } & GlobalFilterParams): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
     try {
         const result = await apiClient.getCertificates(params);

@@ -1,39 +1,117 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import { CertificateIcon, ClockIcon, AlertIcon, TrendUpIcon } from '@/components/icons/Icons';
-import { fetchPageData, generatePageMetrics, generateChartData } from '@/controllers/pageController';
-import { ScanEntry } from '@/types/dashboard';
+import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
+import { useSearch } from '@/context/SearchContext';
+import { DashboardMetrics, ScanEntry } from '@/types/dashboard';
+
+const STORAGE_KEY = 'overview-state';
+
+// Card info tooltips
+const cardInfoTooltips: Record<string, string> = {
+    total: 'Total count of all SSL certificates in the database.',
+    active: 'Certificates that are currently valid and not yet expired.',
+    expiringSoon: 'Certificates expiring within the next 30 days - requires attention.',
+    expired: 'Certificates that have passed their expiration date.',
+};
+
+// SWR fetchers
+const metricsFetcher = () => fetchDashboardMetrics();
+const certificatesFetcher = async (key: string) => {
+    const parts = key.split('|');
+    const page = parseInt(parts[1]) || 1;
+    const search = parts[2] || undefined;
+    return fetchCertificates({ page, pageSize: 10, search });
+};
 
 export default function OverviewPage() {
-    const [tableData, setTableData] = useState<ScanEntry[]>([]);
-    const [metrics, setMetrics] = useState<ReturnType<typeof generatePageMetrics> | null>(null);
+    const router = useRouter();
     const [currentPage, setCurrentPage] = useState(1);
-    const [isLoading, setIsLoading] = useState(true);
-    const itemsPerPage = 10;
+    const [isRestoring, setIsRestoring] = useState(true);
+    const tableRef = useRef<HTMLDivElement>(null);
+    const [isPending, startTransition] = useTransition();
 
+    const { searchQuery } = useSearch();
+
+    // Restore state from sessionStorage on mount
     useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            const data = await fetchPageData('overview');
-            setMetrics(data.metrics);
-            setTableData(data.tableData);
-            setIsLoading(false);
-        };
-        loadData();
+        try {
+            const savedState = sessionStorage.getItem(STORAGE_KEY);
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                if (parsed.page) setCurrentPage(parsed.page);
+                if (parsed.scrollY) {
+                    setTimeout(() => window.scrollTo(0, parsed.scrollY), 150);
+                }
+                // Don't remove - we'll clear after data loads
+            }
+        } catch (e) {
+            console.error('Error restoring page state:', e);
+        }
+        setIsRestoring(false);
     }, []);
 
-    const paginatedData = useMemo(() => {
-        const start = (currentPage - 1) * itemsPerPage;
-        return tableData.slice(start, start + itemsPerPage);
-    }, [tableData, currentPage]);
+    // SWR for metrics
+    const { data: metrics, isLoading: isMetricsLoading } = useSWR<DashboardMetrics>(
+        'overview-metrics',
+        metricsFetcher,
+        { revalidateOnFocus: false, dedupingInterval: 300000 }
+    );
 
-    const totalPages = Math.ceil(tableData.length / itemsPerPage);
+    // SWR for certificates with search
+    const swrKey = `overview-certs|${currentPage}|${searchQuery || ''}`;
+    const { data: certsData, isLoading: isCertsLoading } = useSWR(
+        swrKey,
+        certificatesFetcher,
+        { revalidateOnFocus: false, dedupingInterval: 60000, keepPreviousData: true }
+    );
 
-    if (isLoading) {
+    const tableData = certsData?.certificates || [];
+    const totalPages = certsData?.pagination?.totalPages || 1;
+
+    // Clear saved state after data loads successfully
+    useEffect(() => {
+        if (!isCertsLoading && !isRestoring && tableData.length > 0) {
+            sessionStorage.removeItem(STORAGE_KEY);
+        }
+    }, [isCertsLoading, isRestoring, tableData.length]);
+
+    // Scroll to table on search
+    useEffect(() => {
+        if (searchQuery) {
+            startTransition(() => {
+                setCurrentPage(1);
+            });
+            setTimeout(() => {
+                tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+    }, [searchQuery]);
+
+    // Handle page change
+    const handlePageChange = useCallback((page: number) => {
+        startTransition(() => {
+            setCurrentPage(page);
+        });
+    }, []);
+
+    // Handle row click - save state before navigation
+    const handleRowClick = useCallback((entry: ScanEntry) => {
+        // Save current state before navigating
+        const stateToSave = { page: currentPage, scrollY: window.scrollY };
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+        // Navigate to certificate detail
+        router.push(`/certificate/${entry.id}`);
+    }, [currentPage, router]);
+
+    // Show loading only on initial load
+    if (isMetricsLoading && !metrics) {
         return (
             <div className="flex items-center justify-center h-64">
                 <div className="text-text-muted">Loading...</div>
@@ -53,41 +131,48 @@ export default function OverviewPage() {
                 <MetricCard
                     icon={<CertificateIcon className="w-6 h-6 text-primary-blue" />}
                     iconBgColor="bg-primary-blue/15"
-                    value={metrics?.total?.toLocaleString() || '0'}
+                    value={metrics?.activeCertificates?.total?.toLocaleString() || '0'}
                     label="Total Certificates"
-                    trend={parseFloat(metrics?.trend || '0')}
+                    infoTooltip={cardInfoTooltips.total}
                 />
                 <MetricCard
                     icon={<TrendUpIcon className="w-6 h-6 text-accent-green" />}
                     iconBgColor="bg-accent-green/15"
-                    value={metrics?.active?.toLocaleString() || '0'}
+                    value={metrics?.activeCertificates?.count?.toLocaleString() || '0'}
                     label="Active Certificates"
+                    infoTooltip={cardInfoTooltips.active}
                 />
                 <MetricCard
                     icon={<ClockIcon className="w-6 h-6 text-accent-yellow" />}
                     iconBgColor="bg-accent-yellow/15"
-                    value={metrics?.expiringSoon || 0}
+                    value={metrics?.expiringSoon?.count || 0}
                     label="Expiring Soon"
                     badge={{ text: 'Action Needed', variant: 'warning' }}
+                    infoTooltip={cardInfoTooltips.expiringSoon}
                 />
                 <MetricCard
                     icon={<AlertIcon className="w-6 h-6 text-accent-red" />}
                     iconBgColor="bg-accent-red/15"
-                    value={metrics?.expired || 0}
+                    value={metrics?.expiredCertificates?.count || 0}
                     label="Expired"
+                    infoTooltip={cardInfoTooltips.expired}
                 />
             </div>
 
-            {/* Recent Scans Table */}
-            <Card title="Certificate Overview">
-                <DataTable
-                    data={paginatedData}
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    onRowClick={(entry) => console.log('Row clicked:', entry)}
-                />
-            </Card>
+            {/* Certificates Table */}
+            <div ref={tableRef}>
+                <Card title="Certificate Overview">
+                    <div className={`transition-opacity duration-200 ${isCertsLoading || isPending ? 'opacity-50' : 'opacity-100'}`}>
+                        <DataTable
+                            data={tableData}
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={handlePageChange}
+                            onRowClick={handleRowClick}
+                        />
+                    </div>
+                </Card>
+            </div>
         </div>
     );
 }

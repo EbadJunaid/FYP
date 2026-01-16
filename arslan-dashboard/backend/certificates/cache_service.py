@@ -43,6 +43,10 @@ TTL_CONFIG = {
     'future_risk': 300,          # 5 minutes
     'notifications': 60,         # 1 minute (time-sensitive)
     'unique_filters': 300,       # 5 minutes
+    # Signature and Hashes page caches
+    'signature_stats': 300,      # 5 minutes
+    'hash_trends': 600,          # 10 minutes (historical data)
+    'issuer_matrix': 600,        # 10 minutes
 }
 
 

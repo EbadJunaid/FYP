@@ -41,6 +41,31 @@ export interface Certificate {
     scanDate: string;
     validationLevel: string;
     zlintDetails?: Record<string, { result: string; details?: string }>;
+    // Enhanced fields
+    commonName?: string;
+    subjectDn?: string;
+    selfSigned?: boolean;
+    serialNumber?: string;
+    fingerprintSha256?: string;
+    fingerprintSha1?: string;
+    fingerprintMd5?: string;
+    validityLength?: number; // in seconds
+    isCa?: boolean;
+    keyUsage?: {
+        digitalSignature?: boolean;
+        keyEncipherment?: boolean;
+        dataEncipherment?: boolean;
+        keyCertSign?: boolean;
+        crlSign?: boolean;
+    };
+    extendedKeyUsage?: {
+        serverAuth?: boolean;
+        clientAuth?: boolean;
+        codeSigning?: boolean;
+        emailProtection?: boolean;
+    };
+    crlDistributionPoints?: string[];
+    authorityInfoAccess?: string[];
 }
 
 export interface DashboardMetrics {
@@ -159,6 +184,13 @@ class ApiClient {
         validityBucket?: string;
         issuedMonth?: number;
         issuedYear?: number;
+        // Signature/Hash page filters
+        signature_algorithm?: string;
+        weak_hash?: string;
+        self_signed?: string;
+        key_size?: number;
+        hash_type?: string;
+        encryption_type?: string;
         // Global filter params
         startDate?: string;
         endDate?: string;
@@ -175,6 +207,7 @@ class ApiClient {
         if (params?.issuer) queryParams.append('issuer', params.issuer);
         if (params?.search) queryParams.append('search', params.search);
         if (params?.encryptionType) queryParams.append('encryption_type', params.encryptionType);
+        if (params?.encryption_type) queryParams.append('encryption_type', params.encryption_type);
         if (params?.hasVulnerabilities) queryParams.append('has_vulnerabilities', 'true');
         if (params?.expiringMonth) queryParams.append('expiring_month', params.expiringMonth.toString());
         if (params?.expiringYear) queryParams.append('expiring_year', params.expiringYear.toString());
@@ -182,6 +215,12 @@ class ApiClient {
         if (params?.validityBucket) queryParams.append('validity_bucket', params.validityBucket);
         if (params?.issuedMonth) queryParams.append('issued_month', params.issuedMonth.toString());
         if (params?.issuedYear) queryParams.append('issued_year', params.issuedYear.toString());
+        // Signature/Hash filters
+        if (params?.signature_algorithm) queryParams.append('signature_algorithm', params.signature_algorithm);
+        if (params?.weak_hash) queryParams.append('weak_hash', params.weak_hash);
+        if (params?.self_signed) queryParams.append('self_signed', params.self_signed);
+        if (params?.key_size) queryParams.append('key_size', params.key_size.toString());
+        if (params?.hash_type) queryParams.append('hash_type', params.hash_type);
         // Global filter params
         if (params?.startDate) queryParams.append('start_date', params.startDate);
         if (params?.endDate) queryParams.append('end_date', params.endDate);
@@ -294,6 +333,48 @@ class ApiClient {
     async getIssuanceTimeline(): Promise<IssuanceTimelineEntry[]> {
         return this.fetch<IssuanceTimelineEntry[]>('/issuance-timeline/');
     }
+
+    // Signature and Hashes APIs
+    async getSignatureStats(): Promise<SignatureStats> {
+        return this.fetch<SignatureStats>('/signature-stats/');
+    }
+
+    async getHashTrends(months: number = 36, granularity: 'quarterly' | 'yearly' = 'quarterly'): Promise<HashTrendEntry[]> {
+        return this.fetch<HashTrendEntry[]>(`/hash-trends/?months=${months}&granularity=${granularity}`);
+    }
+
+    async getIssuerAlgorithmMatrix(limit: number = 10): Promise<IssuerAlgorithmEntry[]> {
+        return this.fetch<IssuerAlgorithmEntry[]>(`/issuer-algorithm-matrix/?limit=${limit}`);
+    }
+
+    // Export certificates as CSV with filters
+    async exportCertificates(params?: {
+        signature_algorithm?: string;
+        weak_hash?: string;
+        self_signed?: string;
+        key_size?: number;
+        hash_type?: string;
+        encryption_type?: string;
+    }): Promise<void> {
+        const queryParams = new URLSearchParams();
+        if (params?.signature_algorithm) queryParams.append('signature_algorithm', params.signature_algorithm);
+        if (params?.weak_hash) queryParams.append('weak_hash', params.weak_hash);
+        if (params?.self_signed) queryParams.append('self_signed', params.self_signed);
+        if (params?.key_size) queryParams.append('key_size', params.key_size.toString());
+        if (params?.hash_type) queryParams.append('hash_type', params.hash_type);
+        if (params?.encryption_type) queryParams.append('encryption_type', params.encryption_type);
+
+        const query = queryParams.toString();
+        const url = `${this.baseUrl}/certificates/export/${query ? `?${query}` : ''}`;
+
+        // Trigger download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'certificates.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 }
 
 // Validity Analysis types
@@ -342,9 +423,72 @@ export interface NotificationResponse {
     totalCount: number;
 }
 
+// Signature and Hashes types
+export interface SignatureAlgorithmEntry {
+    name: string;
+    count: number;
+    percentage: number;
+    color: string;
+}
+
+export interface HashDistributionEntry {
+    name: string;
+    count: number;
+    percentage: number;
+    color: string;
+    security: 'secure' | 'deprecated' | 'critical' | 'unknown';
+}
+
+export interface KeySizeDistributionEntry {
+    name: string;
+    algorithm: string;
+    size: number;
+    count: number;
+    percentage: number;
+    color: string;
+}
+
+export interface MaxEncryptionType {
+    name: string;
+    count: number;
+    percentage: number;
+}
+
+export interface SignatureStats {
+    algorithmDistribution: SignatureAlgorithmEntry[];
+    hashDistribution: HashDistributionEntry[];
+    keySizeDistribution: KeySizeDistributionEntry[];
+    weakHashCount: number;
+    hashComplianceRate: number;
+    strengthScore: number;
+    selfSignedCount: number;
+    totalCertificates: number;
+    maxEncryptionType: MaxEncryptionType | null;
+}
+
+export interface HashTrendEntry {
+    period: string;
+    year: number;
+    quarter: number | null;
+    total: number;
+    'SHA-256': number;
+    'SHA-384': number;
+    'SHA-512': number;
+    'SHA-1': number;
+    'MD5': number;
+    'Other': number;
+}
+
+export interface IssuerAlgorithmEntry {
+    issuer: string;
+    algorithm: string;
+    algorithmType: string;
+    keySize: number;
+    count: number;
+}
+
 // Export singleton instance
 export const apiClient = new ApiClient();
 
 // Export default
 export default apiClient;
-

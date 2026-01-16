@@ -90,6 +90,12 @@ class CertificateController:
         validity_bucket: Optional[str] = None,
         issued_month: Optional[int] = None,
         issued_year: Optional[int] = None,
+        # Signature/Hash page filters
+        signature_algorithm: Optional[str] = None,
+        weak_hash: Optional[bool] = None,
+        self_signed: Optional[bool] = None,
+        key_size: Optional[int] = None,
+        hash_type: Optional[str] = None,
         # Global filter params
         global_filters: Optional[GlobalFilterParams] = None
     ) -> Dict:
@@ -109,6 +115,11 @@ class CertificateController:
             'validity_bucket': validity_bucket,
             'issued_month': issued_month,
             'issued_year': issued_year,
+            'signature_algorithm': signature_algorithm,
+            'weak_hash': weak_hash,
+            'self_signed': self_signed,
+            'key_size': key_size,
+            'hash_type': hash_type,
             # Include global filter params in cache key
             **((global_filters.to_cache_key() if global_filters else {}))
         }
@@ -150,6 +161,11 @@ class CertificateController:
             validity_bucket=validity_bucket,
             issued_month=issued_month,
             issued_year=issued_year,
+            signature_algorithm=signature_algorithm,
+            weak_hash=weak_hash,
+            self_signed=self_signed,
+            key_size=key_size,
+            hash_type=hash_type,
             base_filter=base_filter
         )
         
