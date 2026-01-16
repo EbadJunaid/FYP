@@ -12,7 +12,7 @@ class MongoDBClient:
             # Connect to MongoDB
             cls._client = MongoClient("mongodb://localhost:27017/")
         # Use the correct database name
-        return cls._client['pk-domains-v3']
+        return cls._client['my-pk-domains-multi']
         # return cls._client['tranco-60k']
 
         # return cls._client['Tranco_data_Multi']
