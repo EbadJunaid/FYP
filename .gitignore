@@ -1,7 +1,7 @@
 FYP-Send-Code
-SSL-Certificates-Crawler
-SSL-Certificates-Crawler-copy
 .DS_Store
+.vscode
+helping-material
 
 ### Dashboard 
 
@@ -12,6 +12,79 @@ dashboard/backend/overview/__pycache__
 dashboard/backend/.env
 dashboard/backend/overview/migrations
 
+
+## Fixing the reports directory :
+# certificate-lifecycle
+
+reports/certificate-lifecycle/*
+
+# certificate-on-google-drive
+reports/certificate-on-google-drive/*
+
+# expired-expiring-soon
+reports/expired-expiring-soon/*
+
+#hash algorithms
+reports/hash-algorithms/*
+
+#san-report 
+reports/san-report/*
+
+#shared keys 
+reports/shared-keys/*
+
+#signature-algorithms
+reports/signature-algorithms/*
+
+#zlint-errors-warnings
+reports/zlint-errors-warnings/*
+
+!*.py
+!*.js
+!*.txt
+
+
+## now setting the ssl-certificates directory 
+
+#domain-based-crawler
+ssl-certificates-crawler/domain-based-crawler/logs
+ssl-certificates-crawler/domain-based-crawler/zcertificate/*
+!zcertificate
+
+
+#domain-based-crawler/datasets
+#crt-sh
+ssl-certificates-crawler/domain-based-crawler/datasets/crt-sh/*
+
+#pk-domains-sir
+
+ssl-certificates-crawler/domain-based-crawler/datasets/pk-domains-sir/*
+
+!ssl-certificates-crawler/domain-based-crawler/datasets/pk-domains-sir/python-scripts/
+!ssl-certificates-crawler/domain-based-crawler/datasets/pk-domains-sir/info.png
+!ssl-certificates-crawler/domain-based-crawler/datasets/pk-domains-sir/info.excalidraw
+
+
+# rapid-7
+
+ssl-certificates-crawler/domain-based-crawler/datasets/rapid-7/*
+
+!ssl-certificates-crawler/domain-based-crawler/datasets/rapid-7/python-scripts/
+!ssl-certificates-crawler/domain-based-crawler/datasets/rapid-7/info.txt
+
+
+# tranco 
+
+ssl-certificates-crawler/domain-based-crawler/datasets/tranco/*
+!ssl-certificates-crawler/domain-based-crawler/datasets/tranco/python-scripts/
+
+
+#common-crawler-dataset
+ssl-certificates-crawler/domain-based-crawler/common-crawler-dataset/*
+
+
+##ip-based-crawler
+ssl-certificates-crawler/ip-based-crawler/
 
 
 dashboard/frontend/.next

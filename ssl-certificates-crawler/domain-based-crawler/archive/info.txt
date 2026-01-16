@@ -1,0 +1,23 @@
+1. crawler-latest.py (The Primitive Ancestor)
+    - A simple, single-threaded script. It reads a CSV, processes domains one by one, and saves them to MongoDB.
+    - If you have 10,000 domains, it will take forever because it does one at a time. It has no "Resume" logic; if it crashes,
+    you have to figure out where it stopped manually.
+    - It does not have multi-threading and also does not have state saving 
+
+2. crawler-multi-threading.py 
+    - This is just crawler-latest.py but wrapped in a ThreadPoolExecutor.
+    - It launches 50 threads to do the same simple job.
+    - It has no state saving. If you stop it and run it again, it starts from domain #1 and re-does everything.
+
+3. crawler-multi-state.py (The File-Based state-saving)
+    - A multi-threaded crawler that tries to "remember" its progress using Text Files.
+    - It creates progress.txt, completed.txt, and failed.txt. Before starting, it reads these files to skip domains that 
+      has already been processed 
+    - Using text files for state is messy. Threads might fight over writing to the file, and if you delete the text files,
+     the memory is lost.
+
+4. crawler-multi-thread-state-saving.py (The Smart Ancestor)
+    - This is the direct parent of your current V1/V2/V3. It uses MongoDB to check for duplicates (domain_already_processed).
+    - It checks the DB before processing. It also has basic retry logic (MAX_RETRIES).
+    - It lacks the "Doctor/Watchdog" (main-v3) to fix stuck threads, and it lacks the "Visual Dashboard" (V2). It relies on 
+      simple logs.

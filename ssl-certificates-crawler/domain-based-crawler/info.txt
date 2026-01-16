@@ -1,0 +1,121 @@
+
+
+==============================================================================
+                            PROJECT: SSL CERTIFICATE CRAWLER
+==============================================================================
+
+This folder contains three evolutionary stages of the SSL Crawler. 
+Each file represents a different architectural approach to scanning domains.
+
+---------------------------------------------------------------------------------
+1. ssl_crawler_heartbeat_worker.py (Formerly new-V1.py)
+---------------------------------------------------------------------------------
+
+- It connects to MongoDB and processes domains quietly.
+- It implements "heartbeats" that means when a 
+  thread is working, it updates a timestamp in the database every 10 seconds. 
+  If a thread crashes, a background "Reclaimer" notices the heartbeat stopped 
+  and automatically resets the task so another worker(thread) can try again.
+  and keep this in mind that it does not recover the crashed thread or the thread
+  which is freezed or stuck in infinite loop
+
+  suppose the code starts with 30 threads 
+  and one thread stucks while processing domain "google.com"
+  now this code will recover the domain but does not recover the thread
+  so now we are left with 29 threads but we have saved the domain "google.com"
+
+
+- It does not have a good console dashboard like how many domains have processed 
+now and how many are left  
+
+- this code saves only the unique certificates because it stores the
+  certificate fingerprint (SHA-256) suppose google.com and youtube.com
+  have same certificate so it only stores one certificate
+
+- this code does not behavous as a browser means it stores certificates which have issues like 
+  SSL certificate expired, SSL hostname mismatch and Self-signed certificates.It behavous same as 
+  new-v3 
+  means it works on below websites :
+
+  - httpforever.com
+  - trbcdn.net
+  - windows.net
+  - googlevideo.com
+  - 14thaugust.ff.garena.pk
+
+------------------------------------------------------------------------------
+2. ssl_crawler_console_dashboard.py (Formerly new-V2.py)
+------------------------------------------------------------------------------
+
+- It runs the crawler with a real-time status dashboard in the 
+  terminal. It tells you exactly what is the current status like how many have 
+  comepleted and how many are left. 
+- It also introduced the detailed logging format for errors.
+- It does not have a heartbeat concept which means if a thread is freeze or 
+  stuck now that thread will remain stuck forever until we restart the code 
+  and the domain which is being processed by that thread (freeze one) is lost
+
+  suppose the code starts with 30 threads 
+  and one thread stucks while processing domain "google.com"
+  now this code will 'not' recover the domain and also does not recover the thread
+  so now we are left with 29 threads and also that domain is lost 
+
+- this code behavous like a browser like it does not store certifcates 
+  which have below issues :
+
+    SSL certificate expired: The website owner forgot to renew the certificate. 
+    V2 blocked it; V3 downloaded it 
+
+    SSL hostname mismatch: Common in CDNs. You visited image.cdn.com, but the cert 
+    belongs to cloudflare.com. V2 blocked it; V3 downloaded it.
+
+    Self-signed certificate: The user created the cert on their own laptop instead 
+    of buying one. It's not trusted by browsers, but as a crawler, you definitely want to 
+    capture these!
+
+it is because we have added below code in new-v3: 
+
+context.check_hostname = False       # Don't care if cert says "google.com" but we are on "youtube.com"
+context.verify_mode = ssl.CERT_NONE  # Don't care if cert is expired or self-signed
+
+
+
+------------------------------------------------------------------------------
+3. ssl_crawler_auto_healer.py (Formerly new-V3.py - THE FINAL CODE)
+------------------------------------------------------------------------------
+
+This is the complete, robust version that combines the best parts of new-v1 and new-v2, 
+
+- It has a same console dashboard and same logs system like new-v2
+- It has a "Watchdog" that monitors the all threads. If a thread gets stuck on a
+  bad socket (like a firewall dropping packets) or due to some issue, the watchdog recovers
+  the task (domain) and spawns a new thread but that thread which is stuck will stay running 
+  forever because python does not allow to kill the thread so to fix this we created a new thread 
+  instantly. 
+
+
+  suppose the code starts with 30 threads 
+  and one thread stucks while processing domain "google.com"
+  now this code will recover the domain and does not recover the thread but it spawns a 
+  new thread so that thread count will reamin the same and all the thread info(logs) is saved
+  in a log file so now we are left with 31 threads - > 29 previous + 1 stuck + 1 new spawned
+  and also that domain is also recovered  
+
+  
+
+- this code does not behavous as a browser means it stores certificates which have issues like 
+  SSL certificate expired, SSL hostname mismatch and Self-signed certificates.It behavous same as 
+  new-v3 
+  means it works on below websites :
+
+  - httpforever.com
+  - trbcdn.net
+  - windows.net
+  - googlevideo.com
+  - 14thaugust.ff.garena.pk
+
+
+
+
+
+==============================================================================

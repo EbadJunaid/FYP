@@ -1,0 +1,14 @@
+-   extract-domains-1 uses only the zcertificate to get the common name field from 
+    the PEM format of Rapid 7 data this code is slow 
+
+-   extract-domains-2 uses only the cryptographics libarary to get the command field from 
+    the PEM format and this is very fast but it misses few of those domains which we get from the 
+    zcertificate now the thing is these domains are not much too much 
+
+-   extract-domains-3 uses hybrid approach first it uses the cryptographics library and then it uses the zcertificate  
+    on those certificates which are failed by cryptographics in this we get the great balance between speed and more dataset 
+
+I think extract-domains-3 is best and I have saved only the it's output which is processed/comman-names-3.csv
+
+Now we have extracted all the domains in common-names-3.csv which is quite long and then we have extracted only .pk domains 
+from it which is in pk-domains-rapid-7.csv
