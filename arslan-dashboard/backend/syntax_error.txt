@@ -1,0 +1,30 @@
+﻿python :   File "cert
+ificates/models.py", 
+line 51
+At line:1 char:1
++ python -m 
+py_compile certificat
+es/models.py 2>&1 | 
+Out-File -FilePath 
+...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (  File    
+ "certificates/mo    
+dels.py", line 5    
+1:String) [], Re    
+moteException
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+    def get_current_t
+ime_iso() -> str:
+                     
+          ^
+SyntaxError: invalid 
+syntax
+
