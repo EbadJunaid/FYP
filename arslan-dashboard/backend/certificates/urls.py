@@ -10,6 +10,9 @@ from .views import (
     EncryptionStrengthView,
     ValidityTrendsView,
     CAAnalyticsView,
+    CAStatsView,
+    ValidationDistributionView as CAValidationDistributionView,
+    IssuerValidationMatrixView,
     GeographicDistributionView,
     FutureRiskView,
     VulnerabilitiesView,
@@ -22,6 +25,11 @@ from .views import (
     HashTrendsView,
     IssuerAlgorithmMatrixView,
     CertificateExportView,
+    # SAN Analytics page views
+    SANStatsView,
+    SANDistributionView,
+    SANTLDBreakdownView,
+    SANWildcardBreakdownView,
 )
 
 urlpatterns = [
@@ -42,6 +50,9 @@ urlpatterns = [
     path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
     path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
     path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
+    path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),
+    path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
+    path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
     path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
     path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
     path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
@@ -55,6 +66,12 @@ urlpatterns = [
     path('signature-stats/', SignatureStatsView.as_view(), name='signature_stats'),
     path('hash-trends/', HashTrendsView.as_view(), name='hash_trends'),
     path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
+    
+    # SAN Analytics APIs
+    path('san-stats/', SANStatsView.as_view(), name='san_stats'),
+    path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
+    path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
+    path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
     
     # Notifications API
     path('notifications/', NotificationView.as_view(), name='notifications'),

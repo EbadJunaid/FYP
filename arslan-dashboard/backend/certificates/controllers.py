@@ -96,6 +96,11 @@ class CertificateController:
         self_signed: Optional[bool] = None,
         key_size: Optional[int] = None,
         hash_type: Optional[str] = None,
+        # SAN Analytics page filters
+        san_tld: Optional[str] = None,
+        san_type: Optional[str] = None,
+        san_count_min: Optional[int] = None,
+        san_count_max: Optional[int] = None,
         # Global filter params
         global_filters: Optional[GlobalFilterParams] = None
     ) -> Dict:
@@ -120,6 +125,10 @@ class CertificateController:
             'self_signed': self_signed,
             'key_size': key_size,
             'hash_type': hash_type,
+            'san_tld': san_tld,
+            'san_type': san_type,
+            'san_count_min': san_count_min,
+            'san_count_max': san_count_max,
             # Include global filter params in cache key
             **((global_filters.to_cache_key() if global_filters else {}))
         }
@@ -166,6 +175,10 @@ class CertificateController:
             self_signed=self_signed,
             key_size=key_size,
             hash_type=hash_type,
+            san_tld=san_tld,
+            san_type=san_type,
+            san_count_min=san_count_min,
+            san_count_max=san_count_max,
             base_filter=base_filter
         )
         
@@ -262,6 +275,45 @@ class AnalyticsController:
         
         result = CertificateModel.get_ca_distribution(limit=limit, base_filter=base_filter)
         cache.set('ca_analytics', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_ca_stats() -> Dict:
+        """Get CA stats for metric cards (cached 5 min)"""
+        cache_params = {}
+        
+        cached = cache.get('ca_stats', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_ca_stats()
+        cache.set('ca_stats', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_validation_distribution() -> List[Dict]:
+        """Get validation level distribution (cached 5 min)"""
+        cache_params = {}
+        
+        cached = cache.get('validation_dist', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_validation_distribution()
+        cache.set('validation_dist', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_issuer_validation_matrix(limit: int = 10) -> List[Dict]:
+        """Get issuer x validation level matrix (cached 10 min)"""
+        cache_params = {'limit': limit}
+        
+        cached = cache.get('issuer_validation_matrix', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_issuer_validation_matrix(limit=limit)
+        cache.set('issuer_validation_matrix', cache_params, result)
         return result
     
     @staticmethod
@@ -412,6 +464,61 @@ class NotificationController:
         cache.set('notifications', cache_params, result)
         return result
 
+
+class SANAnalyticsController:
+    """Controller for SAN (Subject Alternative Name) Analytics operations"""
+    
+    @staticmethod
+    def get_san_stats() -> Dict:
+        """Get SAN statistics for metric cards (cached 10 min)"""
+        cache_params = {}
+        
+        cached = cache.get('san_stats', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_san_stats()
+        cache.set('san_stats', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_san_distribution() -> List[Dict]:
+        """Get SAN count distribution histogram (cached 10 min)"""
+        cache_params = {}
+        
+        cached = cache.get('san_distribution', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_san_distribution()
+        cache.set('san_distribution', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_san_tld_breakdown(limit: int = 10) -> List[Dict]:
+        """Get top TLDs from SAN entries (cached 15 min)"""
+        cache_params = {'limit': limit}
+        
+        cached = cache.get('san_tld', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_san_tld_breakdown(limit=limit)
+        cache.set('san_tld', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_san_wildcard_breakdown() -> Dict:
+        """Get wildcard vs standard SAN breakdown (cached 10 min)"""
+        cache_params = {}
+        
+        cached = cache.get('san_wildcard', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_san_wildcard_breakdown()
+        cache.set('san_wildcard', cache_params, result)
+        return result
 
 class CacheController:
     """Controller for cache management operations"""

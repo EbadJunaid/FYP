@@ -8,7 +8,7 @@ import { DownloadIcon } from '@/components/icons/Icons';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface ActiveFilter {
-    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap';
+    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap' | 'issuer' | 'san';
     value?: string;
 }
 
@@ -169,11 +169,44 @@ export default function DownloadModal({
                 }
                 break;
             case 'heatmap':
-                // Heatmap format: "issuer::algorithm" (using :: as delimiter)
+                // Heatmap format: "issuer::algorithm" or "issuer::validationLevel" (using :: as delimiter)
                 if (activeFilter.value) {
-                    const [issuer, algorithm] = activeFilter.value.split('::');
+                    const [issuer, second] = activeFilter.value.split('::');
                     if (issuer) params.append('issuer', issuer);
-                    if (algorithm) params.append('encryption_type', algorithm.replace('-', ' '));
+                    if (second) {
+                        // Check if it's a validation level (DV, OV, EV) or an algorithm
+                        if (['DV', 'OV', 'EV', 'Unknown'].includes(second)) {
+                            params.append('validation_level', second);
+                        } else {
+                            params.append('encryption_type', second.replace('-', ' '));
+                        }
+                    }
+                }
+                break;
+            case 'issuer':
+                // CA Analytics page - filter by issuer organization
+                if (activeFilter.value) {
+                    params.append('issuer', activeFilter.value);
+                }
+                break;
+            case 'san':
+                // SAN Analytics page filters
+                // Value format: "wildcard", "standard", "tld:.com", "count:5-1000"
+                if (activeFilter.value) {
+                    if (activeFilter.value === 'wildcard') {
+                        params.append('san_type', 'wildcard');
+                    } else if (activeFilter.value === 'standard') {
+                        params.append('san_type', 'standard');
+                    } else if (activeFilter.value.startsWith('tld:')) {
+                        params.append('san_tld', activeFilter.value.substring(4));
+                    } else if (activeFilter.value.startsWith('count:')) {
+                        const [min, max] = activeFilter.value.substring(6).split('-').map(Number);
+                        if (!isNaN(min)) params.append('san_count_min', min.toString());
+                        if (!isNaN(max)) params.append('san_count_max', max.toString());
+                    } else if (activeFilter.value === 'multidomain') {
+                        params.append('san_count_min', '5');
+                        params.append('san_count_max', '1000');
+                    }
                 }
                 break;
             case 'all':
@@ -232,6 +265,8 @@ export default function DownloadModal({
                 return `${activeFilter.value || 'Key size'} certificates`;
             case 'heatmap':
                 return `${activeFilter.value?.replace('::', ' - ') || 'Heatmap'} certificates`;
+            case 'issuer':
+                return `Certificates by ${activeFilter.value || 'CA'}`;
             case 'all':
             default:
                 return 'All certificates in database';

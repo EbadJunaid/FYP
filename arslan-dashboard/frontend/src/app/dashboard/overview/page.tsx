@@ -88,9 +88,12 @@ export default function OverviewPage() {
             startTransition(() => {
                 setCurrentPage(1);
             });
-            setTimeout(() => {
-                tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
+            // Use requestAnimationFrame for better scroll timing after render
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            });
         }
     }, [searchQuery]);
 
