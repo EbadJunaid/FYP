@@ -68,6 +68,16 @@ const initialState: DashboardState = {
     },
     isLoading: true,
     error: null,
+    // Track loading state per component for progressive rendering
+    loadingStates: {
+        metrics: true,
+        certificates: true,
+        encryption: true,
+        futureRisk: true,
+        ca: true,
+        geographic: true,
+        trends: true,
+    },
 };
 
 const initialPagination: PaginationState = {
@@ -102,49 +112,94 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
         return `${filterType}:${filterValue || 'none'}:${page}`;
     }, []);
 
-    // Fetch initial data from APIs
+    // Fetch initial data from APIs - PROGRESSIVE LOADING (loads independently)
     const loadDashboardData = useCallback(async () => {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
         try {
-            // Fetch all dashboard data in parallel
-            const [
-                metrics,
-                certificatesData,
-                encryptionData,
-                futureRiskData,
-                caData,
-                geoData,
-                trendsData,
-            ] = await Promise.all([
-                fetchDashboardMetrics(),
+            // ✅ OPTIMIZED: Load fast APIs first, then slow ones independently
+            // Instead of Promise.all (which waits for ALL), we load progressively
+            
+            // Phase 1: Load FAST APIs first (these should return in < 5 seconds)
+            Promise.all([
                 fetchCertificates({ page: 1, pageSize: 10 }),
                 fetchEncryptionStrength(),
-                fetchFutureRisk(),
                 fetchCALeaderboard(10),
                 fetchGeographicDistribution(10),
                 fetchValidityTrends(18),
-            ]);
+            ]).then(([certificatesData, encryptionData, caData, geoData, trendsData]) => {
+                // Update state with fast data immediately
+                setState((prev) => ({
+                    ...prev,
+                    recentScans: certificatesData.certificates,
+                    encryptionStrength: encryptionData.map((e) => ({
+                        ...e,
+                        type: e.type as 'Strong' | 'Standard' | 'Modern' | 'Weak' | 'Deprecated',
+                    })),
+                    caLeaderboard: caData as CALeaderboardEntry[],
+                    geographicDistribution: geoData as GeographicEntry[],
+                    validityTrend: trendsData as ValidityTrendPoint[],
+                    isLoading: false, // Mark as loaded so UI can render
+                    loadingStates: {
+                        ...prev.loadingStates!,
+                        certificates: false,
+                        encryption: false,
+                        ca: false,
+                        geographic: false,
+                        trends: false,
+                    },
+                }));
 
-            setState((prev) => ({
-                ...prev,
-                metrics: metrics as DashboardMetrics,
-                recentScans: certificatesData.certificates,
-                encryptionStrength: encryptionData.map((e) => ({
-                    ...e,
-                    type: e.type as 'Strong' | 'Standard' | 'Modern' | 'Weak' | 'Deprecated',
-                })),
-                futureRisk: futureRiskData as FutureRisk,
-                caLeaderboard: caData as CALeaderboardEntry[],
-                geographicDistribution: geoData as GeographicEntry[],
-                validityTrend: trendsData as ValidityTrendPoint[],
-                isLoading: false,
-            }));
+                setPagination((prev) => ({
+                    ...prev,
+                    totalItems: certificatesData.pagination.total,
+                }));
+            }).catch((error) => {
+                console.error('Error loading fast APIs:', error);
+            });
 
-            setPagination((prev) => ({
-                ...prev,
-                totalItems: certificatesData.pagination.total,
-            }));
+            // Phase 2: Load SLOW APIs independently (global-health, future-risk)
+            // These load in the background without blocking the UI
+            fetchDashboardMetrics().then((metrics) => {
+                setState((prev) => ({
+                    ...prev,
+                    metrics: metrics as DashboardMetrics,
+                    loadingStates: {
+                        ...prev.loadingStates!,
+                        metrics: false,
+                    },
+                }));
+            }).catch((error) => {
+                console.error('Error loading dashboard metrics:', error);
+                setState((prev) => ({
+                    ...prev,
+                    loadingStates: {
+                        ...prev.loadingStates!,
+                        metrics: false,
+                    },
+                }));
+            });
+
+            fetchFutureRisk().then((futureRiskData) => {
+                setState((prev) => ({
+                    ...prev,
+                    futureRisk: futureRiskData as FutureRisk,
+                    loadingStates: {
+                        ...prev.loadingStates!,
+                        futureRisk: false,
+                    },
+                }));
+            }).catch((error) => {
+                console.error('Error loading future risk:', error);
+                setState((prev) => ({
+                    ...prev,
+                    loadingStates: {
+                        ...prev.loadingStates!,
+                        futureRisk: false,
+                    },
+                }));
+            });
+
         } catch (error) {
             console.error('Error loading dashboard data:', error);
             setState((prev) => ({

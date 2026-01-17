@@ -136,6 +136,16 @@ export interface DashboardState {
     search: SearchState;
     isLoading: boolean;
     error: string | null;
+    // Component-level loading states for progressive rendering
+    loadingStates?: {
+        metrics: boolean;
+        certificates: boolean;
+        encryption: boolean;
+        futureRisk: boolean;
+        ca: boolean;
+        geographic: boolean;
+        trends: boolean;
+    };
 }
 
 // Theme Type

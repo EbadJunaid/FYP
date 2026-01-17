@@ -1,0 +1,117 @@
+{
+  "MongoDB Compass Aggregation Tests": "Copy each pipeline below into Compass Aggregations tab",
+  
+  "Test 1 - Count Expired Certificates": {
+    "description": "Should return in < 100ms with index",
+    "pipeline": [
+      {
+        "$match": {
+          "parsed.validity.end": { "$lt": "2026-01-18T00:00:00Z" }
+        }
+      },
+      {
+        "$count": "expired_count"
+      }
+    ],
+    "expected_time": "< 100ms",
+    "expected_result": "~13717"
+  },
+
+  "Test 2 - Count Certificates with Errors": {
+    "description": "Should return in < 200ms with index",
+    "pipeline": [
+      {
+        "$match": {
+          "zlint.errors_present": true
+        }
+      },
+      {
+        "$count": "error_count"
+      }
+    ],
+    "expected_time": "< 200ms",
+    "expected_result": "~345686"
+  },
+
+  "Test 3 - Count Expiring Soon (Next 30 Days)": {
+    "description": "Should return in < 100ms with index",
+    "pipeline": [
+      {
+        "$match": {
+          "parsed.validity.end": {
+            "$gte": "2026-01-18T00:00:00Z",
+            "$lte": "2026-02-18T00:00:00Z"
+          }
+        }
+      },
+      {
+        "$count": "expiring_count"
+      }
+    ],
+    "expected_time": "< 100ms"
+  },
+
+  "Test 4 - Group by Issuer (Top 10 CAs)": {
+    "description": "Should return in < 500ms with index",
+    "pipeline": [
+      {
+        "$group": {
+          "_id": "$parsed.issuer.organization",
+          "count": { "$sum": 1 }
+        }
+      },
+      {
+        "$sort": { "count": -1 }
+      },
+      {
+        "$limit": 10
+      }
+    ],
+    "expected_time": "< 500ms"
+  },
+
+  "Test 5 - All Metrics at Once (Like the API)": {
+    "description": "Should return in < 1 second with indexes",
+    "pipeline": [
+      {
+        "$facet": {
+          "expired": [
+            { "$match": { "parsed.validity.end": { "$lt": "2026-01-18T00:00:00Z" } } },
+            { "$count": "count" }
+          ],
+          "expiring": [
+            { "$match": { "parsed.validity.end": { "$gte": "2026-01-18T00:00:00Z", "$lte": "2026-02-18T00:00:00Z" } } },
+            { "$count": "count" }
+          ],
+          "vulnerabilities": [
+            { "$match": { "zlint.errors_present": true } },
+            { "$count": "count" }
+          ]
+        }
+      }
+    ],
+    "expected_time": "< 1 second"
+  },
+
+  "INSTRUCTIONS": {
+    "step_1": "Open MongoDB Compass",
+    "step_2": "Connect to tranco-latest-8-lakh database",
+    "step_3": "Select 'certificates' collection",
+    "step_4": "Click 'Aggregations' tab",
+    "step_5": "Copy a pipeline from above (just the array part)",
+    "step_6": "Paste into Compass and click 'Run'",
+    "step_7": "Check 'Explain' tab to verify index usage",
+    "step_8": "Look at execution time in bottom status bar"
+  },
+
+  "Example - Copy this for Test 1": [
+    {
+      "$match": {
+        "parsed.validity.end": { "$lt": "2026-01-18T00:00:00Z" }
+      }
+    },
+    {
+      "$count": "expired_count"
+    }
+  ]
+}
