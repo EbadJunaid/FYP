@@ -79,6 +79,14 @@ export async function fetchCertificates(params?: {
     key_size?: number;
     hash_type?: string;
     encryption_type?: string;  // Alternative naming
+    // SAN Analytics filters
+    has_wildcard?: string;
+    min_sans?: number;
+    max_sans?: number;
+    san_tld?: string;
+    san_type?: string;
+    san_count_min?: number;
+    san_count_max?: number;
 } & GlobalFilterParams): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
     try {
         const result = await apiClient.getCertificates(params);

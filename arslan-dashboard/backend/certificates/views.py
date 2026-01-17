@@ -112,6 +112,14 @@ class CertificateListView(View):
             key_size = int(key_size_str) if key_size_str else None
             hash_type = request.GET.get('hash_type')
             
+            # SAN Analytics page specific filters
+            san_tld = request.GET.get('san_tld')  # e.g., ".com", ".pk"
+            san_type = request.GET.get('san_type')  # "wildcard" or "standard"
+            san_count_min_str = request.GET.get('san_count_min')  # For SAN Count Distribution
+            san_count_max_str = request.GET.get('san_count_max')
+            san_count_min = int(san_count_min_str) if san_count_min_str else None
+            san_count_max = int(san_count_max_str) if san_count_max_str else None
+            
             result = CertificateController.get_certificates(
                 page=page,
                 page_size=page_size,
@@ -132,6 +140,10 @@ class CertificateListView(View):
                 self_signed=self_signed_filter if self_signed_filter else None,
                 key_size=key_size,
                 hash_type=hash_type,
+                san_tld=san_tld,
+                san_type=san_type,
+                san_count_min=san_count_min,
+                san_count_max=san_count_max,
                 global_filters=global_filters
             )
             return json_response(result)
@@ -323,6 +335,69 @@ class IssuerValidationMatrixView(View):
             return json_response({'error': str(e)}, status=500)
 
 
+# ==================== SAN ANALYTICS VIEWS ====================
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SANStatsView(View):
+    """
+    GET /api/san-stats
+    Returns SAN statistics for metric cards
+    """
+    def get(self, request):
+        try:
+            from .controllers import SANAnalyticsController
+            data = SANAnalyticsController.get_san_stats()
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SANDistributionView(View):
+    """
+    GET /api/san-distribution
+    Returns SAN count distribution (histogram buckets)
+    """
+    def get(self, request):
+        try:
+            from .controllers import SANAnalyticsController
+            data = SANAnalyticsController.get_san_distribution()
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SANTLDBreakdownView(View):
+    """
+    GET /api/san-tld-breakdown
+    Returns top TLDs from SAN entries
+    Query params: limit
+    """
+    def get(self, request):
+        try:
+            from .controllers import SANAnalyticsController
+            limit = int(request.GET.get('limit', 15))
+            data = SANAnalyticsController.get_san_tld_breakdown(limit=limit)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SANWildcardBreakdownView(View):
+    """
+    GET /api/san-wildcard-breakdown
+    Returns wildcard vs standard SAN breakdown
+    """
+    def get(self, request):
+        try:
+            from .controllers import SANAnalyticsController
+            data = SANAnalyticsController.get_san_wildcard_breakdown()
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
 class GeographicDistributionView(View):
     """
     GET /api/geographic-distribution
@@ -467,10 +542,27 @@ class CertificateDownloadView(View):
         # CA Analytics specific filter
         validation_level = request.GET.get('validation_level')
         
+        # SAN Analytics specific filters
+        san_tld = request.GET.get('san_tld')
+        san_type = request.GET.get('san_type')
+        san_count_min_str = request.GET.get('san_count_min')
+        san_count_max_str = request.GET.get('san_count_max')
+        san_count_min = int(san_count_min_str) if san_count_min_str else None
+        san_count_max = int(san_count_max_str) if san_count_max_str else None
+        
         # Generate filename based on filter
         filename = 'certificates'
         if status:
             filename = f'{status.lower()}_certificates'
+        elif san_type == 'wildcard':
+            filename = 'wildcard_certificates'
+        elif san_type == 'standard':
+            filename = 'standard_certificates'
+        elif san_tld:
+            safe_tld = san_tld.replace('.', '').lower()[:10]
+            filename = f'{safe_tld}_tld_certificates'
+        elif san_count_min is not None:
+            filename = f'san_{san_count_min}plus_certificates'
         elif weak_hash:
             filename = 'weak_hash_certificates'
         elif self_signed:
@@ -502,7 +594,11 @@ class CertificateDownloadView(View):
                 hash_type=hash_type,
                 validity_bucket=validity_bucket,
                 expiring_days=expiring_days,
-                validation_level=validation_level
+                validation_level=validation_level,
+                san_tld=san_tld,
+                san_type=san_type,
+                san_count_min=san_count_min,
+                san_count_max=san_count_max
             ),
             content_type='text/csv'
         )
@@ -653,6 +749,79 @@ class CertificateDownloadView(View):
         # Filter by validation level (DV, OV, EV)
         if filters.get('validation_level'):
             query['parsed.validation_level'] = filters['validation_level']
+        
+        # SAN TLD filter - filter certs where any dns_name ends with the TLD
+        if filters.get('san_tld'):
+            tld_pattern = filters['san_tld'].lstrip('.')
+            query['parsed.extensions.subject_alt_name.dns_names'] = {
+                '$regex': f'\\.{tld_pattern}$',
+                '$options': 'i'
+            }
+        
+        # SAN type filter - filter by wildcard or standard SANs
+        if filters.get('san_type'):
+            if filters['san_type'].lower() == 'wildcard':
+                query['parsed.extensions.subject_alt_name.dns_names'] = {
+                    '$regex': '^\\*\\.',
+                    '$options': 'i'
+                }
+            elif filters['san_type'].lower() == 'standard':
+                query['$and'] = query.get('$and', [])
+                query['$and'].append({
+                    'parsed.extensions.subject_alt_name.dns_names': {
+                        '$exists': True,
+                        '$ne': []
+                    }
+                })
+                query['$and'].append({
+                    'parsed.extensions.subject_alt_name.dns_names': {
+                        '$not': {'$regex': '^\\*\\.'}
+                    }
+                })
+        
+        # SAN count filter - requires aggregation pipeline
+        san_count_min = filters.get('san_count_min')
+        san_count_max = filters.get('san_count_max')
+        
+        if san_count_min is not None or san_count_max is not None:
+            # Use aggregation for san count filtering
+            pipeline = [
+                {'$match': query if query else {}},
+                {'$addFields': {
+                    'sanCount': {
+                        '$size': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]}
+                    }
+                }},
+            ]
+            
+            san_count_match = {}
+            if san_count_min is not None:
+                san_count_match['$gte'] = san_count_min
+            if san_count_max is not None:
+                san_count_match['$lte'] = san_count_max
+            
+            if san_count_match:
+                pipeline.append({'$match': {'sanCount': san_count_match}})
+            
+            # Stream data via aggregation
+            for doc in CertificateModel.collection.aggregate(pipeline, allowDiskUse=True):
+                cert = CertificateModel.serialize_certificate(doc)
+                
+                if filters.get('country') and cert.get('country') != filters['country']:
+                    continue
+                
+                yield self._csv_row([
+                    cert.get('domain', 'N/A'),
+                    cert.get('validFrom', 'N/A'),
+                    cert.get('validTo', 'N/A'),
+                    cert.get('sslGrade', 'N/A'),
+                    cert.get('encryptionType', 'N/A'),
+                    cert.get('issuer', 'N/A'),
+                    cert.get('country', 'N/A'),
+                    cert.get('status', 'N/A'),
+                    cert.get('vulnerabilityCount', 0)
+                ])
+            return
         
         # Stream data in batches (batch_size for MongoDB cursor)
         cursor = CertificateModel.collection.find(query).batch_size(1000)

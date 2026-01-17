@@ -50,6 +50,11 @@ TTL_CONFIG = {
     'signature_stats': 480,      # 8 minutes
     'hash_trends': 600,          # 10 minutes (historical data)
     'issuer_matrix': 600,        # 10 minutes
+    # SAN Analytics page caches
+    'san_stats': 600,            # 10 minutes
+    'san_distribution': 600,     # 10 minutes
+    'san_tld': 900,              # 15 minutes
+    'san_wildcard': 600,         # 10 minutes
 }
 
 

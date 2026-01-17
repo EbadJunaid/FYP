@@ -380,6 +380,11 @@ class CertificateModel:
                 self_signed: Optional[bool] = None,
                 key_size: Optional[int] = None,
                 hash_type: Optional[str] = None,
+                # SAN Analytics page filters
+                san_tld: Optional[str] = None,
+                san_type: Optional[str] = None,
+                san_count_min: Optional[int] = None,
+                san_count_max: Optional[int] = None,
                 base_filter: Optional[Dict] = None) -> Dict:
         """Get paginated list of certificates with optional filters
         
@@ -393,6 +398,10 @@ class CertificateModel:
             self_signed: Filter self-signed certificates
             key_size: Filter by exact key size (e.g., 2048, 4096)
             hash_type: Filter by hash algorithm (e.g., "SHA-256", "SHA-1")
+            san_tld: Filter by TLD in SAN entries (e.g., ".com", ".pk")
+            san_type: Filter by SAN type ("wildcard" or "standard")
+            san_count_min: Filter by minimum SAN count
+            san_count_max: Filter by maximum SAN count
             base_filter: Global filter query from build_filter_query() - merged with specific filters
         """
         
@@ -665,6 +674,90 @@ class CertificateModel:
                     }
                 }
         
+        # SAN TLD filter - filter certs where any dns_name ends with the TLD
+        if san_tld:
+            # Remove leading dot if present for regex
+            tld_pattern = san_tld.lstrip('.')
+            # Match dns_names ending with the TLD
+            query['parsed.extensions.subject_alt_name.dns_names'] = {
+                '$regex': f'\\.{tld_pattern}$',
+                '$options': 'i'
+            }
+        
+        # SAN type filter - filter by wildcard or standard SANs
+        if san_type:
+            if san_type.lower() == 'wildcard':
+                # Match certs with at least one wildcard SAN (starts with *.)
+                query['parsed.extensions.subject_alt_name.dns_names'] = {
+                    '$regex': '^\\*\\.',
+                    '$options': 'i'
+                }
+            elif san_type.lower() == 'standard':
+                # Match certs where no SAN starts with *. 
+                # This is trickier - we'll use $not to exclude wildcards
+                query['$and'] = query.get('$and', [])
+                query['$and'].append({
+                    'parsed.extensions.subject_alt_name.dns_names': {
+                        '$exists': True,
+                        '$ne': []
+                    }
+                })
+                query['$and'].append({
+                    'parsed.extensions.subject_alt_name.dns_names': {
+                        '$not': {'$regex': '^\\*\\.'}
+                    }
+                })
+        
+        # SAN count filter - filter by number of SANs (dns_names array size)
+        if san_count_min is not None or san_count_max is not None:
+            # Use aggregation pipeline for array size filtering
+            pipeline = [
+                {'$match': query if query else {}},
+                # Add a field for the count of dns_names
+                {'$addFields': {
+                    'sanCount': {
+                        '$size': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]}
+                    }
+                }},
+            ]
+            
+            # Build match condition for san count
+            san_count_match = {}
+            if san_count_min is not None:
+                san_count_match['$gte'] = san_count_min
+            if san_count_max is not None:
+                san_count_match['$lte'] = san_count_max
+            
+            if san_count_match:
+                pipeline.append({'$match': {'sanCount': san_count_match}})
+            
+            # Get total count first
+            count_pipeline = pipeline + [{'$count': 'total'}]
+            count_result = list(cls.collection.aggregate(count_pipeline, allowDiskUse=True))
+            total = count_result[0]['total'] if count_result else 0
+            
+            # Get paginated results
+            skip = (page - 1) * page_size
+            result_pipeline = pipeline + [
+                {'$skip': skip},
+                {'$limit': page_size}
+            ]
+            
+            certificates = []
+            for doc in cls.collection.aggregate(result_pipeline, allowDiskUse=True):
+                cert = cls.serialize_certificate(doc)
+                certificates.append(cert)
+            
+            return {
+                'certificates': certificates,
+                'pagination': {
+                    'page': page,
+                    'pageSize': page_size,
+                    'total': total,
+                    'totalPages': max(1, (total + page_size - 1) // page_size)
+                }
+            }
+        
         # Get total count with filters applied
         total = cls.collection.count_documents(query)
         
@@ -701,16 +794,24 @@ class CertificateModel:
     
     @classmethod
     def get_dashboard_metrics(cls) -> Dict:
-        """Calculate accurate global health and dashboard metrics using aggregation"""
-        
+        """
+        ULTRA-OPTIMIZED: Use estimated count + separate indexed queries.
+        Each query leverages indexes independently (faster than $facet).
+        """
+        import time
+        start_time = time.time()
+       
         now = cls.get_current_time_iso()
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
-        # Get total count
-        # print("total certificates call before",cls.get_current_time_iso())
-
-        total = cls.collection.count_documents({})
-        # print("total certificates call after",cls.get_current_time_iso())
+        print(f"[METRICS] Starting ultra-optimized queries at {cls.get_current_time_iso()}")
+        
+        # Query 1: Total count - USE ESTIMATED (instant!)
+        print("[METRICS] Query 1: Counting total (estimated)...")
+        t1 = time.time()
+        total = cls.collection.estimated_document_count()
+        print(f"[METRICS] Total count: {total} ({time.time()-t1:.3f}s)")
+        
         if total == 0:
             return {
                 'globalHealth': {
@@ -718,49 +819,44 @@ class CertificateModel:
                     'maxScore': 100,
                     'trend': 0,
                     'status': 'CRITICAL',
-                    'lastUpdated': '2m ago'
+                    'lastUpdated': datetime.now(timezone.utc).strftime('%H:%M')
                 },
-                'activeCertificates': {'count': 0, 'trend': 0},
+                'activeCertificates': {'count': 0, 'total': 0},
                 'expiringSoon': {'count': 0, 'daysThreshold': 30, 'actionNeeded': False},
                 'criticalVulnerabilities': {'count': 0, 'new': 0}
             }
         
-        # Count expired certificates (validity.end < now)
-        expired_count = cls.collection.count_documents({
-            'parsed.validity.end': {'$lt': now}
-        })
+        # Query 2: Expired count - INDEXED query on validity.end
+        print("[METRICS] Query 2: Counting expired (indexed)...")
+        t2 = time.time()
+        expired_count = cls.collection.count_documents(
+            {'parsed.validity.end': {'$lt': now}},
+            hint='idx_validity_end'  # Force use of index
+        )
+        print(f"[METRICS] Expired count: {expired_count} ({time.time()-t2:.3f}s)")
         
-        # Count expiring soon (now <= validity.end <= now+30days)
-        expiring_count = cls.collection.count_documents({
-            'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}
-        })
+        # Query 3: Expiring soon - INDEXED query on validity.end
+        print("[METRICS] Query 3: Counting expiring soon (indexed)...")
+        t3 = time.time()
+        expiring_count = cls.collection.count_documents(
+            {'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}},
+            hint='idx_validity_end'  # Force use of index
+        )
+        print(f"[METRICS] Expiring count: {expiring_count} ({time.time()-t3:.3f}s)")
         
-        # Active = total - expired
+        # Query 4: Vulnerabilities - INDEXED query on zlint.errors_present
+        print("[METRICS] Query 4: Counting vulnerabilities (indexed)...")
+        t4 = time.time()
+        critical_vulns = cls.collection.count_documents(
+            {'zlint.errors_present': True},
+            hint='idx_zlint_errors'  # Force use of index
+        )
+        print(f"[METRICS] Vulnerability count: {critical_vulns} ({time.time()-t4:.3f}s)")
+        
+        # Calculate derived values
         active_count = total - expired_count
         
-        # Count certificates with zlint errors (critical vulnerabilities)
-        # Using aggregation to count ALL certificates with at least one error
-        # No sampling - queries entire collection for accuracy
-        vuln_pipeline = [
-            {
-                "$match": {
-                    "zlint.errors_present": True,
-                    "zlint.lints": {"$exists": True, "$ne": {}}
-                }
-            },
-            {'$project': {
-                'lints_array': {'$objectToArray': '$zlint.lints'}
-            }},
-            {'$unwind': '$lints_array'},
-            {'$match': {'lints_array.v.result': 'error'}},
-            {'$group': {'_id': '$_id'}},  # Group by document to count unique certs
-            {'$count': 'total'}
-        ]
-        
-        vuln_result = list(cls.collection.aggregate(vuln_pipeline))
-        critical_vulns = vuln_result[0]['total'] if vuln_result else 0
-        
-        # Calculate health score based on active percentage and low vulnerability rate
+        # Calculate health score
         active_percentage = (active_count / total) * 100 if total > 0 else 0
         vuln_penalty = min(20, (critical_vulns / total) * 100) if total > 0 else 0
         health_score = int(min(100, max(0, active_percentage - vuln_penalty)))
@@ -772,6 +868,10 @@ class CertificateModel:
             health_status = 'AT_RISK'
         else:
             health_status = 'CRITICAL'
+        
+        elapsed = time.time() - start_time
+        print(f"[METRICS] ✅ All queries completed in {elapsed:.2f} seconds")
+        print(f"[METRICS] Results - Total: {total}, Expired: {expired_count}, Expiring: {expiring_count}, Vulns: {critical_vulns}")
         
         return {
             'globalHealth': {
@@ -2225,3 +2325,219 @@ class CertificateModel:
                 })
         
         return matrix
+
+    # ==================== SAN ANALYTICS METHODS ====================
+    
+    @classmethod
+    def get_san_stats(cls) -> Dict[str, Any]:
+        """
+        Get SAN (Subject Alternative Name) statistics for metric cards.
+        
+        Returns:
+            Dict with total_sans, avg_sans_per_cert, wildcard_certs, multi_domain_certs
+        """
+        pipeline = [
+                {
+                    '$project': {
+                        # Ensure we are looking at the specific SAN DNS array
+                        # We use $ifNull to handle missing fields and $filter to handle nulls
+                        'names': {
+                            '$filter': {
+                                'input': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]},
+                                'as': 'n',
+                                'cond': {'$ne': ['$$n', None]}
+                            }
+                        }
+                    }
+                },
+                {
+                    '$addFields': {
+                        'sanCount': {'$size': '$names'},
+                        'hasWildcard': {
+                            '$gt': [
+                                {'$size': {
+                                    '$filter': {
+                                        'input': '$names',
+                                        'as': 'name',
+                                        'cond': {
+                                            '$and': [
+                                                {'$eq': [{'$type': '$$name'}, 'string']},
+                                                {'$regexMatch': {'input': '$$name', 'regex': '^\\*\\.'}}
+                                            ]
+                                        }
+                                    }
+                                }},
+                                0
+                            ]
+                        }
+                    }
+                },
+                {
+                    '$addFields': {
+                        'isMultiDomain': {'$gte': ['$sanCount', 5]}
+                    }
+                },
+                {
+                    '$group': {
+                        '_id': None,
+                        'totalSans': {'$sum': '$sanCount'},
+                        'totalCerts': {'$sum': 1},
+                        'wildcardCerts': {'$sum': {'$cond': ['$hasWildcard', 1, 0]}},
+                        'multiDomainCerts': {'$sum': {'$cond': ['$isMultiDomain', 1, 0]}}
+                    }
+                }
+            ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        if results:
+            data = results[0]
+            total_certs = data.get('totalCerts', 1) or 1
+            return {
+                'total_sans': data.get('totalSans', 0),
+                'avg_sans_per_cert': round(data.get('totalSans', 0) / total_certs, 2),
+                'wildcard_certs': data.get('wildcardCerts', 0),
+                'multi_domain_certs': data.get('multiDomainCerts', 0),
+                'total_certs': total_certs
+            }
+        
+        return {
+            'total_sans': 0,
+            'avg_sans_per_cert': 0,
+            'wildcard_certs': 0,
+            'multi_domain_certs': 0,
+            'total_certs': 0
+        }
+    
+    @classmethod
+    def get_san_distribution(cls) -> List[Dict[str, Any]]:
+        """
+        Get SAN count distribution (histogram buckets).
+        
+        Returns:
+            List of dicts with bucket name and count
+        """
+        pipeline = [
+            {'$project': {
+                'sanCount': {'$size': {'$ifNull': ['$parsed.names', []]}}
+            }},
+            {'$bucket': {
+                'groupBy': '$sanCount',
+                'boundaries': [0, 1, 2, 4, 6, 11, 21, 51],
+                'default': '50+',
+                'output': {'count': {'$sum': 1}}
+            }}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        # Map bucket IDs to readable labels
+        bucket_labels = {
+            0: '0',
+            1: '1',
+            2: '2-3',
+            4: '4-5',
+            6: '6-10',
+            11: '11-20',
+            21: '21-50',
+            '50+': '50+'
+        }
+        
+        distribution = []
+        for r in results:
+            bucket_id = r['_id']
+            label = bucket_labels.get(bucket_id, str(bucket_id))
+            distribution.append({
+                'bucket': label,
+                'count': r['count']
+            })
+        
+        return distribution
+    
+    @classmethod
+    def get_san_tld_breakdown(cls, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get top TLDs from SAN entries (using dns_names from subject_alt_name).
+        
+        Args:
+            limit: Number of top TLDs to return
+            
+        Returns:
+            List of dicts with tld and count
+        """
+        pipeline = [
+            # Filter documents that have dns_names
+            {'$match': {
+                'parsed.extensions.subject_alt_name.dns_names': {'$exists': True, '$ne': []}
+            }},
+            # Unwind the dns_names array
+            {'$unwind': '$parsed.extensions.subject_alt_name.dns_names'},
+            # Project and extract TLD from each dns name
+            {'$project': {
+                'dnsName': '$parsed.extensions.subject_alt_name.dns_names',
+                # Extract TLD - get last part after last dot
+                'tld': {
+                    '$let': {
+                        'vars': {
+                            'parts': {'$split': ['$parsed.extensions.subject_alt_name.dns_names', '.']}
+                        },
+                        'in': {'$arrayElemAt': ['$$parts', -1]}
+                    }
+                }
+            }},
+            # Filter out wildcards and empty TLDs
+            {'$match': {
+                'tld': {'$exists': True, '$ne': None, '$ne': ''},
+                'dnsName': {'$not': {'$regex': '^\\*'}}
+            }},
+            # Group by TLD
+            {'$group': {
+                '_id': {'$toLower': '$tld'},
+                'count': {'$sum': 1}
+            }},
+            # Sort by count
+            {'$sort': {'count': -1}},
+            # Limit to top N
+            {'$limit': limit}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        return [{'tld': f".{r['_id']}", 'count': r['count']} for r in results]
+    
+    @classmethod
+    def get_san_wildcard_breakdown(cls) -> Dict[str, int]:
+        """
+        Get breakdown of wildcard vs standard SAN entries (using dns_names).
+        
+        Returns:
+            Dict with wildcard and standard counts
+        """
+        pipeline = [
+            # Filter documents that have dns_names
+            {'$match': {
+                'parsed.extensions.subject_alt_name.dns_names': {'$exists': True, '$ne': []}
+            }},
+            # Unwind the dns_names array
+            {'$unwind': '$parsed.extensions.subject_alt_name.dns_names'},
+            # Project to check if wildcard
+            {'$project': {
+                'isWildcard': {'$regexMatch': {'input': '$parsed.extensions.subject_alt_name.dns_names', 'regex': '^\\*\\.'}}
+            }},
+            # Group by wildcard status
+            {'$group': {
+                '_id': '$isWildcard',
+                'count': {'$sum': 1}
+            }}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        breakdown = {'wildcard': 0, 'standard': 0}
+        for r in results:
+            if r['_id'] is True:
+                breakdown['wildcard'] = r['count']
+            else:
+                breakdown['standard'] = r['count']
+        
+        return breakdown

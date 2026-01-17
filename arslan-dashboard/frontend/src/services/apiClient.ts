@@ -163,6 +163,30 @@ export interface IssuerValidationEntry {
     count: number;
 }
 
+// SAN Analytics interfaces
+export interface SANStats {
+    total_sans: number;
+    avg_sans_per_cert: number;
+    wildcard_certs: number;
+    multi_domain_certs: number;
+    total_certs: number;
+}
+
+export interface SANDistributionEntry {
+    bucket: string;
+    count: number;
+}
+
+export interface SANTLDEntry {
+    tld: string;
+    count: number;
+}
+
+export interface SANWildcardBreakdown {
+    wildcard: number;
+    standard: number;
+}
+
 // API Client class
 class ApiClient {
     private baseUrl: string;
@@ -222,6 +246,11 @@ class ApiClient {
         key_size?: number;
         hash_type?: string;
         encryption_type?: string;
+        // SAN Analytics page filters
+        san_tld?: string;
+        san_type?: string;
+        san_count_min?: number;
+        san_count_max?: number;
         // Global filter params
         startDate?: string;
         endDate?: string;
@@ -252,6 +281,11 @@ class ApiClient {
         if (params?.self_signed) queryParams.append('self_signed', params.self_signed);
         if (params?.key_size) queryParams.append('key_size', params.key_size.toString());
         if (params?.hash_type) queryParams.append('hash_type', params.hash_type);
+        // SAN Analytics filters
+        if (params?.san_tld) queryParams.append('san_tld', params.san_tld);
+        if (params?.san_type) queryParams.append('san_type', params.san_type);
+        if (params?.san_count_min !== undefined) queryParams.append('san_count_min', params.san_count_min.toString());
+        if (params?.san_count_max !== undefined) queryParams.append('san_count_max', params.san_count_max.toString());
         // Global filter params
         if (params?.startDate) queryParams.append('start_date', params.startDate);
         if (params?.endDate) queryParams.append('end_date', params.endDate);
@@ -392,6 +426,23 @@ class ApiClient {
 
     async getIssuerAlgorithmMatrix(limit: number = 10): Promise<IssuerAlgorithmEntry[]> {
         return this.fetch<IssuerAlgorithmEntry[]>(`/issuer-algorithm-matrix/?limit=${limit}`);
+    }
+
+    // SAN Analytics APIs
+    async getSANStats(): Promise<SANStats> {
+        return this.fetch<SANStats>('/san-stats/');
+    }
+
+    async getSANDistribution(): Promise<SANDistributionEntry[]> {
+        return this.fetch<SANDistributionEntry[]>('/san-distribution/');
+    }
+
+    async getSANTLDBreakdown(limit: number = 10): Promise<SANTLDEntry[]> {
+        return this.fetch<SANTLDEntry[]>(`/san-tld-breakdown/?limit=${limit}`);
+    }
+
+    async getSANWildcardBreakdown(): Promise<SANWildcardBreakdown> {
+        return this.fetch<SANWildcardBreakdown>('/san-wildcard-breakdown/');
     }
 
     // Export certificates as CSV with filters

@@ -25,6 +25,11 @@ from .views import (
     HashTrendsView,
     IssuerAlgorithmMatrixView,
     CertificateExportView,
+    # SAN Analytics page views
+    SANStatsView,
+    SANDistributionView,
+    SANTLDBreakdownView,
+    SANWildcardBreakdownView,
 )
 
 urlpatterns = [
@@ -61,6 +66,12 @@ urlpatterns = [
     path('signature-stats/', SignatureStatsView.as_view(), name='signature_stats'),
     path('hash-trends/', HashTrendsView.as_view(), name='hash_trends'),
     path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
+    
+    # SAN Analytics APIs
+    path('san-stats/', SANStatsView.as_view(), name='san_stats'),
+    path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
+    path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
+    path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
     
     # Notifications API
     path('notifications/', NotificationView.as_view(), name='notifications'),
