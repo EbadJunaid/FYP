@@ -794,24 +794,16 @@ class CertificateModel:
     
     @classmethod
     def get_dashboard_metrics(cls) -> Dict:
-        """
-        ULTRA-OPTIMIZED: Use estimated count + separate indexed queries.
-        Each query leverages indexes independently (faster than $facet).
-        """
-        import time
-        start_time = time.time()
-       
+        """Calculate accurate global health and dashboard metrics using aggregation"""
+        
         now = cls.get_current_time_iso()
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
-        print(f"[METRICS] Starting ultra-optimized queries at {cls.get_current_time_iso()}")
-        
-        # Query 1: Total count - USE ESTIMATED (instant!)
-        print("[METRICS] Query 1: Counting total (estimated)...")
-        t1 = time.time()
-        total = cls.collection.estimated_document_count()
-        print(f"[METRICS] Total count: {total} ({time.time()-t1:.3f}s)")
-        
+        # Get total count
+        # print("total certificates call before",cls.get_current_time_iso())
+
+        total = cls.collection.count_documents({})
+        # print("total certificates call after",cls.get_current_time_iso())
         if total == 0:
             return {
                 'globalHealth': {
@@ -819,44 +811,49 @@ class CertificateModel:
                     'maxScore': 100,
                     'trend': 0,
                     'status': 'CRITICAL',
-                    'lastUpdated': datetime.now(timezone.utc).strftime('%H:%M')
+                    'lastUpdated': '2m ago'
                 },
-                'activeCertificates': {'count': 0, 'total': 0},
+                'activeCertificates': {'count': 0, 'trend': 0},
                 'expiringSoon': {'count': 0, 'daysThreshold': 30, 'actionNeeded': False},
                 'criticalVulnerabilities': {'count': 0, 'new': 0}
             }
         
-        # Query 2: Expired count - INDEXED query on validity.end
-        print("[METRICS] Query 2: Counting expired (indexed)...")
-        t2 = time.time()
-        expired_count = cls.collection.count_documents(
-            {'parsed.validity.end': {'$lt': now}},
-            hint='idx_validity_end'  # Force use of index
-        )
-        print(f"[METRICS] Expired count: {expired_count} ({time.time()-t2:.3f}s)")
+        # Count expired certificates (validity.end < now)
+        expired_count = cls.collection.count_documents({
+            'parsed.validity.end': {'$lt': now}
+        })
         
-        # Query 3: Expiring soon - INDEXED query on validity.end
-        print("[METRICS] Query 3: Counting expiring soon (indexed)...")
-        t3 = time.time()
-        expiring_count = cls.collection.count_documents(
-            {'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}},
-            hint='idx_validity_end'  # Force use of index
-        )
-        print(f"[METRICS] Expiring count: {expiring_count} ({time.time()-t3:.3f}s)")
+        # Count expiring soon (now <= validity.end <= now+30days)
+        expiring_count = cls.collection.count_documents({
+            'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}
+        })
         
-        # Query 4: Vulnerabilities - INDEXED query on zlint.errors_present
-        print("[METRICS] Query 4: Counting vulnerabilities (indexed)...")
-        t4 = time.time()
-        critical_vulns = cls.collection.count_documents(
-            {'zlint.errors_present': True},
-            hint='idx_zlint_errors'  # Force use of index
-        )
-        print(f"[METRICS] Vulnerability count: {critical_vulns} ({time.time()-t4:.3f}s)")
-        
-        # Calculate derived values
+        # Active = total - expired
         active_count = total - expired_count
         
-        # Calculate health score
+        # Count certificates with zlint errors (critical vulnerabilities)
+        # Using aggregation to count ALL certificates with at least one error
+        # No sampling - queries entire collection for accuracy
+        vuln_pipeline = [
+            {
+                "$match": {
+                    "zlint.errors_present": True,
+                    "zlint.lints": {"$exists": True, "$ne": {}}
+                }
+            },
+            {'$project': {
+                'lints_array': {'$objectToArray': '$zlint.lints'}
+            }},
+            {'$unwind': '$lints_array'},
+            {'$match': {'lints_array.v.result': 'error'}},
+            {'$group': {'_id': '$_id'}},  # Group by document to count unique certs
+            {'$count': 'total'}
+        ]
+        
+        vuln_result = list(cls.collection.aggregate(vuln_pipeline))
+        critical_vulns = vuln_result[0]['total'] if vuln_result else 0
+        
+        # Calculate health score based on active percentage and low vulnerability rate
         active_percentage = (active_count / total) * 100 if total > 0 else 0
         vuln_penalty = min(20, (critical_vulns / total) * 100) if total > 0 else 0
         health_score = int(min(100, max(0, active_percentage - vuln_penalty)))
@@ -868,10 +865,6 @@ class CertificateModel:
             health_status = 'AT_RISK'
         else:
             health_status = 'CRITICAL'
-        
-        elapsed = time.time() - start_time
-        print(f"[METRICS] ✅ All queries completed in {elapsed:.2f} seconds")
-        print(f"[METRICS] Results - Total: {total}, Expired: {expired_count}, Expiring: {expiring_count}, Vulns: {critical_vulns}")
         
         return {
             'globalHealth': {
