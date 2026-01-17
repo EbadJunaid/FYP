@@ -286,15 +286,8 @@ class CertificateModel:
         else:
             encryption_type = algo_name
         
-        # Derive validation level from certificate policies
-        validation_level = 'DV'  # Default
-        policies = extensions.get('certificate_policies', [])
-        if policies:
-            policy_str = str(policies).lower()
-            if 'extended-validation' in policy_str or 'ev-ssl' in policy_str:
-                validation_level = 'EV'
-            elif 'organization-validation' in policy_str or 'ov-ssl' in policy_str:
-                validation_level = 'OV'
+        # Get validation level directly from parsed field
+        validation_level = parsed.get('validation_level', 'DV')
         
         # Build zlintDetails - only include error/warn lints if present
         zlint_details = {}
@@ -714,10 +707,10 @@ class CertificateModel:
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # Get total count
-        print("total certificates call before",cls.get_current_time_iso())
+        # print("total certificates call before",cls.get_current_time_iso())
 
         total = cls.collection.count_documents({})
-        print("total certificates call after",cls.get_current_time_iso())
+        # print("total certificates call after",cls.get_current_time_iso())
         if total == 0:
             return {
                 'globalHealth': {
@@ -2088,5 +2081,147 @@ class CertificateModel:
                 'keySize': key_size,
                 'count': count
             })
+        
+        return matrix
+    
+    @classmethod
+    def get_ca_stats(cls) -> Dict:
+        """
+        Get CA Analytics stats for metric cards.
+        Returns: total CAs, top CA, self-signed count, unique CA countries
+        """
+        # Get total unique CAs
+        ca_pipeline = [
+            {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
+            {'$group': {'_id': '$parsed.issuer.organization'}},
+            {'$count': 'total'}
+        ]
+        ca_result = list(cls.collection.aggregate(ca_pipeline))
+        total_cas = ca_result[0]['total'] if ca_result else 0
+        
+        # Get top CA
+        top_ca_pipeline = [
+            {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
+            {'$group': {'_id': '$parsed.issuer.organization', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 1}
+        ]
+        top_ca_result = list(cls.collection.aggregate(top_ca_pipeline))
+        total_certs = cls.collection.count_documents({})
+        
+        top_ca = None
+        top_ca_count = 0
+        top_ca_percentage = 0
+        if top_ca_result:
+            top_ca = top_ca_result[0]['_id'] or 'Unknown'
+            top_ca_count = top_ca_result[0]['count']
+            top_ca_percentage = round((top_ca_count / total_certs) * 100, 1) if total_certs > 0 else 0
+        
+        # Get self-signed count
+        self_signed_count = cls.collection.count_documents({
+            'parsed.signature.self_signed': True
+        })
+        
+        # Get unique CA countries
+        country_pipeline = [
+            {'$unwind': {'path': '$parsed.issuer.country', 'preserveNullAndEmptyArrays': True}},
+            {'$group': {'_id': '$parsed.issuer.country'}},
+            {'$match': {'_id': {'$ne': None}}},
+            {'$count': 'total'}
+        ]
+        country_result = list(cls.collection.aggregate(country_pipeline))
+        unique_countries = country_result[0]['total'] if country_result else 0
+        
+        return {
+            'total_cas': total_cas,
+            'total_certs': total_certs,
+            'top_ca': {
+                'name': top_ca,
+                'count': top_ca_count,
+                'percentage': top_ca_percentage
+            },
+            'self_signed_count': self_signed_count,
+            'unique_countries': unique_countries
+        }
+    
+    @classmethod
+    def get_validation_distribution(cls) -> List[Dict]:
+        """
+        Get validation level distribution (DV, OV, EV).
+        """
+        total_certs = cls.collection.count_documents({})
+        
+        pipeline = [
+            {'$group': {'_id': '$parsed.validation_level', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline))
+        
+        distribution = []
+        for item in results:
+            level = item['_id'] or 'Unknown'
+            count = item['count']
+            percentage = round((count / total_certs) * 100, 1) if total_certs > 0 else 0
+            distribution.append({
+                'level': level,
+                'count': count,
+                'percentage': percentage
+            })
+        
+        return distribution
+    
+    @classmethod
+    def get_issuer_validation_matrix(cls, limit: int = 10) -> List[Dict]:
+        """
+        Get matrix of issuer × validation level combinations with counts.
+        Similar to get_issuer_algorithm_matrix but for validation levels (DV, OV, EV).
+        
+        Returns:
+            List of dicts with issuer, validationLevel, and count
+        """
+        
+        pipeline = [
+            # Stage 1: Project needed fields only
+            {'$project': {
+                'issuer': {'$arrayElemAt': ['$parsed.issuer.organization', 0]},
+                'validationLevel': {'$ifNull': ['$parsed.validation_level', 'Unknown']}
+            }},
+            # Stage 2: Filter out null issuers
+            {'$match': {'issuer': {'$exists': True, '$ne': None}}},
+            # Stage 3: Group by issuer + validationLevel
+            {'$group': {
+                '_id': {
+                    'issuer': '$issuer',
+                    'validationLevel': '$validationLevel'
+                },
+                'count': {'$sum': 1}
+            }},
+            # Stage 4: Sort by count for top issuers first
+            {'$sort': {'count': -1}}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        # Extract unique issuers (top N by total count)
+        issuer_totals = {}
+        for r in results:
+            issuer = r['_id']['issuer']
+            issuer_totals[issuer] = issuer_totals.get(issuer, 0) + r['count']
+        
+        # Get top issuers
+        top_issuers = sorted(issuer_totals.items(), key=lambda x: x[1], reverse=True)[:limit]
+        top_issuer_names = {issuer for issuer, _ in top_issuers}
+        
+        # Build matrix data
+        matrix = []
+        for r in results:
+            issuer = r['_id']['issuer']
+            if issuer in top_issuer_names:
+                matrix.append({
+                    'issuer': issuer,
+                    'validationLevel': r['_id']['validationLevel'],
+                    'count': r['count']
+                })
         
         return matrix

@@ -132,6 +132,37 @@ export interface FutureRisk {
     }>;
 }
 
+// CA Analytics Types
+export interface CAStats {
+    total_cas: number;
+    total_certs: number;
+    top_ca: {
+        name: string;
+        count: number;
+        percentage: number;
+    };
+    self_signed_count: number;
+    unique_countries: number;
+}
+
+export interface CADistributionEntry {
+    name: string;
+    count: number;
+    percentage: number;
+}
+
+export interface ValidationDistributionEntry {
+    level: string;
+    count: number;
+    percentage: number;
+}
+
+export interface IssuerValidationEntry {
+    issuer: string;
+    validationLevel: string;
+    count: number;
+}
+
 // API Client class
 class ApiClient {
     private baseUrl: string;
@@ -285,6 +316,22 @@ class ApiClient {
         if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
         return this.fetch<CALeaderboardEntry[]>(`/ca-analytics/?${queryParams.toString()}`);
     }
+
+    // CA Analytics - Stats for metric cards
+    async getCAStats(): Promise<CAStats> {
+        return this.fetch<CAStats>('/ca-stats/');
+    }
+
+    // CA Analytics - Validation level distribution (DV, OV, EV)
+    async getValidationDistribution(): Promise<ValidationDistributionEntry[]> {
+        return this.fetch<ValidationDistributionEntry[]>('/validation-distribution/');
+    }
+
+    // CA Analytics - Issuer x Validation level matrix for heatmap
+    async getIssuerValidationMatrix(limit: number = 10): Promise<IssuerValidationEntry[]> {
+        return this.fetch<IssuerValidationEntry[]>(`/issuer-validation-matrix/?limit=${limit}`);
+    }
+
 
     async getGeographicDistribution(limit: number = 10, params?: {
         startDate?: string;

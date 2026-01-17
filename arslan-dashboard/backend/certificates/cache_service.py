@@ -33,18 +33,21 @@ if not REDIS_AVAILABLE:
 
 # TTL configurations in seconds (reduced for fresher data)
 TTL_CONFIG = {
-    'metrics': 120,              # 2 minutes
-    'certificates': 120,         # 2 minutes (for pages 2+)
-    'certificates_page1': 300,   # 5 minutes (first page)
-    'ca_analytics': 300,         # 5 minutes
-    'encryption': 300,           # 5 minutes
-    'validity_trends': 300,      # 5 minutes
-    'geographic': 300,           # 5 minutes
-    'future_risk': 300,          # 5 minutes
-    'notifications': 60,         # 1 minute (time-sensitive)
-    'unique_filters': 300,       # 5 minutes
+    'metrics': 300,              # 5 minutes
+    'certificates': 300,         # 5 minutes (for pages 2+)
+    'certificates_page1': 900,   # 15 minutes (first page)
+    'ca_analytics': 480,         # 8 minutes
+    'ca_stats': 300,             # 5 minutes (CA metric cards)
+    'validation_dist': 300,      # 5 minutes (validation level distribution)
+    'issuer_validation_matrix': 600,  # 10 minutes (CA validation heatmap)
+    'encryption': 480,           # 8 minutes
+    'validity_trends': 480,      # 8 minutes
+    'geographic': 480,           # 8 minutes
+    'future_risk': 480,          # 8 minutes
+    'notifications': 120,         # 2 minute (time-sensitive)
+    'unique_filters': 480,       # 8 minutes
     # Signature and Hashes page caches
-    'signature_stats': 300,      # 5 minutes
+    'signature_stats': 480,      # 8 minutes
     'hash_trends': 600,          # 10 minutes (historical data)
     'issuer_matrix': 600,        # 10 minutes
 }

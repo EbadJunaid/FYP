@@ -280,6 +280,49 @@ class CAAnalyticsView(View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class CAStatsView(View):
+    """
+    GET /api/ca-stats
+    Returns CA statistics for metric cards (total CAs, top CA, self-signed, countries)
+    """
+    def get(self, request):
+        try:
+            data = AnalyticsController.get_ca_stats()
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ValidationDistributionView(View):
+    """
+    GET /api/validation-distribution
+    Returns validation level distribution (DV, OV, EV)
+    """
+    def get(self, request):
+        try:
+            data = AnalyticsController.get_validation_distribution()
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class IssuerValidationMatrixView(View):
+    """
+    GET /api/issuer-validation-matrix
+    Returns matrix of issuer × validation level combinations
+    Query params: limit
+    """
+    def get(self, request):
+        try:
+            limit = int(request.GET.get('limit', 10))
+            data = AnalyticsController.get_issuer_validation_matrix(limit=limit)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
 class GeographicDistributionView(View):
     """
     GET /api/geographic-distribution
@@ -421,6 +464,9 @@ class CertificateDownloadView(View):
         expiring_days_str = request.GET.get('expiring_days')
         expiring_days = int(expiring_days_str) if expiring_days_str else None
         
+        # CA Analytics specific filter
+        validation_level = request.GET.get('validation_level')
+        
         # Generate filename based on filter
         filename = 'certificates'
         if status:
@@ -455,7 +501,8 @@ class CertificateDownloadView(View):
                 signature_algorithm=signature_algorithm,
                 hash_type=hash_type,
                 validity_bucket=validity_bucket,
-                expiring_days=expiring_days
+                expiring_days=expiring_days,
+                validation_level=validation_level
             ),
             content_type='text/csv'
         )
@@ -602,6 +649,10 @@ class CertificateDownloadView(View):
                 '$gt': now,  # Not yet expired
                 '$lte': target_date  # Within expiring_days window
             }
+        
+        # Filter by validation level (DV, OV, EV)
+        if filters.get('validation_level'):
+            query['parsed.validation_level'] = filters['validation_level']
         
         # Stream data in batches (batch_size for MongoDB cursor)
         cursor = CertificateModel.collection.find(query).batch_size(1000)

@@ -265,6 +265,45 @@ class AnalyticsController:
         return result
     
     @staticmethod
+    def get_ca_stats() -> Dict:
+        """Get CA stats for metric cards (cached 5 min)"""
+        cache_params = {}
+        
+        cached = cache.get('ca_stats', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_ca_stats()
+        cache.set('ca_stats', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_validation_distribution() -> List[Dict]:
+        """Get validation level distribution (cached 5 min)"""
+        cache_params = {}
+        
+        cached = cache.get('validation_dist', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_validation_distribution()
+        cache.set('validation_dist', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_issuer_validation_matrix(limit: int = 10) -> List[Dict]:
+        """Get issuer x validation level matrix (cached 10 min)"""
+        cache_params = {'limit': limit}
+        
+        cached = cache.get('issuer_validation_matrix', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_issuer_validation_matrix(limit=limit)
+        cache.set('issuer_validation_matrix', cache_params, result)
+        return result
+    
+    @staticmethod
     def get_geographic_distribution(limit: int = 10, global_filters: Optional[GlobalFilterParams] = None) -> List[Dict]:
         """Get geographic distribution for chart (cached 5 min)"""
         cache_params = {'limit': limit, **(global_filters.to_cache_key() if global_filters else {})}

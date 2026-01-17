@@ -8,7 +8,7 @@ import { DownloadIcon } from '@/components/icons/Icons';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface ActiveFilter {
-    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap';
+    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap' | 'issuer';
     value?: string;
 }
 
@@ -169,11 +169,24 @@ export default function DownloadModal({
                 }
                 break;
             case 'heatmap':
-                // Heatmap format: "issuer::algorithm" (using :: as delimiter)
+                // Heatmap format: "issuer::algorithm" or "issuer::validationLevel" (using :: as delimiter)
                 if (activeFilter.value) {
-                    const [issuer, algorithm] = activeFilter.value.split('::');
+                    const [issuer, second] = activeFilter.value.split('::');
                     if (issuer) params.append('issuer', issuer);
-                    if (algorithm) params.append('encryption_type', algorithm.replace('-', ' '));
+                    if (second) {
+                        // Check if it's a validation level (DV, OV, EV) or an algorithm
+                        if (['DV', 'OV', 'EV', 'Unknown'].includes(second)) {
+                            params.append('validation_level', second);
+                        } else {
+                            params.append('encryption_type', second.replace('-', ' '));
+                        }
+                    }
+                }
+                break;
+            case 'issuer':
+                // CA Analytics page - filter by issuer organization
+                if (activeFilter.value) {
+                    params.append('issuer', activeFilter.value);
                 }
                 break;
             case 'all':
@@ -232,6 +245,8 @@ export default function DownloadModal({
                 return `${activeFilter.value || 'Key size'} certificates`;
             case 'heatmap':
                 return `${activeFilter.value?.replace('::', ' - ') || 'Heatmap'} certificates`;
+            case 'issuer':
+                return `Certificates by ${activeFilter.value || 'CA'}`;
             case 'all':
             default:
                 return 'All certificates in database';

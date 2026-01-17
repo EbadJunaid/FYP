@@ -397,7 +397,7 @@ export default function ValidityAnalyticsPage() {
             </div>
 
             {/* Validity Trends Card */}
-            <Card title="Validity Trends Over Time" subtitle="Certificate expirations by months">
+            <Card title="Validity Trends Over Time" subtitle="Certificate expirations by months" infoTooltip="Shows certificate expiration trends over time. Click on data points to filter the table. Toggle between monthly and weekly views.">
                 <div className="mb-4 flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-text-muted">Total Expirations: {validityTrends?.reduce((sum, t) => sum + t.expirations, 0) || 0}</span>
@@ -460,7 +460,7 @@ export default function ValidityAnalyticsPage() {
 
             {/* Middle Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card title="Validity Period Distribution">
+                <Card title="Validity Period Distribution" infoTooltip="Distribution of certificates by their validity period length. Click on a bar to filter the table to that validity range.">
                     <div className="space-y-4">
                         {isDistLoading ? (
                             <div className="h-48 flex items-center justify-center">
@@ -503,7 +503,7 @@ export default function ValidityAnalyticsPage() {
                     </div>
                 </Card>
 
-                <Card title="Certificate Status Breakdown">
+                <Card title="Certificate Status Breakdown" infoTooltip="Distribution of certificates by status. Click legend items to toggle visibility. Double-click to filter the table by that status.">
                     <div className="flex items-center justify-center h-64">
                         <div className="flex items-center gap-8">
                             <div className="relative">
@@ -567,6 +567,7 @@ export default function ValidityAnalyticsPage() {
             <Card
                 title="Certificate Issuance Timeline"
                 subtitle="Volume of certificates issued vs expiring over the last 12 months"
+                infoTooltip="Historical view of certificate issuance and expiration trends. Click on data points to filter the table by that month."
             >
                 <div className="h-72">
                     {isTimelineLoading ? (
@@ -623,6 +624,7 @@ export default function ValidityAnalyticsPage() {
                 <Card
                     title={getTableTitle()}
                     subtitle="Detailed list of all certificates sortable by validity duration"
+                    infoTooltip="View and filter certificates by validity status. Use quick filters or click chart elements to refine results."
                     headerAction={
                         <div className="flex items-center gap-3">
                             <div className="flex gap-2">
