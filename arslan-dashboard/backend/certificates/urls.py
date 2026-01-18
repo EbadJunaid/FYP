@@ -30,6 +30,12 @@ from .views import (
     SANDistributionView,
     SANTLDBreakdownView,
     SANWildcardBreakdownView,
+    # Trends Analytics page views
+    TrendsStatsView,
+    ExpirationForecastView,
+    AlgorithmAdoptionView,
+    ValidationLevelTrendsView,
+    KeySizeTimelineView,
 )
 
 urlpatterns = [
@@ -72,6 +78,13 @@ urlpatterns = [
     path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
     path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
     path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
+    
+    # Trends Analytics APIs
+    path('trends/stats/', TrendsStatsView.as_view(), name='trends_stats'),
+    path('trends/expiration-forecast/', ExpirationForecastView.as_view(), name='trends_expiration_forecast'),
+    path('trends/algorithm-adoption/', AlgorithmAdoptionView.as_view(), name='trends_algorithm_adoption'),
+    path('trends/validation-levels/', ValidationLevelTrendsView.as_view(), name='trends_validation_levels'),
+    path('trends/key-size-timeline/', KeySizeTimelineView.as_view(), name='trends_key_size_timeline'),
     
     # Notifications API
     path('notifications/', NotificationView.as_view(), name='notifications'),

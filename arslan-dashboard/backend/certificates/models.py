@@ -374,6 +374,7 @@ class CertificateModel:
                 validity_bucket: Optional[str] = None,
                 issued_month: Optional[int] = None,
                 issued_year: Optional[int] = None,
+                issued_within_days: Optional[int] = None,
                 # New Signature/Hash page filters
                 signature_algorithm: Optional[str] = None,
                 weak_hash: Optional[bool] = None,
@@ -385,6 +386,8 @@ class CertificateModel:
                 san_type: Optional[str] = None,
                 san_count_min: Optional[int] = None,
                 san_count_max: Optional[int] = None,
+                expiring_start: Optional[str] = None,
+                expiring_end: Optional[str] = None,
                 base_filter: Optional[Dict] = None) -> Dict:
         """Get paginated list of certificates with optional filters
         
@@ -393,6 +396,7 @@ class CertificateModel:
             validity_bucket: Filter by validity period bucket (e.g., "0-90", "90-365", "365-730", "730+")
             issued_month: Filter by issuance month (1-12)
             issued_year: Filter by issuance year (e.g., 2025)
+            issued_within_days: Filter for certs issued within N days (e.g., 30)
             signature_algorithm: Filter by exact signature algorithm (e.g., "SHA256-RSA")
             weak_hash: Filter certs with weak hash (MD5, SHA-1)
             self_signed: Filter self-signed certificates
@@ -402,6 +406,8 @@ class CertificateModel:
             san_type: Filter by SAN type ("wildcard" or "standard")
             san_count_min: Filter by minimum SAN count
             san_count_max: Filter by maximum SAN count
+            expiring_start: Filter by exact expiration start date (ISO string)
+            expiring_end: Filter by exact expiration end date (ISO string)
             base_filter: Global filter query from build_filter_query() - merged with specific filters
         """
         
@@ -524,6 +530,12 @@ class CertificateModel:
             month_end = f"{expiring_year}-{expiring_month:02d}-{last_day:02d}T23:59:59Z"
             query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
         
+        # Filter by custom expiration range (e.g. for weekly view)
+        if expiring_start and expiring_end:
+            # If both month filter and range filter are present, range takes precedence
+            # or we could combine them, but range is usually more specific
+            query['parsed.validity.end'] = {'$gte': expiring_start, '$lte': expiring_end}
+        
         # Filter by issued month/year - get certs that were issued (validFrom) in that month
         if issued_month and issued_year:
             from calendar import monthrange
@@ -532,6 +544,16 @@ class CertificateModel:
             month_start = f"{issued_year}-{issued_month:02d}-01T00:00:00Z"
             month_end = f"{issued_year}-{issued_month:02d}-{last_day:02d}T23:59:59Z"
             query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
+        
+        # Filter by issued within N days (for "Issued (30d)" card click)
+        if issued_within_days:
+            now_dt = datetime.now(timezone.utc)
+            past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            # Certificates with validity start date within the last N days
+            query['parsed.validity.start'] = {
+                '$gte': past_date,  # Issued within last N days
+                '$lte': now  # Up to now
+            }
         
         # Filter by expiring within N days (distinct from 30-day expiring_soon status)
         if expiring_days:
@@ -2534,3 +2556,348 @@ class CertificateModel:
                 breakdown['standard'] = r['count']
         
         return breakdown
+    
+    # ========== TRENDS ANALYTICS METHODS ==========
+    
+    @classmethod
+    def get_trends_stats(cls) -> Dict[str, Any]:
+        """
+        Get trend statistics for metric cards.
+        
+        Returns:
+            Dict with:
+            - velocity_30d: Certificates issued in last 30 days
+            - velocity_change: % change vs previous 30 days
+            - expiring_30d: Certificates expiring in next 30 days
+            - expiring_change: % change vs previous month
+            - modern_algo_percent: % using SHA256 or newer
+            - strong_key_percent: % with strong keys
+        """
+        # Use same approach as get_dashboard_metrics for consistency
+        now = cls.get_current_time_iso()
+        now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        sixty_days_ago = (datetime.now(timezone.utc) - timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # Velocity: Certificates issued in last 30 days (using same logic as filters)
+        velocity_30d = cls.collection.count_documents({
+            'parsed.validity.start': {'$gte': thirty_days_ago, '$lte': now}
+        })
+        
+        # Previous 30 days for change calculation
+        velocity_prev_30d = cls.collection.count_documents({
+            'parsed.validity.start': {'$gte': sixty_days_ago, '$lt': thirty_days_ago}
+        })
+        
+        velocity_change = 0
+        if velocity_prev_30d > 0:
+            velocity_change = round(((velocity_30d - velocity_prev_30d) / velocity_prev_30d) * 100, 1)
+        
+        # Expiring in next 30 days - SAME logic as get_dashboard_metrics
+        expiring_30d = cls.collection.count_documents({
+            'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}
+        })
+        
+        # Modern algorithm % (exclude legacy: SHA1, MD5, MD2)
+        total_certs = cls.collection.count_documents({})
+        legacy_algos = ['SHA1-RSA', 'SHA1WithRSAEncryption', 'MD5-RSA', 'MD5WithRSAEncryption', 'MD2-RSA', 'SHA1-ECDSA']
+        legacy_count = cls.collection.count_documents({
+            'parsed.signature_algorithm.name': {'$in': legacy_algos}
+        })
+        modern_algo_count = total_certs - legacy_count
+        modern_algo_percent = round((modern_algo_count / max(total_certs, 1)) * 100, 1)
+        
+        # Strong key % (RSA >= 2048 bits or ECDSA >= 256 bits)
+        strong_key_count = cls.collection.count_documents({
+            '$or': [
+                # RSA keys >= 2048 bits
+                {
+                    'parsed.subject_key_info.key_algorithm.name': 'RSA',
+                    'parsed.subject_key_info.rsa_public_key.length': {'$gte': 2048}
+                },
+                # ECDSA keys >= 256 bits (P-256, P-384, P-521)
+                {
+                    'parsed.subject_key_info.key_algorithm.name': {'$in': ['ECDSA', 'EC']},
+                    'parsed.subject_key_info.ecdsa_public_key.length': {'$gte': 256}
+                },
+                # Ed25519/Ed448 always strong
+                {
+                    'parsed.subject_key_info.key_algorithm.name': {'$in': ['Ed25519', 'Ed448']}
+                }
+            ]
+        })
+        strong_key_percent = round((strong_key_count / max(total_certs, 1)) * 100, 1)
+        
+        return {
+            'velocity_30d': velocity_30d,
+            'velocity_change': velocity_change,
+            'expiring_30d': expiring_30d,
+            'modern_algo_percent': modern_algo_percent,
+            'strong_key_percent': strong_key_percent,
+            'total_certs': total_certs
+        }
+    
+    @classmethod
+    def get_key_size_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
+        """
+        Get key size distribution over time for animation.
+        
+        Returns monthly breakdown of key sizes for RSA and ECDSA certificates.
+        Used for animated visualization of key strength evolution.
+        """
+        from dateutil.relativedelta import relativedelta
+        
+        now = datetime.now(timezone.utc)
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        timeline = []
+        
+        # Go back 'months' months from current
+        for i in range(months - 1, -1, -1):
+            target_date = now - relativedelta(months=i)
+            start_of_month = target_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_of_month = (start_of_month + relativedelta(months=1)) - timedelta(seconds=1)
+            
+            start_str = start_of_month.strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_str = end_of_month.strftime('%Y-%m-%dT%H:%M:%SZ')
+            
+            # Count certificates issued in this month by key size
+            base_match = {
+                'parsed.validity.start': {'$gte': start_str, '$lte': end_str}
+            }
+            
+            # RSA 2048
+            rsa_2048 = cls.collection.count_documents({
+                **base_match,
+                'parsed.subject_key_info.key_algorithm.name': 'RSA',
+                'parsed.subject_key_info.rsa_public_key.length': 2048
+            })
+            
+            # RSA 4096
+            rsa_4096 = cls.collection.count_documents({
+                **base_match,
+                'parsed.subject_key_info.key_algorithm.name': 'RSA',
+                'parsed.subject_key_info.rsa_public_key.length': 4096
+            })
+            
+            # RSA other (smaller or larger)
+            rsa_other = cls.collection.count_documents({
+                **base_match,
+                'parsed.subject_key_info.key_algorithm.name': 'RSA',
+                'parsed.subject_key_info.rsa_public_key.length': {'$nin': [2048, 4096]}
+            })
+            
+            # ECDSA 256
+            ecdsa_256 = cls.collection.count_documents({
+                **base_match,
+                'parsed.subject_key_info.key_algorithm.name': {'$in': ['ECDSA', 'EC']},
+                'parsed.subject_key_info.ecdsa_public_key.length': 256
+            })
+            
+            # ECDSA 384
+            ecdsa_384 = cls.collection.count_documents({
+                **base_match,
+                'parsed.subject_key_info.key_algorithm.name': {'$in': ['ECDSA', 'EC']},
+                'parsed.subject_key_info.ecdsa_public_key.length': 384
+            })
+            
+            month_label = f"{month_names[target_date.month - 1]} '{str(target_date.year)[2:]}"
+            
+            timeline.append({
+                'month': month_label,
+                'year': target_date.year,
+                'monthNum': target_date.month,
+                'rsa_2048': rsa_2048,
+                'rsa_4096': rsa_4096,
+                'rsa_other': rsa_other,
+                'ecdsa_256': ecdsa_256,
+                'ecdsa_384': ecdsa_384,
+                'total': rsa_2048 + rsa_4096 + rsa_other + ecdsa_256 + ecdsa_384
+            })
+        
+        return timeline
+    
+    @classmethod
+    def get_expiration_forecast(cls, months: int = 12) -> List[Dict[str, Any]]:
+        """
+        Get certificate expiration count by month for upcoming months.
+        
+        Args:
+            months: Number of months to forecast
+            
+        Returns:
+            List of {month: 'Jan 2025', count: 123, year: 2025, monthNum: 1}
+        """
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_date = now + timedelta(days=months * 30)
+        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        pipeline = [
+            {'$match': {
+                'parsed.validity.end': {'$gte': now_str, '$lte': end_str}
+            }},
+            {'$project': {
+                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}},
+                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}}
+            }},
+            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
+            {'$group': {
+                '_id': {'year': '$year', 'month': '$month'},
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'_id.year': 1, '_id.month': 1}}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        forecast = []
+        for r in results:
+            year = r['_id']['year']
+            month = r['_id']['month']
+            forecast.append({
+                'month': f"{month_names[month]} {year}",
+                'monthNum': month,
+                'year': year,
+                'count': r['count']
+            })
+        
+        return forecast
+    
+    @classmethod
+    def get_algorithm_adoption(cls, months: int = 12) -> List[Dict[str, Any]]:
+        """
+        Get signature algorithm distribution over time by issuance month.
+        
+        Args:
+            months: Number of months to include
+            
+        Returns:
+            List of {month: 'Jan 2025', sha256_rsa: 100, sha384_rsa: 20, ecdsa: 10, sha1_rsa: 5, other: 2}
+        """
+        now = datetime.now(timezone.utc)
+        start_date = now - timedelta(days=months * 30)
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        pipeline = [
+            {'$match': {
+                'parsed.validity.start': {'$gte': start_str}
+            }},
+            {'$project': {
+                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
+                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
+                'algo': '$parsed.signature_algorithm.name'
+            }},
+            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
+            {'$group': {
+                '_id': {'year': '$year', 'month': '$month', 'algo': '$algo'},
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'_id.year': 1, '_id.month': 1}}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        # Group by month
+        month_data = {}
+        for r in results:
+            key = (r['_id']['year'], r['_id']['month'])
+            if key not in month_data:
+                month_data[key] = {'sha256_rsa': 0, 'sha384_rsa': 0, 'ecdsa': 0, 'sha1_rsa': 0, 'other': 0}
+            
+            algo = (r['_id']['algo'] or '').upper()
+            count = r['count']
+            
+            if 'SHA256' in algo and 'RSA' in algo:
+                month_data[key]['sha256_rsa'] += count
+            elif 'SHA384' in algo and 'RSA' in algo:
+                month_data[key]['sha384_rsa'] += count
+            elif 'ECDSA' in algo or 'EC' in algo:
+                month_data[key]['ecdsa'] += count
+            elif 'SHA1' in algo or 'SHA-1' in algo:
+                month_data[key]['sha1_rsa'] += count
+            else:
+                month_data[key]['other'] += count
+        
+        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        adoption = []
+        for (year, month), data in sorted(month_data.items()):
+            adoption.append({
+                'month': f"{month_names[month]} {year}",
+                'monthNum': month,
+                'year': year,
+                **data
+            })
+        
+        return adoption
+    
+    @classmethod
+    def get_validation_level_trends(cls, months: int = 12) -> List[Dict[str, Any]]:
+        """
+        Get validation level (DV/OV/EV) distribution over time by issuance month.
+        
+        Args:
+            months: Number of months to include
+            
+        Returns:
+            List of {month: 'Jan 2025', dv: 100, ov: 20, ev: 5, unknown: 2}
+        """
+        now = datetime.now(timezone.utc)
+        start_date = now - timedelta(days=months * 30)
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        pipeline = [
+            {'$match': {
+                'parsed.validity.start': {'$gte': start_str}
+            }},
+            {'$project': {
+                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
+                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
+                'level': {'$ifNull': ['$parsed.validation_level', 'Unknown']}
+            }},
+            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
+            {'$group': {
+                '_id': {'year': '$year', 'month': '$month', 'level': '$level'},
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'_id.year': 1, '_id.month': 1}}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        # Group by month
+        month_data = {}
+        for r in results:
+            key = (r['_id']['year'], r['_id']['month'])
+            if key not in month_data:
+                month_data[key] = {'dv': 0, 'ov': 0, 'ev': 0, 'unknown': 0}
+            
+            level = (r['_id']['level'] or 'Unknown').upper()
+            count = r['count']
+            
+            if level == 'DV':
+                month_data[key]['dv'] += count
+            elif level == 'OV':
+                month_data[key]['ov'] += count
+            elif level == 'EV':
+                month_data[key]['ev'] += count
+            else:
+                month_data[key]['unknown'] += count
+        
+        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        trends = []
+        for (year, month), data in sorted(month_data.items()):
+            trends.append({
+                'month': f"{month_names[month]} {year}",
+                'monthNum': month,
+                'year': year,
+                **data
+            })
+        
+        return trends
+

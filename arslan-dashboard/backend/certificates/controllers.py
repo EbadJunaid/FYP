@@ -90,6 +90,7 @@ class CertificateController:
         validity_bucket: Optional[str] = None,
         issued_month: Optional[int] = None,
         issued_year: Optional[int] = None,
+        issued_within_days: Optional[int] = None,
         # Signature/Hash page filters
         signature_algorithm: Optional[str] = None,
         weak_hash: Optional[bool] = None,
@@ -101,6 +102,8 @@ class CertificateController:
         san_type: Optional[str] = None,
         san_count_min: Optional[int] = None,
         san_count_max: Optional[int] = None,
+        expiring_start: Optional[str] = None,
+        expiring_end: Optional[str] = None,
         # Global filter params
         global_filters: Optional[GlobalFilterParams] = None
     ) -> Dict:
@@ -120,6 +123,7 @@ class CertificateController:
             'validity_bucket': validity_bucket,
             'issued_month': issued_month,
             'issued_year': issued_year,
+            'issued_within_days': issued_within_days,
             'signature_algorithm': signature_algorithm,
             'weak_hash': weak_hash,
             'self_signed': self_signed,
@@ -129,6 +133,8 @@ class CertificateController:
             'san_type': san_type,
             'san_count_min': san_count_min,
             'san_count_max': san_count_max,
+            'expiring_start': expiring_start,
+            'expiring_end': expiring_end,
             # Include global filter params in cache key
             **((global_filters.to_cache_key() if global_filters else {}))
         }
@@ -170,6 +176,7 @@ class CertificateController:
             validity_bucket=validity_bucket,
             issued_month=issued_month,
             issued_year=issued_year,
+            issued_within_days=issued_within_days,
             signature_algorithm=signature_algorithm,
             weak_hash=weak_hash,
             self_signed=self_signed,
@@ -179,6 +186,8 @@ class CertificateController:
             san_type=san_type,
             san_count_min=san_count_min,
             san_count_max=san_count_max,
+            expiring_start=expiring_start,
+            expiring_end=expiring_end,
             base_filter=base_filter
         )
         
@@ -434,18 +443,18 @@ class ValidityAnalysisController:
         cache.set('validity_distribution', cache_params, result)
         return result
     
-    @staticmethod
-    def get_issuance_timeline() -> List[Dict]:
-        """Get issuance and expiration timeline (cached 5 min)"""
-        cache_params = {}
+    # @staticmethod
+    # def get_issuance_timeline() -> List[Dict]:
+    #     """Get issuance and expiration timeline (cached 5 min)"""
+    #     cache_params = {}
         
-        cached = cache.get('issuance_timeline', cache_params)
-        if cached:
-            return cached
+    #     cached = cache.get('issuance_timeline', cache_params)
+    #     if cached:
+    #         return cached
         
-        result = CertificateModel.get_issuance_timeline()
-        cache.set('issuance_timeline', cache_params, result)
-        return result
+    #     result = CertificateModel.get_issuance_timeline()
+    #     cache.set('issuance_timeline', cache_params, result)
+    #     return result
 
 
 class NotificationController:
@@ -519,6 +528,89 @@ class SANAnalyticsController:
         result = CertificateModel.get_san_wildcard_breakdown()
         cache.set('san_wildcard', cache_params, result)
         return result
+
+
+class TrendsController:
+    """Controller for trends analytics with caching"""
+    
+    @staticmethod
+    def get_trends_stats() -> Dict:
+        """Get trends metric card stats (cached 10 min)"""
+        cache_params = {}
+        
+        cached = cache.get('trends_stats', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_trends_stats()
+        cache.set('trends_stats', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_issuance_timeline(months: int = 12) -> List:
+        """Get certificate issuance timeline (cached 15 min)"""
+        cache_params = {'months': months}
+        
+        cached = cache.get('issuance_timeline', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_issuance_timeline(months)
+        cache.set('issuance_timeline', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_expiration_forecast(months: int = 12) -> List:
+        """Get certificate expiration forecast (cached 15 min)"""
+        cache_params = {'months': months}
+        
+        cached = cache.get('expiration_forecast', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_expiration_forecast(months)
+        cache.set('expiration_forecast', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_algorithm_adoption(months: int = 12) -> List:
+        """Get algorithm adoption trends (cached 15 min)"""
+        cache_params = {'months': months}
+        
+        cached = cache.get('algorithm_adoption', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_algorithm_adoption(months)
+        cache.set('algorithm_adoption', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_validation_level_trends(months: int = 12) -> List:
+        """Get validation level trends (cached 15 min)"""
+        cache_params = {'months': months}
+        
+        cached = cache.get('validation_trends', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_validation_level_trends(months)
+        cache.set('validation_trends', cache_params, result)
+        return result
+    
+    @staticmethod
+    def get_key_size_timeline(months: int = 12) -> List:
+        """Get key size distribution timeline for animation (cached 15 min)"""
+        cache_params = {'months': months}
+        
+        cached = cache.get('key_size_timeline', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_key_size_timeline(months)
+        cache.set('key_size_timeline', cache_params, result)
+        return result
+
 
 class CacheController:
     """Controller for cache management operations"""

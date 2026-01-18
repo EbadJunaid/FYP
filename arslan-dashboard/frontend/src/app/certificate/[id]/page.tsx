@@ -424,7 +424,6 @@ export default function CertificateDetailPage() {
                                     <div className="space-y-2">
                                         {Object.entries(certificate.zlintDetails)
                                             .filter(([, v]) => v.result === 'error')
-                                            .slice(0, 5)
                                             .map(([key, value]) => (
                                                 <div key={key} className="p-3 bg-accent-red/10 border border-accent-red/20 rounded-lg">
                                                     <p className="text-sm text-text-primary font-medium">{key.replace(/_/g, ' ')}</p>
@@ -446,7 +445,6 @@ export default function CertificateDetailPage() {
                                     <div className="space-y-2">
                                         {Object.entries(certificate.zlintDetails)
                                             .filter(([, v]) => v.result === 'warn')
-                                            .slice(0, 5)
                                             .map(([key, value]) => (
                                                 <div key={key} className="p-3 bg-accent-yellow/10 border border-accent-yellow/20 rounded-lg">
                                                     <p className="text-sm text-text-primary font-medium">{key.replace(/_/g, ' ')}</p>

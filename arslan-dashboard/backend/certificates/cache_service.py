@@ -55,6 +55,13 @@ TTL_CONFIG = {
     'san_distribution': 600,     # 10 minutes
     'san_tld': 900,              # 15 minutes
     'san_wildcard': 600,         # 10 minutes
+    # Trends Analytics page caches
+    'trends_stats': 600,         # 10 minutes
+    'issuance_timeline': 900,    # 15 minutes
+    'expiration_forecast': 900,  # 15 minutes
+    'algorithm_adoption': 900,   # 15 minutes
+    'validation_trends': 900,    # 15 minutes
+    'key_size_timeline': 900,    # 15 minutes
 }
 
 

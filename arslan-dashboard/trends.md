@@ -95,7 +95,7 @@ Based on the certificate structure (`1.json`), the following fields are suitable
 #### 5. **CA Market Share Over Time** (Animated Stacked Bar / Racing Bar)
 - **Display**: Top 5 CAs market share evolution
 - **Time Range**: Monthly snapshots over 12 months
-- **Animated**: Optional "play" button to animate changes
+- **Animated**: "play" button to animate changes
 - **Click**: Filter by CA at selected time
 
 #### 6. **Validation Level Trends** (100% Stacked Area)

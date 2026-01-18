@@ -68,6 +68,10 @@ class CertificateListView(View):
             expiring_days_str = request.GET.get('expiring_days')
             expiring_days = int(expiring_days_str) if expiring_days_str else None
             
+            # Expiring date range filter (for weekly trends clicks)
+            expiring_start = request.GET.get('expiring_start')
+            expiring_end = request.GET.get('expiring_end')
+            
             # Validity bucket filter (for distribution card clicks)
             validity_bucket = request.GET.get('validity_bucket')  # e.g., "0-90", "90-365", "365-730", "730+"
             
@@ -86,6 +90,10 @@ class CertificateListView(View):
             issued_year_str = request.GET.get('issued_year')
             issued_month = int(issued_month_str) if issued_month_str else None
             issued_year = int(issued_year_str) if issued_year_str else None
+            
+            # Issued within days filter (for "Issued (30d)" card click)
+            issued_within_days_str = request.GET.get('issued_within_days')
+            issued_within_days = int(issued_within_days_str) if issued_within_days_str else None
             
             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
@@ -135,6 +143,7 @@ class CertificateListView(View):
                 validity_bucket=validity_bucket,
                 issued_month=issued_month,
                 issued_year=issued_year,
+                issued_within_days=issued_within_days,
                 signature_algorithm=signature_algorithm,
                 weak_hash=weak_hash if weak_hash else None,
                 self_signed=self_signed_filter if self_signed_filter else None,
@@ -144,6 +153,8 @@ class CertificateListView(View):
                 san_type=san_type,
                 san_count_min=san_count_min,
                 san_count_max=san_count_max,
+                expiring_start=expiring_start,
+                expiring_end=expiring_end,
                 global_filters=global_filters
             )
             return json_response(result)
@@ -398,6 +409,108 @@ class SANWildcardBreakdownView(View):
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
 
+
+# ========== TRENDS ANALYTICS VIEWS ==========
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TrendsStatsView(View):
+    """
+    GET /api/trends/stats
+    Returns trend statistics for metric cards
+    """
+    def get(self, request):
+        try:
+            from .controllers import TrendsController
+            data = TrendsController.get_trends_stats()
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class IssuanceTimelineView(View):
+    """
+    GET /api/trends/issuance-timeline
+    Returns certificate issuance count by month
+    Query params: months (default 12)
+    """
+    def get(self, request):
+        try:
+            from .controllers import TrendsController
+            months = int(request.GET.get('months', 12))
+            data = TrendsController.get_issuance_timeline(months=months)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ExpirationForecastView(View):
+    """
+    GET /api/trends/expiration-forecast
+    Returns certificate expiration count by month
+    Query params: months (default 12)
+    """
+    def get(self, request):
+        try:
+            from .controllers import TrendsController
+            months = int(request.GET.get('months', 12))
+            data = TrendsController.get_expiration_forecast(months=months)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AlgorithmAdoptionView(View):
+    """
+    GET /api/trends/algorithm-adoption
+    Returns algorithm distribution over time
+    Query params: months (default 12)
+    """
+    def get(self, request):
+        try:
+            from .controllers import TrendsController
+            months = int(request.GET.get('months', 12))
+            data = TrendsController.get_algorithm_adoption(months=months)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ValidationLevelTrendsView(View):
+    """
+    GET /api/trends/validation-levels
+    Returns validation level (DV/OV/EV) distribution over time
+    Query params: months (default 12)
+    """
+    def get(self, request):
+        try:
+            from .controllers import TrendsController
+            months = int(request.GET.get('months', 12))
+            data = TrendsController.get_validation_level_trends(months=months)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class KeySizeTimelineView(View):
+    """
+    GET /api/trends/key-size-timeline
+    Returns key size distribution over time for animated visualization
+    Query params: months (default 12)
+    """
+    def get(self, request):
+        try:
+            from .controllers import TrendsController
+            months = int(request.GET.get('months', 12))
+            data = TrendsController.get_key_size_timeline(months=months)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
 class GeographicDistributionView(View):
     """
     GET /api/geographic-distribution
@@ -523,7 +636,11 @@ class CertificateDownloadView(View):
         expiring_month_str = request.GET.get('expiring_month')
         expiring_year_str = request.GET.get('expiring_year')
         expiring_month = int(expiring_month_str) if expiring_month_str else None
+        expiring_month = int(expiring_month_str) if expiring_month_str else None
         expiring_year = int(expiring_year_str) if expiring_year_str else None
+
+        expiring_start = request.GET.get('expiring_start')
+        expiring_end = request.GET.get('expiring_end')
         
         issued_month_str = request.GET.get('issued_month')
         issued_year_str = request.GET.get('issued_year')
@@ -538,6 +655,10 @@ class CertificateDownloadView(View):
         validity_bucket = request.GET.get('validity_bucket')
         expiring_days_str = request.GET.get('expiring_days')
         expiring_days = int(expiring_days_str) if expiring_days_str else None
+        
+        # Issued within days filter (for Trends page)
+        issued_within_days_str = request.GET.get('issued_within_days')
+        issued_within_days = int(issued_within_days_str) if issued_within_days_str else None
         
         # CA Analytics specific filter
         validation_level = request.GET.get('validation_level')
@@ -586,6 +707,8 @@ class CertificateDownloadView(View):
                 has_vulnerabilities=has_vulnerabilities if has_vulnerabilities else None,
                 expiring_month=expiring_month,
                 expiring_year=expiring_year,
+                expiring_start=expiring_start,
+                expiring_end=expiring_end,
                 issued_month=issued_month,
                 issued_year=issued_year,
                 weak_hash=weak_hash if weak_hash else None,
@@ -594,6 +717,7 @@ class CertificateDownloadView(View):
                 hash_type=hash_type,
                 validity_bucket=validity_bucket,
                 expiring_days=expiring_days,
+                issued_within_days=issued_within_days,
                 validation_level=validation_level,
                 san_tld=san_tld,
                 san_type=san_type,
@@ -684,6 +808,13 @@ class CertificateDownloadView(View):
             month_end = f"{filters['expiring_year']}-{filters['expiring_month']:02d}-{last_day:02d}T23:59:59Z"
             query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
         
+        # Filter by custom expiration range (e.g. for weekly view)
+        if filters.get('expiring_start') and filters.get('expiring_end'):
+             query['parsed.validity.end'] = {
+                '$gte': filters['expiring_start'],
+                '$lte': filters['expiring_end']
+            }
+
         if filters.get('has_vulnerabilities'):
             query['zlint.errors_present'] = True
         
@@ -725,18 +856,56 @@ class CertificateDownloadView(View):
             query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
         
         # Filter by validity bucket (duration in days)
-        if filters.get('validity_bucket'):
+        # Using aggregation pipeline similar to get_all for consistency and accuracy
+        validity_bucket = filters.get('validity_bucket')
+        
+        if validity_bucket:
             bucket_ranges = {
                 '0-90': (0, 90),
                 '90-365': (90, 365),
                 '365-730': (365, 730),
-                '730+': (730, 9999)
+                '730+': (730, 100000)
             }
-            if filters['validity_bucket'] in bucket_ranges:
-                min_days, max_days = bucket_ranges[filters['validity_bucket']]
-                min_seconds = min_days * 86400
-                max_seconds = max_days * 86400
-                query['parsed.validity.length'] = {'$gte': min_seconds, '$lt': max_seconds}
+            if validity_bucket in bucket_ranges:
+                min_days, max_days = bucket_ranges[validity_bucket]
+                min_ms = min_days * 86400000
+                max_ms = max_days * 86400000
+                
+                # Use aggregation pipeline for duration-based filtering
+                # This overrides the simple find loop, similar to san_count
+                pipeline = [
+                    {'$match': query if query else {}},
+                    {'$addFields': {
+                        'validFromDate': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}},
+                        'validToDate': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}
+                    }},
+                    {'$addFields': {
+                        'durationMs': {'$subtract': ['$validToDate', '$validFromDate']}
+                    }},
+                    {'$match': {
+                        'durationMs': {'$gte': min_ms, '$lt': max_ms}
+                    }}
+                ]
+                
+                # Stream data via aggregation
+                for doc in CertificateModel.collection.aggregate(pipeline, allowDiskUse=True):
+                    cert = CertificateModel.serialize_certificate(doc)
+                    
+                    if filters.get('country') and cert.get('country') != filters['country']:
+                        continue
+                    
+                    yield self._csv_row([
+                        cert.get('domain', 'N/A'),
+                        cert.get('validFrom', 'N/A'),
+                        cert.get('validTo', 'N/A'),
+                        cert.get('sslGrade', 'N/A'),
+                        cert.get('encryptionType', 'N/A'),
+                        cert.get('issuer', 'N/A'),
+                        cert.get('country', 'N/A'),
+                        cert.get('status', 'N/A'),
+                        cert.get('vulnerabilityCount', 0)
+                    ])
+                return
         
         # Filter by expiring days
         if filters.get('expiring_days'):
@@ -744,6 +913,14 @@ class CertificateDownloadView(View):
             query['parsed.validity.end'] = {
                 '$gt': now,  # Not yet expired
                 '$lte': target_date  # Within expiring_days window
+            }
+        
+        # Filter by issued within days (for Trends page "Issued 30d" card)
+        if filters.get('issued_within_days'):
+            past_date = (datetime.now(timezone.utc) - timedelta(days=filters['issued_within_days'])).strftime('%Y-%m-%dT%H:%M:%SZ')
+            query['parsed.validity.start'] = {
+                '$gte': past_date,
+                '$lte': now
             }
         
         # Filter by validation level (DV, OV, EV)
@@ -885,19 +1062,19 @@ class ValidityDistributionView(View):
             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class IssuanceTimelineView(View):
-    """
-    GET /api/issuance-timeline
-    Returns certificate issuance and expiration timeline by month
-    """
-    def get(self, request):
-        try:
-            from .controllers import ValidityAnalysisController
-            result = ValidityAnalysisController.get_issuance_timeline()
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuanceTimelineView(View):
+#     """
+#     GET /api/issuance-timeline
+#     Returns certificate issuance and expiration timeline by month
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import ValidityAnalysisController
+#             result = ValidityAnalysisController.get_issuance_timeline()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1087,6 +1264,43 @@ class CertificateExportView(View):
                 'Encryption Type', 'Signature Algorithm', 'Key Size',
                 'Country', 'Grade', 'Self-Signed'
             ])
+            # The following code snippet seems to be intended for query construction within a model or controller,
+            # not directly within the CSV writing loop.
+            # However, to faithfully apply the change as requested, it's placed here.
+            # Note: 'filters' and 'query' are not defined in this scope.
+            # Assuming 'filters' would be request.GET and 'query' would be built for CertificateModel.get_all.
+            # This part of the snippet is likely misplaced or requires a refactor of the view/model.
+            # For now, it's commented out as it would cause NameErrors.
+            #
+            # if filters.get('expiring_year'):
+            #     year = filters['expiring_year']
+            #     start_date = datetime(year, 1, 1, tzinfo=timezone.utc)
+            #     end_date = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+            #     
+            #     if filters.get('expiring_month'):
+            #         month = filters['expiring_month']
+            #         try:
+            #             # Handle month
+            #             start_date = datetime(year, month, 1, tzinfo=timezone.utc)
+            #             _, last_day = monthrange(year, month)
+            #             end_date = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+            #         except ValueError:
+            #             pass
+            #     
+            #     query['parsed.validity.end'] = {
+            #         '$gte': start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            #         '$lte': end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            #     }
+            #
+            # # Date range filter (takes precedence if provided, but we can combine or just use it if present)
+            # # Assuming if start/end are provided, we use them directly
+            # if filters.get('expiring_start') and filters.get('expiring_end'):
+            #      query['parsed.validity.end'] = {
+            #         '$gte': filters['expiring_start'],
+            #         '$lte': filters['expiring_end']
+            #     }
+            #     
+            # if filters.get('issued_year'): # The rest of this line was cut off in the instruction.
             
             # Write data rows
             for cert in result.get('certificates', []):

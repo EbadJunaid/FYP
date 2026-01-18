@@ -82,6 +82,22 @@ const certificatesFetcher = async (key: string) => {
         expiringMonth = month;
         expiringYear = year;
     }
+    // Validity Trends chart point clicks - expiring in specific week (range)
+    else if (filter.startsWith('expiring-range::')) {
+        const parts = filter.split('::');
+        // Format: expiring-range::START_DATE::END_DATE
+        // We handle this by passing these as special params to fetchCertificates
+        // NOTE: expiringStart/expiringEnd variables need to be added to fetchCertificates signature first
+        const rangeStart = parts[1];
+        const rangeEnd = parts[2];
+        return fetchCertificates({
+            page,
+            pageSize: 10,
+            search: search || undefined,
+            expiringStart: rangeStart,
+            expiringEnd: rangeEnd
+        });
+    }
     // Issuance Timeline chart clicks - issued in specific month
     else if (filter.startsWith('issued-month-')) {
         const dateStr = filter.replace('issued-month-', '');
@@ -277,7 +293,11 @@ export default function ValidityAnalyticsPage() {
 
     // Handle click on Validity Trends chart point (expiring in specific month)
     const handleTrendPointClick = useCallback((data: { year?: number; monthNum?: number; weekStart?: string; weekEnd?: string; granularity?: string }) => {
-        if (data.year && data.monthNum) {
+        if (data.granularity === 'weekly' && data.weekStart && data.weekEnd) {
+            // "expiring-range::START::END" - use :: to avoid conflict with SWR key | separator
+            const filterStr = `expiring-range::${data.weekStart}::${data.weekEnd}`;
+            handleCardClick(filterStr);
+        } else if (data.year && data.monthNum) {
             const filterStr = `expiring-month-${data.year}-${data.monthNum.toString().padStart(2, '0')}`;
             handleCardClick(filterStr);
         }
@@ -293,6 +313,18 @@ export default function ValidityAnalyticsPage() {
 
     const getTableTitle = () => {
         // Handle dynamic filter patterns
+        if (filter.startsWith('expiring-range::')) {
+            const parts = filter.split('::');
+            const startStr = parts[1];
+            const endStr = parts[2];
+            try {
+                const startDate = new Date(startStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const endDate = new Date(endStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                return `Certificates Expiring: ${startDate} - ${endDate}`;
+            } catch {
+                return 'Certificates Expiring in Selected Week';
+            }
+        }
         if (filter.startsWith('expiring-month-')) {
             const dateStr = filter.replace('expiring-month-', '');
             const [year, month] = dateStr.split('-').map(Number);
@@ -671,12 +703,39 @@ export default function ValidityAnalyticsPage() {
                 </Card>
             </div>
 
-            {/* Download Modal */}
+            {/* Download Modal - Pass correct active filter based on current filter state */}
             <DownloadModal
                 isOpen={downloadModalOpen}
                 onClose={() => setDownloadModalOpen(false)}
                 currentPageData={tableData}
-                activeFilter={{ type: filter === 'expiring30' ? 'expiringSoon' : 'all', value: filter }}
+                activeFilter={(() => {
+                    // Helper to map current filter string to ActiveFilter object
+                    if (filter === 'all') return { type: 'all' };
+                    if (filter === 'valid') return { type: 'active' }; // Map valid to active
+                    if (filter === 'expiring') return { type: 'expiringSoon' }; // Map expiring to expiringSoon
+                    if (filter === 'expired') return { type: 'expired' };
+                    if (filter === 'expiring30') return { type: 'expiringDays', value: '30' };
+                    if (filter === 'expiring90') return { type: 'expiringDays', value: '90' };
+
+                    if (filter.startsWith('bucket-')) {
+                        return { type: 'bucket', value: filter.replace('bucket-', '') };
+                    }
+                    if (filter.startsWith('expiring-month-')) {
+                        return { type: 'expiringMonth', value: filter.replace('expiring-month-', '') };
+                    }
+                    if (filter.startsWith('expiring-range::')) {
+                        return { type: 'expiringRange', value: filter.replace('expiring-range::', '') };
+                    }
+                    if (filter.startsWith('issued-month-')) {
+                        return { type: 'issuedMonth', value: filter.replace('issued-month-', '') };
+                    }
+                    if (filter.startsWith('expired-month-')) {
+                        return { type: 'expiredMonth', value: filter.replace('expired-month-', '') };
+                    }
+
+                    // Fallback
+                    return { type: 'all', value: filter };
+                })()}
                 totalCount={totalItems}
             />
         </div>

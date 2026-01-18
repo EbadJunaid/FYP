@@ -72,6 +72,9 @@ export async function fetchCertificates(params?: {
     validityBucket?: string;
     issuedMonth?: number;
     issuedYear?: number;
+    issuedWithinDays?: number;  // Filter for certificates issued within N days
+    expiringStart?: string;
+    expiringEnd?: string;
     // Signature/Hash page filters
     signature_algorithm?: string;
     weak_hash?: string;
