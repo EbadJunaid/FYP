@@ -53,3 +53,7 @@ arslan-dashboard/README-old.md
 .vscode
 
 arslan-dashboard/backend/node_modules
+
+arslan-dashboard/backend/CA_ANALYTICS_SETUP.md
+arslan-dashboard/backend/MULTIPLE_DATABASE_GUIDE.md
+arslan-dashboard/backend/UNDERSTANDING_INDEXES.md
