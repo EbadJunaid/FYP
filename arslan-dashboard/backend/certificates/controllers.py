@@ -104,6 +104,8 @@ class CertificateController:
         san_count_max: Optional[int] = None,
         expiring_start: Optional[str] = None,
         expiring_end: Optional[str] = None,
+        # Shared Keys page filter
+        shared_key: Optional[bool] = None,
         # Global filter params
         global_filters: Optional[GlobalFilterParams] = None
     ) -> Dict:
@@ -135,6 +137,7 @@ class CertificateController:
             'san_count_max': san_count_max,
             'expiring_start': expiring_start,
             'expiring_end': expiring_end,
+            'shared_key': shared_key,
             # Include global filter params in cache key
             **((global_filters.to_cache_key() if global_filters else {}))
         }
@@ -188,6 +191,7 @@ class CertificateController:
             san_count_max=san_count_max,
             expiring_start=expiring_start,
             expiring_end=expiring_end,
+            shared_key=shared_key,
             base_filter=base_filter
         )
         
@@ -612,6 +616,71 @@ class TrendsController:
         return result
 
 
+class SharedKeyController:
+    """Controller for shared public key analytics"""
+    
+    @staticmethod
+    def get_stats() -> Dict:
+        """Get shared key stats (cached 10 min)"""
+        cached = cache.get('shared_key_stats', {})
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_key_stats()
+        cache.set('shared_key_stats', {}, result, ttl=600)
+        return result
+    
+    @staticmethod
+    def get_distribution() -> List:
+        """Get shared key group size distribution (cached 10 min)"""
+        cached = cache.get('shared_key_distribution', {})
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_key_distribution()
+        cache.set('shared_key_distribution', {}, result, ttl=600)
+        return result
+    
+    @staticmethod
+    def get_by_issuer(limit: int = 10) -> List:
+        """Get shared key certs by issuer (cached 10 min)"""
+        cache_params = {'limit': limit}
+        
+        cached = cache.get('shared_key_issuer', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_keys_by_issuer(limit)
+        cache.set('shared_key_issuer', cache_params, result, ttl=600)
+        return result
+    
+    @staticmethod
+    def get_timeline(months: int = 12) -> List:
+        """Get shared key timeline (cached 15 min)"""
+        cache_params = {'months': months}
+        
+        cached = cache.get('shared_key_timeline', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_key_timeline(months)
+        cache.set('shared_key_timeline', cache_params, result, ttl=900)
+        return result
+    
+    @staticmethod
+    def get_heatmap(limit: int = 10) -> List:
+        """Get issuer x key-type heatmap (cached 10 min)"""
+        cache_params = {'limit': limit}
+        
+        cached = cache.get('shared_key_heatmap', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_key_heatmap(limit)
+        cache.set('shared_key_heatmap', cache_params, result, ttl=600)
+        return result
+
+
 class CacheController:
     """Controller for cache management operations"""
     
@@ -633,3 +702,4 @@ class CacheController:
         cache.invalidate_namespace('metrics')
         cache.invalidate_namespace('notifications')
         return {'status': 'success', 'message': 'Certificate caches invalidated'}
+

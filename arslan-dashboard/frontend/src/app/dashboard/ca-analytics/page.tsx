@@ -327,7 +327,7 @@ export default function CAAnalyticsPage() {
                                 <div className="text-text-muted">Loading...</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" minHeight={320}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={0}>
                                 <BarChart
                                     layout="vertical"
                                     data={caDistribution}

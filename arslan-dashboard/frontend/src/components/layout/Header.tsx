@@ -236,6 +236,7 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                             value={searchQuery}
                             onChange={handleSearchChange}
                             placeholder="Enter domain to analyze..."
+                            suppressHydrationWarning={true}
                             className="w-full h-10 pl-10 pr-16 bg-card-bg border border-card-border rounded-xl 
                          text-sm text-text-primary placeholder-text-muted
                          focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue

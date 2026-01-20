@@ -128,6 +128,9 @@ class CertificateListView(View):
             san_count_min = int(san_count_min_str) if san_count_min_str else None
             san_count_max = int(san_count_max_str) if san_count_max_str else None
             
+            # Shared Keys page specific filter
+            shared_key = request.GET.get('shared_key', '').lower() == 'true'
+            
             result = CertificateController.get_certificates(
                 page=page,
                 page_size=page_size,
@@ -155,6 +158,7 @@ class CertificateListView(View):
                 san_count_max=san_count_max,
                 expiring_start=expiring_start,
                 expiring_end=expiring_end,
+                shared_key=shared_key if shared_key else None,
                 global_filters=global_filters
             )
             return json_response(result)
@@ -1321,3 +1325,66 @@ class CertificateExportView(View):
             return response
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
+
+
+# ==================== SHARED KEYS ANALYTICS VIEWS ====================
+
+class SharedKeyStatsView(View):
+    """
+    GET /api/shared-keys/stats
+    Returns shared key statistics for metric cards
+    """
+    def get(self, request):
+        from .controllers import SharedKeyController
+        stats = SharedKeyController.get_stats()
+        return json_response(stats)
+
+
+class SharedKeyDistributionView(View):
+    """
+    GET /api/shared-keys/distribution
+    Returns shared key group size distribution for histogram
+    """
+    def get(self, request):
+        from .controllers import SharedKeyController
+        distribution = SharedKeyController.get_distribution()
+        return json_response(distribution)
+
+
+class SharedKeyByIssuerView(View):
+    """
+    GET /api/shared-keys/by-issuer
+    Returns shared key certificates by issuer for bar chart
+    Query params: limit
+    """
+    def get(self, request):
+        from .controllers import SharedKeyController
+        limit = int(request.GET.get('limit', 10))
+        data = SharedKeyController.get_by_issuer(limit)
+        return json_response(data)
+
+
+class SharedKeyTimelineView(View):
+    """
+    GET /api/shared-keys/timeline
+    Returns timeline of certificates joining shared key groups
+    Query params: months
+    """
+    def get(self, request):
+        from .controllers import SharedKeyController
+        months = int(request.GET.get('months', 12))
+        timeline = SharedKeyController.get_timeline(months)
+        return json_response(timeline)
+
+
+class SharedKeyHeatmapView(View):
+    """
+    GET /api/shared-keys/heatmap
+    Returns issuer x key-type matrix for heatmap
+    Query params: limit
+    """
+    def get(self, request):
+        from .controllers import SharedKeyController
+        limit = int(request.GET.get('limit', 10))
+        heatmap = SharedKeyController.get_heatmap(limit)
+        return json_response(heatmap)

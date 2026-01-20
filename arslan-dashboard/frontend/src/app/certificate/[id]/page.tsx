@@ -299,6 +299,27 @@ export default function CertificateDetailPage() {
                 </div>
             </div>
 
+            {/* Public Key Information */}
+            <div className="bg-card-bg border border-card-border rounded-xl p-5">
+                <SectionHeader title="Public Key Information" info="Details about the certificate public key including modulus and SPKI fingerprints." />
+                <div className="space-y-4">
+                    <div className="bg-background/50 rounded-lg p-4">
+                        <p className="text-xs text-text-muted mb-1">Public Key (Modulus)</p>
+                        <p className="text-xs font-mono text-text-secondary break-all max-h-40 overflow-y-auto">
+                            {certificate.publicKey || 'N/A'}
+                        </p>
+                    </div>
+                    <div className="bg-background/50 rounded-lg p-4">
+                        <p className="text-xs text-text-muted mb-1">SPKI Subject Fingerprint</p>
+                        <p className="text-xs font-mono text-text-secondary break-all">{certificate.spkiSubjectFingerprint || 'N/A'}</p>
+                    </div>
+                    <div className="bg-background/50 rounded-lg p-4">
+                        <p className="text-xs text-text-muted mb-1">Parsed SPKI Fingerprint (SHA-256)</p>
+                        <p className="text-xs font-mono text-text-secondary break-all">{certificate.spkiFingerprint || 'N/A'}</p>
+                    </div>
+                </div>
+            </div>
+
             {/* Fingerprints */}
             <div className="bg-card-bg border border-card-border rounded-xl p-5">
                 <SectionHeader title="Fingerprints" info={sectionInfo.fingerprints} />
@@ -317,6 +338,7 @@ export default function CertificateDetailPage() {
                             <p className="text-xs font-mono text-text-secondary break-all">{certificate.fingerprintMd5 || 'N/A'}</p>
                         </div>
                     </div>
+
                 </div>
             </div>
 

@@ -36,6 +36,12 @@ from .views import (
     AlgorithmAdoptionView,
     ValidationLevelTrendsView,
     KeySizeTimelineView,
+    # Shared Keys Analytics page views
+    SharedKeyStatsView,
+    SharedKeyDistributionView,
+    SharedKeyByIssuerView,
+    SharedKeyTimelineView,
+    SharedKeyHeatmapView,
 )
 
 urlpatterns = [
@@ -85,6 +91,13 @@ urlpatterns = [
     path('trends/algorithm-adoption/', AlgorithmAdoptionView.as_view(), name='trends_algorithm_adoption'),
     path('trends/validation-levels/', ValidationLevelTrendsView.as_view(), name='trends_validation_levels'),
     path('trends/key-size-timeline/', KeySizeTimelineView.as_view(), name='trends_key_size_timeline'),
+    
+    # Shared Keys Analytics APIs
+    path('shared-keys/stats/', SharedKeyStatsView.as_view(), name='shared_key_stats'),
+    path('shared-keys/distribution/', SharedKeyDistributionView.as_view(), name='shared_key_distribution'),
+    path('shared-keys/by-issuer/', SharedKeyByIssuerView.as_view(), name='shared_key_by_issuer'),
+    path('shared-keys/timeline/', SharedKeyTimelineView.as_view(), name='shared_key_timeline'),
+    path('shared-keys/heatmap/', SharedKeyHeatmapView.as_view(), name='shared_key_heatmap'),
     
     # Notifications API
     path('notifications/', NotificationView.as_view(), name='notifications'),

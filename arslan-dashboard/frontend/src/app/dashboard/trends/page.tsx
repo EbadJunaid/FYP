@@ -332,7 +332,7 @@ export default function TrendsAnalyticsPage() {
                                 <div className="text-text-muted">Loading...</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
                                 <BarChart data={expirationForecast || []} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                     <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} angle={-45} textAnchor="end" height={60} />
@@ -368,7 +368,7 @@ export default function TrendsAnalyticsPage() {
                                 <div className="text-text-muted">Loading...</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
                                 <AreaChart data={algorithmAdoption || []} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                     <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} angle={-45} textAnchor="end" height={60} />
@@ -400,7 +400,7 @@ export default function TrendsAnalyticsPage() {
                                 <div className="text-text-muted">Loading...</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
                                 <AreaChart data={validationTrends || []} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                     <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} angle={-45} textAnchor="end" height={60} />

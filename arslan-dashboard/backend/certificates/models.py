@@ -324,6 +324,17 @@ class CertificateModel:
         # Get signature info
         signature = parsed.get('signature', {})
         is_self_signed = signature.get('self_signed', False)
+
+        # Get public key details
+        public_key = ''
+        if key_info.get('rsa_public_key'):
+            public_key = key_info['rsa_public_key'].get('modulus', '')
+        elif key_info.get('ecdsa_public_key'):
+            # For ECDSA, we might want x and y coordinates or just indicate ECDSA
+            # For now, we'll try to get 'public_key' if it exists, or leave empty
+            public_key = key_info['ecdsa_public_key'].get('public_key', '')
+            
+        spki_fingerprint = key_info.get('fingerprint_sha256', '')
         
         return {
             'id': str(doc.get('_id', '')),
@@ -358,6 +369,9 @@ class CertificateModel:
             'extendedKeyUsage': ext_key_usage_dict,
             'crlDistributionPoints': extensions.get('crl_distribution_points', []),
             'authorityInfoAccess': extensions.get('authority_info_access', {}).get('issuer_urls', []),
+            'publicKey': public_key,
+            'spkiFingerprint': spki_fingerprint,
+            'spkiSubjectFingerprint': doc.get('spki_subject_fingerprint', ''),
         }
     
     @classmethod
@@ -388,6 +402,8 @@ class CertificateModel:
                 san_count_max: Optional[int] = None,
                 expiring_start: Optional[str] = None,
                 expiring_end: Optional[str] = None,
+                # Shared Keys page filter
+                shared_key: Optional[bool] = None,
                 base_filter: Optional[Dict] = None) -> Dict:
         """Get paginated list of certificates with optional filters
         
@@ -408,6 +424,7 @@ class CertificateModel:
             san_count_max: Filter by maximum SAN count
             expiring_start: Filter by exact expiration start date (ISO string)
             expiring_end: Filter by exact expiration end date (ISO string)
+            shared_key: Filter for certs involved in true key reuse (different certs sharing same public key)
             base_filter: Global filter query from build_filter_query() - merged with specific filters
         """
         
@@ -728,7 +745,48 @@ class CertificateModel:
                     'parsed.extensions.subject_alt_name.dns_names': {
                         '$not': {'$regex': '^\\*\\.'}
                     }
+                    
+                    })
+        
+        # Shared key filter - only show certs that share public key with different certificates
+        if shared_key:
+            # Find all public key fingerprints that are shared by 2+ distinct certs
+            shared_keys_pipeline = [
+                {'$match': {
+                    'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                    'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+                }},
+                {'$group': {
+                    '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                    'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+                }},
+                {'$addFields': {
+                    'distinct_certs': {'$size': '$cert_fingerprints'}
+                }},
+                {'$match': {'distinct_certs': {'$gt': 1}}},
+                {'$project': {'_id': 1}}
+            ]
+            
+            shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
+            
+            if shared_fingerprints:
+                # Filter certs to only those with shared public keys
+                if '$and' not in query:
+                    query['$and'] = []
+                query['$and'].append({
+                    'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
                 })
+            else:
+                # No shared keys found, return empty result
+                return {
+                    'certificates': [],
+                    'pagination': {
+                        'page': page,
+                        'pageSize': page_size,
+                        'total': 0,
+                        'totalPages': 0
+                    }
+                }
         
         # SAN count filter - filter by number of SANs (dns_names array size)
         if san_count_min is not None or san_count_max is not None:
@@ -2900,4 +2958,342 @@ class CertificateModel:
             })
         
         return trends
+
+    # ==================== SHARED KEYS ANALYTICS ====================
+    # 
+    # IMPORTANT: "Shared keys" means multiple DIFFERENT certificates using the same public key.
+    # We identify this by:
+    # 1. Grouping by public key fingerprint (parsed.subject_key_info.fingerprint_sha256)
+    # 2. Counting DISTINCT certificate fingerprints (parsed.fingerprint_sha256) in each group
+    # 3. Only considering it "shared" if there are 2+ distinct certificate fingerprints
+    #
+    # This excludes SAN certificates that are technically the same cert with different domain lists.
+
+    @classmethod
+    def get_shared_key_stats(cls) -> Dict[str, Any]:
+        """
+        Get statistics for shared public keys.
+        Groups certificates by public key fingerprint and finds groups with multiple distinct certs.
+        
+        Returns:
+            - unique_keys: Total distinct public key fingerprints
+            - shared_key_groups: Count of public keys shared by truly different certificates
+            - certificates_at_risk: Total certificates in shared key groups
+            - most_affected_domain: Domain with most certs sharing a single key
+        """
+        pipeline_groups = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+            }},
+            # Group by public key fingerprint, collect unique cert fingerprints
+            {'$group': {
+                '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'},
+                'cert_count': {'$sum': 1},
+                'domains': {'$addToSet': {'$arrayElemAt': ['$parsed.names', 0]}}
+            }},
+            # Add field for count of distinct certs
+            {'$addFields': {
+                'distinct_certs': {'$size': '$cert_fingerprints'}
+            }},
+            {'$facet': {
+                'all_keys': [{'$count': 'total'}],
+                'shared_keys': [
+                    # Only keys with 2+ distinct certificates
+                    {'$match': {'distinct_certs': {'$gt': 1}}},
+                    {'$group': {
+                        '_id': None,
+                        'group_count': {'$sum': 1},
+                        'cert_count': {'$sum': '$cert_count'}
+                    }}
+                ],
+                'top_domain': [
+                    {'$match': {'distinct_certs': {'$gt': 1}}},
+                    {'$unwind': '$domains'},
+                    {'$group': {
+                        '_id': '$domains',
+                        'key_fingerprint': {'$first': '$_id'},
+                        'count': {'$max': '$distinct_certs'}
+                    }},
+                    {'$sort': {'count': -1}},
+                    {'$limit': 1}
+                ]
+            }}
+        ]
+        
+        result = list(cls.collection.aggregate(pipeline_groups, allowDiskUse=True))
+        
+        if not result:
+            return {
+                'unique_keys': 0,
+                'shared_key_groups': 0,
+                'certificates_at_risk': 0,
+                'most_affected_domain': {'name': 'N/A', 'count': 0}
+            }
+        
+        data = result[0]
+        unique_keys = data['all_keys'][0]['total'] if data['all_keys'] else 0
+        shared_info = data['shared_keys'][0] if data['shared_keys'] else {'group_count': 0, 'cert_count': 0}
+        top_domain = data['top_domain'][0] if data['top_domain'] else {'_id': 'N/A', 'count': 0}
+        
+        return {
+            'unique_keys': unique_keys,
+            'shared_key_groups': shared_info.get('group_count', 0),
+            'certificates_at_risk': shared_info.get('cert_count', 0),
+            'most_affected_domain': {
+                'name': top_domain.get('_id', 'N/A'),
+                'count': top_domain.get('count', 0)
+            }
+        }
+
+    @classmethod
+    def get_shared_key_distribution(cls) -> List[Dict[str, Any]]:
+        """
+        Get distribution of shared key group sizes for histogram.
+        Only counts groups where multiple distinct certificates share a key.
+        
+        Returns list of buckets: "2", "3-5", "6-10", "10+"
+        """
+        pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+            }},
+            {'$group': {
+                '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+            }},
+            {'$addFields': {
+                'distinct_certs': {'$size': '$cert_fingerprints'}
+            }},
+            {'$match': {'distinct_certs': {'$gt': 1}}},  # Only truly shared keys
+            {'$bucket': {
+                'groupBy': '$distinct_certs',
+                'boundaries': [2, 3, 6, 11, 1000000],
+                'default': 'overflow',
+                'output': {'groups': {'$sum': 1}}
+            }}
+        ]
+        
+        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
+        
+        # Map to readable labels
+        bucket_labels = {2: '2', 3: '3-5', 6: '6-10', 11: '10+'}
+        distribution = []
+        
+        for r in results:
+            bucket_id = r['_id']
+            label = bucket_labels.get(bucket_id, str(bucket_id))
+            distribution.append({
+                'bucket': label,
+                'count': r['groups']
+            })
+        
+        # Ensure all buckets exist
+        all_labels = ['2', '3-5', '6-10', '10+']
+        existing = {d['bucket'] for d in distribution}
+        for label in all_labels:
+            if label not in existing:
+                distribution.append({'bucket': label, 'count': 0})
+        
+        # Sort by bucket order
+        order = {'2': 0, '3-5': 1, '6-10': 2, '10+': 3}
+        distribution.sort(key=lambda x: order.get(x['bucket'], 99))
+        
+        return distribution
+
+    @classmethod
+    def get_shared_keys_by_issuer(cls, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get count of shared-key certificates by issuer.
+        Only counts certificates that share a public key with truly different certificates.
+        
+        Returns list of issuers with their count of certificates involved in key reuse.
+        """
+        # First find all public key fingerprints that have 2+ distinct cert fingerprints
+        shared_keys_pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+            }},
+            {'$group': {
+                '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+            }},
+            {'$addFields': {
+                'distinct_certs': {'$size': '$cert_fingerprints'}
+            }},
+            {'$match': {'distinct_certs': {'$gt': 1}}},
+            {'$project': {'_id': 1}}
+        ]
+        
+        shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
+        
+        if not shared_fingerprints:
+            return []
+        
+        # Now count by issuer for certs with these fingerprints
+        issuer_pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
+            }},
+            {'$group': {
+                '_id': {'$ifNull': [{'$arrayElemAt': ['$parsed.issuer.organization', 0]}, 'Unknown']},
+                'shared_certs': {'$sum': 1}
+            }},
+            {'$sort': {'shared_certs': -1}},
+            {'$limit': limit}
+        ]
+        
+        results = list(cls.collection.aggregate(issuer_pipeline, allowDiskUse=True))
+        
+        return [{'issuer': r['_id'], 'shared_certs': r['shared_certs']} for r in results]
+
+    @classmethod
+    def get_shared_key_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
+        """
+        Get timeline of certificates joining shared key groups by issuance month.
+        Only includes certificates that share keys with truly different certificates.
+        
+        Shows new certs issued per month that are part of a shared key group.
+        """
+        now = datetime.now(timezone.utc)
+        start_date = now - timedelta(days=months * 30)
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # First find truly shared key fingerprints
+        shared_keys_pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+            }},
+            {'$group': {
+                '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+            }},
+            {'$addFields': {
+                'distinct_certs': {'$size': '$cert_fingerprints'}
+            }},
+            {'$match': {'distinct_certs': {'$gt': 1}}},
+            {'$project': {'_id': 1}}
+        ]
+        
+        shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
+        
+        if not shared_fingerprints:
+            return []
+        
+        # Get timeline of shared-key certs by issuance month
+        timeline_pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints},
+                'parsed.validity.start': {'$gte': start_str}
+            }},
+            {'$project': {
+                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
+                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}}
+            }},
+            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
+            {'$group': {
+                '_id': {'year': '$year', 'month': '$month'},
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'_id.year': 1, '_id.month': 1}}
+        ]
+        
+        results = list(cls.collection.aggregate(timeline_pipeline, allowDiskUse=True))
+        
+        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        timeline = []
+        for r in results:
+            year = r['_id']['year']
+            month = r['_id']['month']
+            timeline.append({
+                'month': f"{month_names[month]} {year}",
+                'monthNum': month,
+                'year': year,
+                'count': r['count']
+            })
+        
+        return timeline
+
+    @classmethod
+    def get_shared_key_heatmap(cls, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get issuer x key-type matrix for heatmap.
+        Only includes certificates with truly shared keys.
+        
+        Returns list of {issuer, key_type, count} for certificates in shared key groups.
+        """
+        # First find truly shared key fingerprints
+        shared_keys_pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+            }},
+            {'$group': {
+                '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+            }},
+            {'$addFields': {
+                'distinct_certs': {'$size': '$cert_fingerprints'}
+            }},
+            {'$match': {'distinct_certs': {'$gt': 1}}},
+            {'$project': {'_id': 1}}
+        ]
+        
+        shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
+        
+        if not shared_fingerprints:
+            return []
+        
+        # Get heatmap data
+        heatmap_pipeline = [
+            {'$match': {
+                'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
+            }},
+            {'$project': {
+                'issuer': {'$ifNull': [{'$arrayElemAt': ['$parsed.issuer.organization', 0]}, 'Unknown']},
+                'key_algo': {'$ifNull': ['$parsed.subject_key_info.key_algorithm.name', 'Unknown']},
+                'key_length': {'$ifNull': ['$parsed.subject_key_info.rsa_public_key.length', 0]}
+            }},
+            {'$addFields': {
+                'key_type': {
+                    '$concat': [
+                        '$key_algo',
+                        '-',
+                        {'$toString': '$key_length'}
+                    ]
+                }
+            }},
+            {'$group': {
+                '_id': {'issuer': '$issuer', 'key_type': '$key_type'},
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'count': -1}}
+        ]
+        
+        results = list(cls.collection.aggregate(heatmap_pipeline, allowDiskUse=True))
+        
+        # Get top issuers
+        issuer_totals = {}
+        for r in results:
+            issuer = r['_id']['issuer']
+            issuer_totals[issuer] = issuer_totals.get(issuer, 0) + r['count']
+        
+        top_issuers = sorted(issuer_totals.keys(), key=lambda x: issuer_totals[x], reverse=True)[:limit]
+        
+        # Filter results to top issuers
+        heatmap = []
+        for r in results:
+            if r['_id']['issuer'] in top_issuers:
+                heatmap.append({
+                    'issuer': r['_id']['issuer'],
+                    'key_type': r['_id']['key_type'],
+                    'count': r['count']
+                })
+        
+        return heatmap
 

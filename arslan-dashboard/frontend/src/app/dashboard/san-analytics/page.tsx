@@ -301,7 +301,7 @@ export default function SANAnalyticsPage() {
                                 <div className="text-text-muted">Loading...</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
                                 <BarChart data={sanDistribution || []} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                     <XAxis dataKey="bucket" stroke="#9ca3af" fontSize={12} />
@@ -334,7 +334,7 @@ export default function SANAnalyticsPage() {
                                 <div className="text-text-muted">Loading...</div>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
                                 <PieChart>
                                     <Pie
                                         data={pieData}
@@ -375,7 +375,7 @@ export default function SANAnalyticsPage() {
                             <div className="text-text-muted">Loading...</div>
                         </div>
                     ) : (
-                        <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
                             <BarChart
                                 layout="vertical"
                                 data={sanTlds || []}
@@ -422,7 +422,7 @@ export default function SANAnalyticsPage() {
                     headerAction={
                         <div className="flex items-center gap-2">
                             {/* Quick Filter Buttons */}
-                              <button
+                            <button
                                 onClick={() => handleCardClick('all', '')}
                                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === 'all'
                                     ? 'bg-primary-blue/20 text-primary-blue'
@@ -449,7 +449,7 @@ export default function SANAnalyticsPage() {
                             >
                                 Standard
                             </button>
-                          
+
                             <div className="w-px h-5 bg-border-default mx-1" />
                             {/* Download Button */}
                             <button

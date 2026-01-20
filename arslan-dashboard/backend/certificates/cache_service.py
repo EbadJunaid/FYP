@@ -33,35 +33,35 @@ if not REDIS_AVAILABLE:
 
 # TTL configurations in seconds (reduced for fresher data)
 TTL_CONFIG = {
-    'metrics': 300,              # 5 minutes
-    'certificates': 300,         # 5 minutes (for pages 2+)
-    'certificates_page1': 900,   # 15 minutes (first page)
-    'ca_analytics': 480,         # 8 minutes
-    'ca_stats': 300,             # 5 minutes (CA metric cards)
-    'validation_dist': 300,      # 5 minutes (validation level distribution)
-    'issuer_validation_matrix': 600,  # 10 minutes (CA validation heatmap)
-    'encryption': 480,           # 8 minutes
-    'validity_trends': 480,      # 8 minutes
-    'geographic': 480,           # 8 minutes
-    'future_risk': 480,          # 8 minutes
-    'notifications': 120,         # 2 minute (time-sensitive)
-    'unique_filters': 480,       # 8 minutes
+    'metrics': 1800,              # 5 minutes
+    'certificates': 1800,         # 5 minutes (for pages 2+)
+    'certificates_page1': 1800,   # 15 minutes (first page)
+    'ca_analytics': 1800,         # 8 minutes
+    'ca_stats': 1800,             # 5 minutes (CA metric cards)
+    'validation_dist': 1800,      # 5 minutes (validation level distribution)
+    'issuer_validation_matrix': 1800,  # 10 minutes (CA validation heatmap)
+    'encryption': 1800,           # 8 minutes
+    'validity_trends': 1800,      # 8 minutes
+    'geographic': 1800,           # 8 minutes
+    'future_risk': 1800,          # 8 minutes
+    'notifications': 1800,         # 2 minute (time-sensitive)
+    'unique_filters': 1800,       # 8 minutes
     # Signature and Hashes page caches
-    'signature_stats': 480,      # 8 minutes
-    'hash_trends': 600,          # 10 minutes (historical data)
-    'issuer_matrix': 600,        # 10 minutes
+    'signature_stats': 1800,      # 8 minutes
+    'hash_trends': 1800,          # 10 minutes (historical data)
+    'issuer_matrix': 1800,        # 10 minutes
     # SAN Analytics page caches
-    'san_stats': 600,            # 10 minutes
-    'san_distribution': 600,     # 10 minutes
-    'san_tld': 900,              # 15 minutes
-    'san_wildcard': 600,         # 10 minutes
+    'san_stats': 1800,            # 10 minutes
+    'san_distribution': 1800,     # 10 minutes
+    'san_tld': 1800,              # 15 minutes
+    'san_wildcard': 1800,         # 10 minutes
     # Trends Analytics page caches
-    'trends_stats': 600,         # 10 minutes
-    'issuance_timeline': 900,    # 15 minutes
-    'expiration_forecast': 900,  # 15 minutes
-    'algorithm_adoption': 900,   # 15 minutes
-    'validation_trends': 900,    # 15 minutes
-    'key_size_timeline': 900,    # 15 minutes
+    'trends_stats': 1800,         # 10 minutes
+    'issuance_timeline': 1800,    # 15 minutes
+    'expiration_forecast': 1800,  # 15 minutes
+    'algorithm_adoption': 1800,   # 15 minutes
+    'validation_trends': 1800,    # 15 minutes
+    'key_size_timeline': 1800,    # 15 minutes
 }
 
 

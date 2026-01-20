@@ -90,6 +90,8 @@ export async function fetchCertificates(params?: {
     san_type?: string;
     san_count_min?: number;
     san_count_max?: number;
+    // Shared Keys page filter
+    shared_key?: boolean;
 } & GlobalFilterParams): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
     try {
         const result = await apiClient.getCertificates(params);

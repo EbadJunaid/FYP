@@ -539,7 +539,7 @@ export default function ValidityAnalyticsPage() {
                     <div className="flex items-center justify-center h-64">
                         <div className="flex items-center gap-8">
                             <div className="relative">
-                                <ResponsiveContainer width={180} height={180}>
+                                <ResponsiveContainer width={180} height={180} minWidth={0}>
                                     <PieChart>
                                         <Pie
                                             data={visibleStatusBreakdown}
@@ -607,7 +607,7 @@ export default function ValidityAnalyticsPage() {
                             <div className="text-text-muted">Loading timeline...</div>
                         </div>
                     ) : (
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <AreaChart data={timeline} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                 <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />

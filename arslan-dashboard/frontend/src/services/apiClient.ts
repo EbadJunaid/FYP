@@ -66,6 +66,9 @@ export interface Certificate {
     };
     crlDistributionPoints?: string[];
     authorityInfoAccess?: string[];
+    publicKey?: string;
+    spkiFingerprint?: string;
+    spkiSubjectFingerprint?: string;
 }
 
 export interface DashboardMetrics {
@@ -311,6 +314,8 @@ class ApiClient {
         san_type?: string;
         san_count_min?: number;
         san_count_max?: number;
+        // Shared Keys page filter
+        shared_key?: boolean;
         // Global filter params
         startDate?: string;
         endDate?: string;
@@ -349,6 +354,8 @@ class ApiClient {
         if (params?.san_type) queryParams.append('san_type', params.san_type);
         if (params?.san_count_min !== undefined) queryParams.append('san_count_min', params.san_count_min.toString());
         if (params?.san_count_max !== undefined) queryParams.append('san_count_max', params.san_count_max.toString());
+        // Shared Keys filter
+        if (params?.shared_key) queryParams.append('shared_key', 'true');
         // Global filter params
         if (params?.startDate) queryParams.append('start_date', params.startDate);
         if (params?.endDate) queryParams.append('end_date', params.endDate);
@@ -557,6 +564,27 @@ class ApiClient {
         link.click();
         document.body.removeChild(link);
     }
+
+    // Shared Keys Analytics APIs
+    async getSharedKeyStats(): Promise<SharedKeyStats> {
+        return this.fetch<SharedKeyStats>('/shared-keys/stats/');
+    }
+
+    async getSharedKeyDistribution(): Promise<SharedKeyDistributionEntry[]> {
+        return this.fetch<SharedKeyDistributionEntry[]>('/shared-keys/distribution/');
+    }
+
+    async getSharedKeysByIssuer(limit: number = 10): Promise<SharedKeyIssuerEntry[]> {
+        return this.fetch<SharedKeyIssuerEntry[]>(`/shared-keys/by-issuer/?limit=${limit}`);
+    }
+
+    async getSharedKeyTimeline(months: number = 12): Promise<SharedKeyTimelineEntry[]> {
+        return this.fetch<SharedKeyTimelineEntry[]>(`/shared-keys/timeline/?months=${months}`);
+    }
+
+    async getSharedKeyHeatmap(limit: number = 10): Promise<SharedKeyHeatmapEntry[]> {
+        return this.fetch<SharedKeyHeatmapEntry[]>(`/shared-keys/heatmap/?limit=${limit}`);
+    }
 }
 
 // Validity Analysis types
@@ -666,6 +694,40 @@ export interface IssuerAlgorithmEntry {
     algorithm: string;
     algorithmType: string;
     keySize: number;
+    count: number;
+}
+
+// Shared Keys Analytics types
+export interface SharedKeyStats {
+    unique_keys: number;
+    shared_key_groups: number;
+    certificates_at_risk: number;
+    most_affected_domain: {
+        name: string;
+        count: number;
+    };
+}
+
+export interface SharedKeyDistributionEntry {
+    bucket: string;
+    count: number;
+}
+
+export interface SharedKeyIssuerEntry {
+    issuer: string;
+    shared_certs: number;
+}
+
+export interface SharedKeyTimelineEntry {
+    month: string;
+    monthNum: number;
+    year: number;
+    count: number;
+}
+
+export interface SharedKeyHeatmapEntry {
+    issuer: string;
+    key_type: string;
     count: number;
 }
 
