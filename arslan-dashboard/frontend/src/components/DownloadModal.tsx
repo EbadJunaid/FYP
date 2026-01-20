@@ -8,8 +8,10 @@ import { DownloadIcon } from '@/components/icons/Icons';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface ActiveFilter {
-    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap' | 'issuer' | 'san';
+    type: 'all' | 'active' | 'expired' | 'expiringSoon' | 'vulnerabilities' | 'ca' | 'geographic' | 'encryption' | 'validityTrend' | 'bucket' | 'expiringDays' | 'issuedMonth' | 'issuedWithinDays' | 'expiringMonth' | 'expiredMonth' | 'weakHash' | 'selfSigned' | 'signatureAlgorithm' | 'hashType' | 'keySize' | 'heatmap' | 'issuer' | 'san' | 'expiringRange';
     value?: string;
+    month?: string;
+    year?: string;
 }
 
 interface DownloadModalProps {
@@ -133,6 +135,32 @@ export default function DownloadModal({
                     if (month > 0 && year > 0) {
                         params.append('issued_month', month.toString());
                         params.append('issued_year', year.toString());
+                    }
+                }
+                break;
+            case 'issuedWithinDays':
+                // issued_within_days like "30" - certs issued within last N days
+                if (activeFilter.value) {
+                    params.append('issued_within_days', activeFilter.value);
+                }
+                break;
+            case 'expiringMonth':
+                // expiring_month like "2026-03" (YYYY-MM) - certs expiring in specific month
+                if (activeFilter.value) {
+                    const [year, month] = activeFilter.value.split('-').map(Number);
+                    if (month > 0 && year > 0) {
+                        params.append('expiring_month', month.toString());
+                        params.append('expiring_year', year.toString());
+                    }
+                }
+                break;
+            case 'expiringRange':
+                // expiringRange value format: "START_DATE::END_DATE"
+                if (activeFilter.value) {
+                    const parts = activeFilter.value.split('::');
+                    if (parts.length >= 2) {
+                        params.append('expiring_start', parts[0]);
+                        params.append('expiring_end', parts[1]);
                     }
                 }
                 break;

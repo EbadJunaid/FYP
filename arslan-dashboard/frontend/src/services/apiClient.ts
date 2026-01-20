@@ -66,6 +66,9 @@ export interface Certificate {
     };
     crlDistributionPoints?: string[];
     authorityInfoAccess?: string[];
+    publicKey?: string;
+    spkiFingerprint?: string;
+    spkiSubjectFingerprint?: string;
 }
 
 export interface DashboardMetrics {
@@ -187,6 +190,63 @@ export interface SANWildcardBreakdown {
     standard: number;
 }
 
+// Trends Analytics interfaces
+export interface TrendsStats {
+    velocity_30d: number;
+    velocity_change: number;
+    expiring_30d: number;
+    modern_algo_percent: number;
+    strong_key_percent: number;  // Replaced compliance_percent
+    total_certs: number;
+}
+
+export interface TrendsIssuanceEntry {
+    month: string;
+    monthNum: number;
+    year: number;
+    count: number;
+}
+
+export interface KeySizeTimelineEntry {
+    month: string;
+    year: number;
+    monthNum: number;
+    rsa_2048: number;
+    rsa_4096: number;
+    rsa_other: number;
+    ecdsa_256: number;
+    ecdsa_384: number;
+    total: number;
+}
+
+export interface ExpirationForecastEntry {
+    month: string;
+    monthNum: number;
+    year: number;
+    count: number;
+}
+
+export interface AlgorithmAdoptionEntry {
+    month: string;
+    monthNum: number;
+    year: number;
+    sha256_rsa: number;
+    sha384_rsa: number;
+    ecdsa: number;
+    sha1_rsa: number;
+    other: number;
+}
+
+export interface ValidationLevelTrendsEntry {
+    month: string;
+    monthNum: number;
+    year: number;
+    dv: number;
+    ov: number;
+    ev: number;
+    unknown: number;
+}
+
 // API Client class
 class ApiClient {
     private baseUrl: string;
@@ -239,6 +299,9 @@ class ApiClient {
         validityBucket?: string;
         issuedMonth?: number;
         issuedYear?: number;
+        issuedWithinDays?: number;
+        expiringStart?: string;
+        expiringEnd?: string;
         // Signature/Hash page filters
         signature_algorithm?: string;
         weak_hash?: string;
@@ -251,6 +314,8 @@ class ApiClient {
         san_type?: string;
         san_count_min?: number;
         san_count_max?: number;
+        // Shared Keys page filter
+        shared_key?: boolean;
         // Global filter params
         startDate?: string;
         endDate?: string;
@@ -275,6 +340,9 @@ class ApiClient {
         if (params?.validityBucket) queryParams.append('validity_bucket', params.validityBucket);
         if (params?.issuedMonth) queryParams.append('issued_month', params.issuedMonth.toString());
         if (params?.issuedYear) queryParams.append('issued_year', params.issuedYear.toString());
+        if (params?.issuedWithinDays) queryParams.append('issued_within_days', params.issuedWithinDays.toString());
+        if (params?.expiringStart) queryParams.append('expiring_start', params.expiringStart);
+        if (params?.expiringEnd) queryParams.append('expiring_end', params.expiringEnd);
         // Signature/Hash filters
         if (params?.signature_algorithm) queryParams.append('signature_algorithm', params.signature_algorithm);
         if (params?.weak_hash) queryParams.append('weak_hash', params.weak_hash);
@@ -286,6 +354,8 @@ class ApiClient {
         if (params?.san_type) queryParams.append('san_type', params.san_type);
         if (params?.san_count_min !== undefined) queryParams.append('san_count_min', params.san_count_min.toString());
         if (params?.san_count_max !== undefined) queryParams.append('san_count_max', params.san_count_max.toString());
+        // Shared Keys filter
+        if (params?.shared_key) queryParams.append('shared_key', 'true');
         // Global filter params
         if (params?.startDate) queryParams.append('start_date', params.startDate);
         if (params?.endDate) queryParams.append('end_date', params.endDate);
@@ -445,6 +515,27 @@ class ApiClient {
         return this.fetch<SANWildcardBreakdown>('/san-wildcard-breakdown/');
     }
 
+    // Trends Analytics APIs
+    async getTrendsStats(): Promise<TrendsStats> {
+        return this.fetch<TrendsStats>('/trends/stats/');
+    }
+
+    async getExpirationForecast(months: number = 12): Promise<ExpirationForecastEntry[]> {
+        return this.fetch<ExpirationForecastEntry[]>(`/trends/expiration-forecast/?months=${months}`);
+    }
+
+    async getAlgorithmAdoption(months: number = 12): Promise<AlgorithmAdoptionEntry[]> {
+        return this.fetch<AlgorithmAdoptionEntry[]>(`/trends/algorithm-adoption/?months=${months}`);
+    }
+
+    async getValidationLevelTrends(months: number = 12): Promise<ValidationLevelTrendsEntry[]> {
+        return this.fetch<ValidationLevelTrendsEntry[]>(`/trends/validation-levels/?months=${months}`);
+    }
+
+    async getKeySizeTimeline(months: number = 12): Promise<KeySizeTimelineEntry[]> {
+        return this.fetch<KeySizeTimelineEntry[]>(`/trends/key-size-timeline/?months=${months}`);
+    }
+
     // Export certificates as CSV with filters
     async exportCertificates(params?: {
         signature_algorithm?: string;
@@ -472,6 +563,27 @@ class ApiClient {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    // Shared Keys Analytics APIs
+    async getSharedKeyStats(): Promise<SharedKeyStats> {
+        return this.fetch<SharedKeyStats>('/shared-keys/stats/');
+    }
+
+    async getSharedKeyDistribution(): Promise<SharedKeyDistributionEntry[]> {
+        return this.fetch<SharedKeyDistributionEntry[]>('/shared-keys/distribution/');
+    }
+
+    async getSharedKeysByIssuer(limit: number = 10): Promise<SharedKeyIssuerEntry[]> {
+        return this.fetch<SharedKeyIssuerEntry[]>(`/shared-keys/by-issuer/?limit=${limit}`);
+    }
+
+    async getSharedKeyTimeline(months: number = 12): Promise<SharedKeyTimelineEntry[]> {
+        return this.fetch<SharedKeyTimelineEntry[]>(`/shared-keys/timeline/?months=${months}`);
+    }
+
+    async getSharedKeyHeatmap(limit: number = 10): Promise<SharedKeyHeatmapEntry[]> {
+        return this.fetch<SharedKeyHeatmapEntry[]>(`/shared-keys/heatmap/?limit=${limit}`);
     }
 }
 
@@ -582,6 +694,40 @@ export interface IssuerAlgorithmEntry {
     algorithm: string;
     algorithmType: string;
     keySize: number;
+    count: number;
+}
+
+// Shared Keys Analytics types
+export interface SharedKeyStats {
+    unique_keys: number;
+    shared_key_groups: number;
+    certificates_at_risk: number;
+    most_affected_domain: {
+        name: string;
+        count: number;
+    };
+}
+
+export interface SharedKeyDistributionEntry {
+    bucket: string;
+    count: number;
+}
+
+export interface SharedKeyIssuerEntry {
+    issuer: string;
+    shared_certs: number;
+}
+
+export interface SharedKeyTimelineEntry {
+    month: string;
+    monthNum: number;
+    year: number;
+    count: number;
+}
+
+export interface SharedKeyHeatmapEntry {
+    issuer: string;
+    key_type: string;
     count: number;
 }
 

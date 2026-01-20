@@ -432,7 +432,7 @@ export default function SignatureHashPage() {
                 {/* Signature Algorithm Distribution Pie Chart with Legend Toggle */}
                 <Card title="Signature Algorithm Distribution" infoTooltip={cardInfoTooltips.algoDistribution}>
                     <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <PieChart>
                                 <Pie
                                     data={algorithmChartData}
@@ -564,7 +564,7 @@ export default function SignatureHashPage() {
                 ) : (
                     <>
                         <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                 <LineChart data={hashTrends || []} margin={{ left: 0, right: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                     <XAxis dataKey="period" stroke="#9ca3af" fontSize={12} />

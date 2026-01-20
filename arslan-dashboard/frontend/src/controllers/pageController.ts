@@ -72,6 +72,9 @@ export async function fetchCertificates(params?: {
     validityBucket?: string;
     issuedMonth?: number;
     issuedYear?: number;
+    issuedWithinDays?: number;  // Filter for certificates issued within N days
+    expiringStart?: string;
+    expiringEnd?: string;
     // Signature/Hash page filters
     signature_algorithm?: string;
     weak_hash?: string;
@@ -87,6 +90,8 @@ export async function fetchCertificates(params?: {
     san_type?: string;
     san_count_min?: number;
     san_count_max?: number;
+    // Shared Keys page filter
+    shared_key?: boolean;
 } & GlobalFilterParams): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
     try {
         const result = await apiClient.getCertificates(params);
