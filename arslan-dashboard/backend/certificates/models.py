@@ -416,10 +416,9 @@ class CertificateModel:
             query = base_filter.copy()
         
         if search:
-            query['$or'] = [
-                {'parsed.subject.common_name': {'$regex': search, '$options': 'i'}},
-                {'domain': {'$regex': search, '$options': 'i'}}
-            ]
+            # ⚡ OPTIMIZED: Use MongoDB text search index instead of regex
+            # Text index (idx_text_search) enables fast full-text search
+            query['$text'] = {'$search': search}
         
         if issuer:
             if issuer.lower() == 'others':
@@ -766,9 +765,15 @@ class CertificateModel:
             total = cls.collection.count_documents(query)
         
         # Get paginated results
-        # ✅ OPTIMIZATION: Sort by _id (indexed) and hint to use index for fast pagination
+        # ✅ OPTIMIZATION: Sort by _id (indexed) for fast pagination
+        # Note: Cannot use .hint() with $text search, MongoDB automatically uses text index
         skip = (page - 1) * page_size
-        cursor = cls.collection.find(query).sort('_id', 1).hint('_id_').skip(skip).limit(page_size)
+        if search:
+            # Text search: MongoDB automatically uses text index, no hint needed
+            cursor = cls.collection.find(query).sort('_id', 1).skip(skip).limit(page_size)
+        else:
+            # Regular query: Use hint to optimize with _id index
+            cursor = cls.collection.find(query).sort('_id', 1).hint('_id_').skip(skip).limit(page_size)
         
         certificates = []
         for doc in cursor:
@@ -1368,6 +1373,88 @@ class CertificateModel:
             })
             
         return ca_list
+    
+    @classmethod
+    def get_geographic_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+        """
+        ⚡ FAST VERSION: Get Geographic distribution from pre-computed collection
+        
+        This method reads from a materialized view that's updated periodically (every 6-12 hours)
+        by the compute_geographic_distribution.py script.
+        
+        Performance: ~0.01s (reads from pre-computed results)
+        
+        Limitation: 
+        - Does NOT support base_filter (global filters) - returns full pre-computed data
+        - If you need filtered results, falls back to get_geographic_distribution() (slow)
+        
+        Args:
+            limit: Number of top countries to return (default: 10)
+            base_filter: If provided, falls back to slow method (not supported)
+            
+        Returns:
+            List of geographic distribution data in API-ready format
+        """
+        
+        # If filter is provided, fall back to slow method
+        if base_filter:
+            print("[WARNING] Geographic Distribution: base_filter provided, falling back to slow aggregation")
+            return cls.get_geographic_distribution(limit=limit, base_filter=base_filter)
+        
+        try:
+            # Read from pre-computed collection
+            geo_collection = results_db['geographic-distribution']
+            
+            # Get metadata to check freshness
+            metadata = geo_collection.find_one({'_id': 'metadata'})
+            if not metadata:
+                print("[WARNING] Geographic Distribution: No pre-computed data found, falling back to slow method")
+                return cls.get_geographic_distribution(limit=limit, base_filter=None)
+            
+            # Check if data is stale (older than 24 hours)
+            last_computed = metadata.get('last_computed')
+            if last_computed:
+                # Ensure both datetimes are timezone-aware
+                now_utc = datetime.now(timezone.utc)
+                if isinstance(last_computed, datetime):
+                    # If last_computed is naive, make it aware (assume UTC)
+                    if last_computed.tzinfo is None:
+                        last_computed = last_computed.replace(tzinfo=timezone.utc)
+                    
+                    age_hours = (now_utc - last_computed).total_seconds() / 3600
+                    if age_hours > 24:
+                        print(f"[WARNING] Geographic Distribution: Pre-computed data is {age_hours:.1f} hours old")
+            
+            # Fetch top N countries
+            geo_records = list(
+                geo_collection
+                .find({'_id': {'$ne': 'metadata'}})  # Exclude metadata document
+                .sort('rank', 1)  # Sort by rank ascending
+                .limit(limit)
+            )
+            
+            if not geo_records:
+                print("[WARNING] Geographic Distribution: No records found, falling back to slow method")
+                return cls.get_geographic_distribution(limit=limit, base_filter=None)
+            
+            # Transform to API format
+            geo_list = [
+                {
+                    'id': record['geo_id'],
+                    'country': record['country'],
+                    'count': record['count'],
+                    'maxCount': record['max_count'],
+                    'percentage': record['percentage'],
+                    'color': record['color']
+                }
+                for record in geo_records
+            ]
+            
+            return geo_list
+            
+        except Exception as e:
+            print(f"[ERROR] Geographic Distribution Fast: {str(e)}, falling back to slow method")
+            return cls.get_geographic_distribution(limit=limit, base_filter=None)
     
     @classmethod
     def get_geographic_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:

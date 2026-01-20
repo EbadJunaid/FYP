@@ -54,6 +54,7 @@ arslan-dashboard/README-old.md
 
 arslan-dashboard/backend/node_modules
 
+arslan-dashboard/temp/
 arslan-dashboard/backend/CA_ANALYTICS_SETUP.md
 arslan-dashboard/backend/MULTIPLE_DATABASE_GUIDE.md
 arslan-dashboard/backend/UNDERSTANDING_INDEXES.md

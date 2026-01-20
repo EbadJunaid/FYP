@@ -325,7 +325,12 @@ class AnalyticsController:
     
     @staticmethod
     def get_geographic_distribution(limit: int = 10, global_filters: Optional[GlobalFilterParams] = None) -> List[Dict]:
-        """Get geographic distribution for chart (cached 5 min)"""
+        """
+        Get geographic distribution for chart
+        
+        ⚡ OPTIMIZED: Uses pre-computed materialized view for fast response (~0.01s)
+        Falls back to slow aggregation only if global filters are applied
+        """
         cache_params = {'limit': limit, **(global_filters.to_cache_key() if global_filters else {})}
         
         cached = cache.get('geographic', cache_params)
@@ -345,7 +350,9 @@ class AnalyticsController:
                 validation_levels=global_filters.validation_levels
             )
         
-        result = CertificateModel.get_geographic_distribution(limit=limit, base_filter=base_filter)
+        # ⚡ Use fast pre-computed method (automatically falls back if filter provided)
+        result = CertificateModel.get_geographic_distribution_fast(limit=limit, base_filter=base_filter)
+        
         cache.set('geographic', cache_params, result)
         return result
     
