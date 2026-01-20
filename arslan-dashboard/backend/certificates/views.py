@@ -952,8 +952,8 @@ class SignatureStatsView(View):
             if cached:
                 return json_response(cached)
             
-            # Get fresh data from model
-            result = CertificateModel.get_signature_stats()
+            # Get fresh data from pre-computed results (OPTIMIZED)
+            result = CertificateModel.get_signature_stats_fast()
             
             # Cache for 5 minutes
             cache.set(cache_key, {}, result, ttl=300)
@@ -989,8 +989,8 @@ class HashTrendsView(View):
             if cached:
                 return json_response(cached)
             
-            # Get fresh data from model
-            result = CertificateModel.get_hash_trends(months=months, granularity=granularity)
+            # Get fresh data from pre-computed results (OPTIMIZED)
+            result = CertificateModel.get_hash_trends_fast(months=months, granularity=granularity)
             
             # Cache for 10 minutes
             cache.set('hash_trends', cache_params, result, ttl=600)
@@ -1020,8 +1020,8 @@ class IssuerAlgorithmMatrixView(View):
             if cached:
                 return json_response(cached)
             
-            # Get fresh data from model
-            result = CertificateModel.get_issuer_algorithm_matrix(limit=limit)
+            # Get fresh data from pre-computed results (OPTIMIZED)
+            result = CertificateModel.get_issuer_algorithm_matrix_fast(limit=limit)
             
             # Cache for 10 minutes
             cache.set('issuer_matrix', cache_params, result, ttl=600)

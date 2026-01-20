@@ -293,7 +293,7 @@ class AnalyticsController:
         if cached:
             return cached
         
-        result = CertificateModel.get_ca_stats()
+        result = CertificateModel.get_ca_stats_fast()  # Using fast method
         cache.set('ca_stats', cache_params, result)
         return result
     
@@ -319,7 +319,7 @@ class AnalyticsController:
         if cached:
             return cached
         
-        result = CertificateModel.get_issuer_validation_matrix(limit=limit)
+        result = CertificateModel.get_issuer_validation_matrix_fast(limit=limit)  # Using fast method
         cache.set('issuer_validation_matrix', cache_params, result)
         return result
     
@@ -431,7 +431,8 @@ class ValidityAnalysisController:
         if cached:
             return cached
         
-        result = CertificateModel.get_validity_stats()
+        # Use fast pre-computed method (OPTIMIZED)
+        result = CertificateModel.get_validity_stats_fast()
         cache.set('validity_stats', cache_params, result)
         return result
     
@@ -444,7 +445,8 @@ class ValidityAnalysisController:
         if cached:
             return cached
         
-        result = CertificateModel.get_validity_distribution()
+        # Use fast pre-computed method (OPTIMIZED)
+        result = CertificateModel.get_validity_distribution_fast()
         cache.set('validity_distribution', cache_params, result)
         return result
     
@@ -457,7 +459,8 @@ class ValidityAnalysisController:
         if cached:
             return cached
         
-        result = CertificateModel.get_issuance_timeline()
+        # Use fast pre-computed method (OPTIMIZED)
+        result = CertificateModel.get_issuance_timeline_fast()
         cache.set('issuance_timeline', cache_params, result)
         return result
 
@@ -484,53 +487,53 @@ class SANAnalyticsController:
     
     @staticmethod
     def get_san_stats() -> Dict:
-        """Get SAN statistics for metric cards (cached 10 min)"""
+        """⚡ OPTIMIZED: Get SAN statistics from materialized view (cached 10 min)"""
         cache_params = {}
         
         cached = cache.get('san_stats', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_san_stats()
+        result = CertificateModel.get_san_stats_fast()  # ⚡ Changed to fast version
         cache.set('san_stats', cache_params, result)
         return result
     
     @staticmethod
     def get_san_distribution() -> List[Dict]:
-        """Get SAN count distribution histogram (cached 10 min)"""
+        """⚡ OPTIMIZED: Get SAN count distribution from materialized view (cached 10 min)"""
         cache_params = {}
         
         cached = cache.get('san_distribution', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_san_distribution()
+        result = CertificateModel.get_san_distribution_fast()  # ⚡ Changed to fast version
         cache.set('san_distribution', cache_params, result)
         return result
     
     @staticmethod
     def get_san_tld_breakdown(limit: int = 10) -> List[Dict]:
-        """Get top TLDs from SAN entries (cached 15 min)"""
+        """⚡ OPTIMIZED: Get top TLDs from materialized view (cached 15 min)"""
         cache_params = {'limit': limit}
         
         cached = cache.get('san_tld', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_san_tld_breakdown(limit=limit)
+        result = CertificateModel.get_san_tld_breakdown_fast(limit=limit)  # ⚡ Changed to fast version
         cache.set('san_tld', cache_params, result)
         return result
     
     @staticmethod
     def get_san_wildcard_breakdown() -> Dict:
-        """Get wildcard vs standard SAN breakdown (cached 10 min)"""
+        """⚡ OPTIMIZED: Get wildcard vs standard from materialized view (cached 10 min)"""
         cache_params = {}
         
         cached = cache.get('san_wildcard', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_san_wildcard_breakdown()
+        result = CertificateModel.get_san_wildcard_breakdown_fast()  # ⚡ Changed to fast version
         cache.set('san_wildcard', cache_params, result)
         return result
 
