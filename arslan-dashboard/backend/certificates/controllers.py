@@ -638,62 +638,62 @@ class SharedKeyController:
     
     @staticmethod
     def get_stats() -> Dict:
-        """Get shared key stats (cached 10 min)"""
+        """⚡ OPTIMIZED: Get shared key stats from materialized view (cached 10 min)"""
         cached = cache.get('shared_key_stats', {})
         if cached:
             return cached
         
-        result = CertificateModel.get_shared_key_stats()
+        result = CertificateModel.get_shared_key_stats_fast()  # ⚡ Changed to fast version
         cache.set('shared_key_stats', {}, result, ttl=600)
         return result
     
     @staticmethod
     def get_distribution() -> List:
-        """Get shared key group size distribution (cached 10 min)"""
+        """⚡ OPTIMIZED: Get shared key distribution from materialized view (cached 10 min)"""
         cached = cache.get('shared_key_distribution', {})
         if cached:
             return cached
         
-        result = CertificateModel.get_shared_key_distribution()
+        result = CertificateModel.get_shared_key_distribution_fast()  # ⚡ Changed to fast version
         cache.set('shared_key_distribution', {}, result, ttl=600)
         return result
     
     @staticmethod
     def get_by_issuer(limit: int = 10) -> List:
-        """Get shared key certs by issuer (cached 10 min)"""
+        """⚡ OPTIMIZED: Get shared key certs by issuer from materialized view (cached 10 min)"""
         cache_params = {'limit': limit}
         
         cached = cache.get('shared_key_issuer', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_shared_keys_by_issuer(limit)
+        result = CertificateModel.get_shared_keys_by_issuer_fast(limit)  # ⚡ Changed to fast version
         cache.set('shared_key_issuer', cache_params, result, ttl=600)
         return result
     
     @staticmethod
     def get_timeline(months: int = 12) -> List:
-        """Get shared key timeline (cached 15 min)"""
+        """⚡ OPTIMIZED: Get shared key timeline from materialized view (cached 15 min)"""
         cache_params = {'months': months}
         
         cached = cache.get('shared_key_timeline', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_shared_key_timeline(months)
+        result = CertificateModel.get_shared_key_timeline_fast(months)  # ⚡ Changed to fast version
         cache.set('shared_key_timeline', cache_params, result, ttl=900)
         return result
     
     @staticmethod
     def get_heatmap(limit: int = 10) -> List:
-        """Get issuer x key-type heatmap (cached 10 min)"""
+        """⚡ OPTIMIZED: Get issuer x key-type heatmap from materialized view (cached 10 min)"""
         cache_params = {'limit': limit}
         
         cached = cache.get('shared_key_heatmap', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_shared_key_heatmap(limit)
+        result = CertificateModel.get_shared_key_heatmap_fast(limit)  # ⚡ Changed to fast version
         cache.set('shared_key_heatmap', cache_params, result, ttl=600)
         return result
 
