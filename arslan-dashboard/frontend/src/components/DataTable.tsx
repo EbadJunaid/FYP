@@ -16,6 +16,7 @@ interface DataTableProps {
     onPageChange: (page: number) => void;
     showPagination?: boolean;
     enableNavigation?: boolean; // Navigate to certificate detail on click
+    showSanColumn?: boolean; // Show SAN Count column (for SAN Analytics page)
 }
 
 // SSL Grade Badge Component
@@ -67,7 +68,11 @@ const StatusBadge: React.FC<{ status: CertificateStatus }> = ({ status }) => {
 };
 
 // Vulnerabilities Badge
-const VulnBadge: React.FC<{ text: string }> = ({ text }) => {
+const VulnBadge: React.FC<{ text: string | undefined }> = ({ text }) => {
+    if (!text) {
+        return <span className="text-sm text-text-muted">N/A</span>;
+    }
+    
     const isCritical = text.toLowerCase().includes('critical');
     const isLow = text.toLowerCase().includes('low');
     const isMedium = text.toLowerCase().includes('medium');
@@ -91,6 +96,7 @@ export default function DataTable({
     onPageChange,
     showPagination = true,
     enableNavigation = true,
+    showSanColumn = false,
 }: DataTableProps) {
     const router = useRouter();
 
@@ -114,14 +120,16 @@ export default function DataTable({
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 Domain
                             </th>
+                            {showSanColumn && (
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
+                                    SAN Count
+                                </th>
+                            )}
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 Start Date
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 End Date
-                            </th>
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
-                                SSL Grade
                             </th>
                             <th className="text-left py-3 px-4 text-xs font-semibold text-text-muted uppercase tracking-wider">
                                 Encryption
@@ -143,7 +151,7 @@ export default function DataTable({
                     <tbody>
                         {data.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-8 text-center text-text-muted">
+                                <td colSpan={showSanColumn ? 9 : 8} className="py-8 text-center text-text-muted">
                                     No data available
                                 </td>
                             </tr>
@@ -162,14 +170,16 @@ export default function DataTable({
                                             <span className="text-sm font-medium text-text-primary">{entry.domain}</span>
                                         </div>
                                     </td>
+                                    {showSanColumn && (
+                                        <td className="py-4 px-4">
+                                            <span className="text-sm font-semibold text-accent-blue">{(entry as any).san_count || 0}</span>
+                                        </td>
+                                    )}
                                     <td className="py-4 px-4">
                                         <span className="text-sm text-text-secondary">{entry.scanDate}</span>
                                     </td>
                                     <td className="py-4 px-4">
                                         <span className="text-sm text-text-secondary">{entry.endDate || 'N/A'}</span>
-                                    </td>
-                                    <td className="py-4 px-4">
-                                        <GradeBadge grade={entry.sslGrade} />
                                     </td>
                                     <td className="py-4 px-4">
                                         <span className="text-xs font-mono text-text-secondary bg-background px-2 py-1 rounded">

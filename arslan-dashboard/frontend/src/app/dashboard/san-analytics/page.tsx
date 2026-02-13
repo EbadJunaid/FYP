@@ -11,7 +11,8 @@ import { CertificateIcon, AlertIcon, GlobeIcon } from '@/components/icons/Icons'
 import { fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
-import { apiClient, SANStats, SANDistributionEntry, SANTLDEntry, SANWildcardBreakdown } from '@/services/apiClient';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
+import { apiClient, SANStats, SANDistributionEntry, SANTLDEntry, SANWildcardBreakdown, SANFilteredCertsResponse } from '@/services/apiClient';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell
@@ -28,7 +29,7 @@ const cardInfoTooltips: Record<string, string> = {
 };
 
 // Filter types - added sanType for wildcard/standard pie click, tld for TLD bar click
-type FilterType = 'all' | 'wildcard' | 'multidomain' | 'bucket' | 'tld' | 'sanType';
+type FilterType = 'standard' | 'wildcard' | 'multidomain' | 'bucket' | 'tld' | 'sanType';
 
 // SWR fetchers
 const sanStatsFetcher = () => apiClient.getSANStats();
@@ -36,7 +37,7 @@ const sanDistributionFetcher = () => apiClient.getSANDistribution();
 const sanTldFetcher = () => apiClient.getSANTLDBreakdown(10);
 const sanWildcardFetcher = () => apiClient.getSANWildcardBreakdown();
 
-// Certificates fetcher with SAN filters
+// Certificates fetcher with SAN filters - ⚡ NOW USING FAST PRE-COMPUTED API!
 const certificatesFetcher = async (key: string) => {
     const parts = key.split('|');
     const filterType = parts[1] as FilterType;
@@ -44,42 +45,107 @@ const certificatesFetcher = async (key: string) => {
     const page = parseInt(parts[3]) || 1;
     const search = parts[4] || undefined;
 
-    // Build filter params based on filter type
-    let san_tld: string | undefined;
-    let san_type: string | undefined;
-    let san_count_min: number | undefined;
-    let san_count_max: number | undefined;
+    // If searching, use slow API (fetchCertificates)
+    if (search) {
+        // Build filter params for legacy API
+        let san_tld: string | undefined;
+        let san_type: string | undefined;
+        let san_count_min: number | undefined;
+        let san_count_max: number | undefined;
 
-    if (filterType === 'wildcard') {
-        // From Wildcard Certs metric card
-        san_type = 'wildcard';
-    } else if (filterType === 'sanType') {
-        // From pie chart click - filterValue is 'wildcard' or 'standard'
-        san_type = filterValue;
-    } else if (filterType === 'tld') {
-        // From TLD bar chart click - filterValue is the TLD like ".com"
-        san_tld = filterValue;
-    } else if (filterType === 'bucket' && filterValue) {
-        // From SAN Count Distribution histogram click
-        // filterValue is like "0-0", "1-1", "2-3", "6-10", "50-1000"
-        const [min, max] = filterValue.split('-').map(Number);
-        if (!isNaN(min)) san_count_min = min;
-        if (!isNaN(max)) san_count_max = max;
-    } else if (filterType === 'multidomain') {
-        // Multi-Domain Certs card - certificates with 5+ SANs
-        san_count_min = 5;
-        san_count_max = 1000;
+        if (filterType === 'wildcard') {
+            san_type = 'wildcard';
+        } else if (filterType === 'sanType') {
+            san_type = filterValue;
+        } else if (filterType === 'tld') {
+            san_tld = filterValue;
+        } else if (filterType === 'bucket' && filterValue) {
+            const [min, max] = filterValue.split('-').map(Number);
+            if (!isNaN(min)) san_count_min = min;
+            if (!isNaN(max)) san_count_max = max;
+        } else if (filterType === 'multidomain') {
+            san_count_min = 5;
+            san_count_max = 1000;
+        }
+
+        return fetchCertificates({
+            page,
+            pageSize: 10,
+            search,
+            san_tld,
+            san_type,
+            san_count_min,
+            san_count_max,
+        });
     }
 
-    return fetchCertificates({
+    // ⚡ Use fast pre-computed API for filtered results!
+    let apiFilterType: 'wildcard' | 'standard' | 'multi-domain' | 'san-count' | 'tld';
+    let apiFilterValue: string | undefined;
+
+    if (filterType === 'standard') {
+        apiFilterType = 'standard';
+    } else if (filterType === 'wildcard' || filterType === 'sanType' && filterValue === 'wildcard') {
+        apiFilterType = 'wildcard';
+    } else if (filterType === 'multidomain') {
+        apiFilterType = 'multi-domain';
+    } else if (filterType === 'bucket') {
+        apiFilterType = 'san-count';
+        // Convert bucket range to API format (e.g., "2-3" stays "2-3", "50-1000" becomes "50+")
+        if (filterValue === '50-1000') {
+            apiFilterValue = '50+';
+        } else if (filterValue === '0-0') {
+            apiFilterValue = '0';
+        } else if (filterValue === '1-1') {
+            apiFilterValue = '1';
+        } else {
+            apiFilterValue = filterValue;
+        }
+    } else if (filterType === 'tld') {
+        apiFilterType = 'tld';
+        apiFilterValue = filterValue;
+    } else {
+        // Fallback to legacy API
+        return fetchCertificates({ page, pageSize: 10 });
+    }
+
+    // Call fast API
+    const response = await apiClient.getSANFilteredCerts({
+        filter_type: apiFilterType,
+        filter_value: apiFilterValue,
         page,
-        pageSize: 10,
-        search,
-        san_tld,
-        san_type,
-        san_count_min,
-        san_count_max,
+        page_size: 10,
     });
+
+    // Transform fast API response to match fetchCertificates format
+    return {
+        certificates: response.certificates.map((cert, index) => ({
+            id: `${cert.cert_id}-${cert.domain}-${index}`,  // ⚡ Use unique combination to avoid duplicate keys
+            cert_id: cert.cert_id,  // Keep original cert_id for navigation
+            domain: cert.domain,
+            san_count: cert.san_count,  // ⚡ Keep this for table display
+            sample_sans: cert.sample_sans,
+            issuer: Array.isArray(cert.issuer) ? cert.issuer[0] : cert.issuer,
+            expiry: cert.expiry,
+            grade: 'N/A' as const,
+            status: 'VALID' as const,
+            // ⚡ NOW enriched from main collection!
+            vulnerabilities: cert.vulnerabilities || undefined,
+            issuer_org: Array.isArray(cert.issuer) ? cert.issuer[0] : cert.issuer,
+            common_name: cert.domain,
+            scanDate: cert.expiry ? new Date(cert.expiry).toISOString().split('T')[0] : 'N/A',
+            endDate: cert.expiry,
+            sslGrade: 'N/A' as any,
+            encryptionType: cert.encryption || 'Unknown',
+            country: cert.country || 'Unknown',
+        } as any)),
+        pagination: {
+            page: response.page,
+            pageSize: response.page_size,
+            totalPages: Math.ceil(response.total / response.page_size),
+            total: response.total,
+        },
+    };
 };
 
 // Chart colors
@@ -90,15 +156,23 @@ export default function SANAnalyticsPage() {
     const router = useRouter();
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
+    const dbKey = useDatabaseKey('san');
 
     // State for filters
-    const [filterType, setFilterType] = useState<FilterType>('all');
+    const [filterType, setFilterType] = useState<FilterType>('standard');
     const [filterValue, setFilterValue] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const [isRestoring, setIsRestoring] = useState(true);
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+
+    // Clear search query on unmount
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     // Restore state on mount
     useEffect(() => {
@@ -120,33 +194,31 @@ export default function SANAnalyticsPage() {
 
     // SWR data fetching
     const { data: sanStats, isLoading: isStatsLoading } = useSWR<SANStats>(
-        'san-stats',
+        `san-stats|${dbKey}`,
         sanStatsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     const { data: sanDistribution, isLoading: isDistLoading } = useSWR<SANDistributionEntry[]>(
-        'san-distribution',
+        `san-distribution|${dbKey}`,
         sanDistributionFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
     const { data: sanTlds, isLoading: isTldLoading } = useSWR<SANTLDEntry[]>(
-        'san-tld',
+        `san-tld|${dbKey}`,
         sanTldFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
     const { data: wildcardBreakdown, isLoading: isWildcardLoading } = useSWR<SANWildcardBreakdown>(
-        'san-wildcard',
+        `san-wildcard|${dbKey}`,
         sanWildcardFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
-    // Build SWR key for certificates - handle boolean filters separately
-    const swrKey = filterType === 'all'
-        ? `san-certs|all||${currentPage}|${searchQuery || ''}`
-        : `san-certs|${filterType}|${filterValue}|${currentPage}|${searchQuery || ''}`;
+    // Build SWR key for certificates
+    const swrKey = `san-certs|${filterType}|${filterValue}|${currentPage}|${searchQuery || ''}|${dbKey}`;
 
     const { data: certsData, isLoading: isCertsLoading } = useSWR(
         swrKey,
@@ -184,7 +256,9 @@ export default function SANAnalyticsPage() {
             page: currentPage,
             scrollY: window.scrollY
         }));
-        router.push(`/certificate/${entry.id}`);
+        // Use cert_id if available, otherwise fallback to id
+        const certId = (entry as any).cert_id || entry.id;
+        router.push(`/certificate/${certId}`);
     }, [filterType, filterValue, currentPage, router]);
 
     const handlePageChange = useCallback((page: number) => {
@@ -194,15 +268,15 @@ export default function SANAnalyticsPage() {
     }, []);
 
     const handleBucketClick = useCallback((bucket: string) => {
-        // Convert bucket label to range
+        // Convert bucket label to range for backend
         const bucketRanges: Record<string, string> = {
             '0': '0-0',
             '1': '1-1',
             '2-3': '2-3',
             '4-5': '4-5',
             '6-10': '6-10',
-            '11-20': '11-20',
-            '21-50': '21-50',
+            '11-30': '11-30',
+            '31-50': '31-50',
             '50+': '50-1000',
         };
         handleCardClick('bucket', bucketRanges[bucket] || bucket);
@@ -211,12 +285,13 @@ export default function SANAnalyticsPage() {
     // Get table title
     const getTableTitle = () => {
         switch (filterType) {
+            case 'standard': return 'Standard Certificates (with SANs, no wildcards)';
             case 'wildcard': return 'Wildcard Certificates';
             case 'sanType': return filterValue === 'wildcard' ? 'Wildcard SAN Certificates' : 'Standard SAN Certificates';
             case 'multidomain': return 'Multi-Domain Certificates (5+ SANs)';
             case 'bucket': return `Certificates with ${filterValue.replace('-', ' to ')} SANs`;
             case 'tld': return `Certificates with ${filterValue} TLD`;
-            default: return 'All Certificates';
+            default: return 'Standard Certificates (with SANs, no wildcards)';
         }
     };
 
@@ -228,12 +303,13 @@ export default function SANAnalyticsPage() {
 
     // Get active filter for download
     const getActiveFilter = () => {
+        if (filterType === 'standard') return { type: 'san' as const, value: 'standard' };
         if (filterType === 'wildcard') return { type: 'san' as const, value: 'wildcard' };
         if (filterType === 'sanType') return { type: 'san' as const, value: filterValue }; // 'wildcard' or 'standard'
         if (filterType === 'multidomain') return { type: 'san' as const, value: 'multidomain' };
         if (filterType === 'bucket') return { type: 'san' as const, value: `count:${filterValue}` };
         if (filterType === 'tld') return { type: 'san' as const, value: `tld:${filterValue}` };
-        return { type: 'all' as const, value: '' };
+        return { type: 'san' as const, value: 'standard' }; // Default to standard
     };
 
     // Loading state
@@ -423,32 +499,44 @@ export default function SANAnalyticsPage() {
                         <div className="flex items-center gap-2">
                             {/* Quick Filter Buttons */}
                             <button
-                                onClick={() => handleCardClick('all', '')}
-                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === 'all'
+                                onClick={() => handleCardClick('standard', '')}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === 'standard'
                                     ? 'bg-primary-blue/20 text-primary-blue'
                                     : 'text-text-secondary hover:text-primary-blue hover:bg-primary-blue/10'
                                     }`}
                             >
-                                All
+                                Standard
                             </button>
                             <button
-                                onClick={() => handleCardClick('sanType', 'wildcard')}
-                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === 'sanType' && filterValue === 'wildcard'
+                                onClick={() => handleCardClick('wildcard', '')}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === 'wildcard'
                                     ? 'bg-accent-yellow/20 text-accent-yellow'
                                     : 'text-text-secondary hover:text-accent-yellow hover:bg-accent-yellow/10'
                                     }`}
                             >
                                 Wildcard
                             </button>
-                            <button
-                                onClick={() => handleCardClick('sanType', 'standard')}
-                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === 'sanType' && filterValue === 'standard'
-                                    ? 'bg-accent-green/20 text-accent-green'
-                                    : 'text-text-secondary hover:text-accent-green hover:bg-accent-green/10'
-                                    }`}
+
+                            {/* SAN Count Dropdown */}
+                            <select
+                                value={filterType === 'bucket' ? filterValue : ''}
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        handleBucketClick(e.target.value);
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-sm font-medium rounded-md bg-card-bg border border-card-border text-text-secondary hover:text-primary-blue focus:outline-none focus:ring-2 focus:ring-primary-blue/50"
                             >
-                                Standard
-                            </button>
+                                <option value="">SAN Count...</option>
+                                <option value="0">0 SANs</option>
+                                <option value="1">1 SAN</option>
+                                <option value="2-3">2-3 SANs</option>
+                                <option value="4-5">4-5 SANs</option>
+                                <option value="6-10">6-10 SANs</option>
+                                <option value="11-30">11-30 SANs</option>
+                                <option value="31-50">31-50 SANs</option>
+                                <option value="50+">50+ SANs</option>
+                            </select>
 
                             <div className="w-px h-5 bg-border-default mx-1" />
                             {/* Download Button */}
@@ -476,6 +564,7 @@ export default function SANAnalyticsPage() {
                                 totalPages={totalPages}
                                 onPageChange={handlePageChange}
                                 onRowClick={handleRowClick}
+                                showSanColumn={true}
                             />
                         )}
                     </div>

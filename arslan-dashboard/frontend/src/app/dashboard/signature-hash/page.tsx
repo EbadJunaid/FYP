@@ -9,6 +9,7 @@ import DownloadModal from '@/components/DownloadModal';
 import { apiClient, SignatureStats, HashTrendEntry, IssuerAlgorithmEntry } from '@/services/apiClient';
 import { fetchCertificates } from '@/controllers/pageController';
 import { useSearch } from '@/context/SearchContext';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
     LineChart, Line, XAxis, YAxis, CartesianGrid
@@ -115,11 +116,19 @@ export default function SignatureHashPage() {
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
     const [isRestoring, setIsRestoring] = useState(true);
+    const dbKey = useDatabaseKey('signature');
 
     const STORAGE_KEY = 'signature-hash-state';
 
     // Search context integration
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+
+    // Clear search query on unmount
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     // Restore state from sessionStorage on mount
     useEffect(() => {
@@ -178,25 +187,25 @@ export default function SignatureHashPage() {
 
     // SWR hooks for data fetching
     const { data: signatureStats, isLoading: statsLoading } = useSWR<SignatureStats>(
-        'signature-stats',
+        `signature-stats|${dbKey}`,
         signatureStatsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     const { data: hashTrends, isLoading: trendsLoading } = useSWR<HashTrendEntry[]>(
-        'hash-trends',
+        `hash-trends|${dbKey}`,
         hashTrendsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
     const { data: issuerMatrix } = useSWR<IssuerAlgorithmEntry[]>(
-        'issuer-matrix',
+        `issuer-matrix|${dbKey}`,
         issuerMatrixFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
     // Certificates data with filter and search
-    const swrKey = `sig-certs|${activeFilter}|${filterValue}|${currentPage}|${searchQuery || ''}`;
+    const swrKey = `sig-certs|${activeFilter}|${filterValue}|${currentPage}|${searchQuery || ''}|${dbKey}`;
     const { data: certificatesData, isLoading: certsLoading } = useSWR(
         swrKey,
         certificatesFetcher,

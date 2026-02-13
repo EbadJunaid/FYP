@@ -13,6 +13,7 @@ from .controllers import (
     AnalyticsController,
     NotificationController
 )
+from .db import MongoDBClient
 
 
 def json_response(data, status=200):
@@ -410,6 +411,37 @@ class SANWildcardBreakdownView(View):
             from .controllers import SANAnalyticsController
             data = SANAnalyticsController.get_san_wildcard_breakdown()
             return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SANFilteredCertsView(View):
+    """
+    GET /api/san-filtered-certs?filter_type=wildcard&page=1&page_size=50
+    GET /api/san-filtered-certs?filter_type=san-count&filter_value=50+&page=1
+    GET /api/san-filtered-certs?filter_type=tld&filter_value=.com&page=1
+    
+    Returns filtered certificates from pre-computed collections (fast!)
+    """
+    def get(self, request):
+        try:
+            from .controllers import SANAnalyticsController
+            
+            filter_type = request.GET.get('filter_type', 'wildcard')
+            filter_value = request.GET.get('filter_value', None)
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 50))
+            
+            data = SANAnalyticsController.get_san_filtered_certs(
+                filter_type=filter_type,
+                filter_value=filter_value,
+                page=page,
+                page_size=page_size
+            )
+            return json_response(data)
+        except ValueError as e:
+            return json_response({'error': str(e)}, status=400)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
 
@@ -1081,6 +1113,62 @@ class ValidityDistributionView(View):
 #             return json_response({'error': str(e)}, status=500)
 
 
+# ========== DATABASE MANAGEMENT VIEWS ==========
+
+@csrf_exempt
+def get_current_database(request):
+    """GET /api/databases/current/ - Get current database configuration"""
+    if request.method != 'GET':
+        return json_response({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        current_db = MongoDBClient.get_current_database()
+        return json_response(current_db)
+    except Exception as e:
+        return json_response({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def get_available_databases(request):
+    """GET /api/databases/available/ - Get all available databases"""
+    if request.method != 'GET':
+        return json_response({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        databases = MongoDBClient.get_available_databases()
+        return json_response(databases)
+    except Exception as e:
+        return json_response({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def switch_database(request):
+    """POST /api/databases/switch/ - Switch to a different database"""
+    if request.method != 'POST':
+        return json_response({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        db_id = data.get('database_id')
+        
+        if not db_id:
+            return json_response({'error': 'database_id is required'}, status=400)
+        
+        success = MongoDBClient.switch_database(db_id)
+        
+        if success:
+            current_db = MongoDBClient.get_current_database()
+            return json_response({
+                'success': True,
+                'message': f'Successfully switched to {current_db["name"]}',
+                'current_database': current_db
+            })
+        else:
+            return json_response({'error': 'Invalid database_id'}, status=400)
+    except Exception as e:
+        return json_response({'error': str(e)}, status=500)
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class NotificationView(View):
     """
@@ -1388,3 +1476,83 @@ class SharedKeyHeatmapView(View):
         limit = int(request.GET.get('limit', 10))
         heatmap = SharedKeyController.get_heatmap(limit)
         return json_response(heatmap)
+
+class SharedKeysListView(View):
+    """
+    GET /api/shared-keys/list
+    Returns paginated list of shared key groups for table view
+    Query params: page, page_size, sort_by, sort_order, risk_level, key_type, min_cert_count, issuer
+    """
+    def get(self, request):
+        from .controllers import SharedKeyController
+        
+        try:
+            # Get query parameters
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+            sort_by = request.GET.get('sort_by', 'certificate_count')
+            sort_order = request.GET.get('sort_order', 'desc')
+            risk_level = request.GET.get('risk_level')
+            key_type = request.GET.get('key_type')
+            min_cert_count = request.GET.get('min_cert_count')
+            issuer = request.GET.get('issuer')
+            
+            # Convert min_cert_count to int if provided
+            if min_cert_count:
+                min_cert_count = int(min_cert_count)
+            
+            # Get list from controller
+            result = SharedKeyController.get_list(
+                page=page,
+                page_size=page_size,
+                sort_by=sort_by,
+                sort_order=sort_order,
+                risk_level=risk_level,
+                key_type=key_type,
+                min_cert_count=min_cert_count,
+                issuer=issuer
+            )
+            
+            return json_response({
+                'success': True,
+                'data': result
+            })
+        
+        except ValueError as e:
+            return json_response({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+        except Exception as e:
+            return json_response({
+                'success': False,
+                'error': 'Failed to fetch shared keys list'
+            }, status=500)
+
+
+class SharedKeyDetailView(View):
+    """
+    GET /api/shared-keys/detail/<public_key_hash>
+    Returns full details for a specific shared key group
+    """
+    def get(self, request, public_key_hash):
+        from .controllers import SharedKeyController
+        
+        try:
+            result = SharedKeyController.get_detail(public_key_hash)
+            
+            return json_response({
+                'success': True,
+                'data': result
+            })
+        
+        except ValueError as e:
+            return json_response({
+                'success': False,
+                'error': str(e)
+            }, status=404)
+        except Exception as e:
+            return json_response({
+                'success': False,
+                'error': 'Failed to fetch shared key details'
+            }, status=500)

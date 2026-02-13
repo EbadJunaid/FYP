@@ -8,6 +8,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { useSearch } from '@/context/SearchContext';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import Card from '@/components/Card';
 import MetricCard from '@/components/dashboard/MetricCard';
 import DataTable from '@/components/DataTable';
@@ -110,6 +111,7 @@ export default function TrendsAnalyticsPage() {
     const router = useRouter();
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
+    const dbKey = useDatabaseKey('trends');
 
     // State for filters
     const [filterType, setFilterType] = useState<FilterType>('all');
@@ -118,7 +120,14 @@ export default function TrendsAnalyticsPage() {
     const [isRestoring, setIsRestoring] = useState(true);
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+
+    // Clear search query on unmount
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     // Restore state on mount
     useEffect(() => {
@@ -152,28 +161,28 @@ export default function TrendsAnalyticsPage() {
     }, [filterType, filterValue, currentPage, isRestoring]);
 
     // SWR data fetching
-    const { data: trendsStats, isLoading: isStatsLoading } = useSWR('trends-stats', trendsStatsFetcher, {
+    const { data: trendsStats, isLoading: isStatsLoading } = useSWR(`trends-stats|${dbKey}`, trendsStatsFetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
     });
 
-    const { data: expirationForecast, isLoading: isForecastLoading } = useSWR('expiration-forecast', expirationForecastFetcher, {
+    const { data: expirationForecast, isLoading: isForecastLoading } = useSWR(`expiration-forecast|${dbKey}`, expirationForecastFetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
     });
 
-    const { data: algorithmAdoption, isLoading: isAlgoLoading } = useSWR('algorithm-adoption', algorithmAdoptionFetcher, {
+    const { data: algorithmAdoption, isLoading: isAlgoLoading } = useSWR(`algorithm-adoption|${dbKey}`, algorithmAdoptionFetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
     });
 
-    const { data: validationTrends, isLoading: isValidationLoading } = useSWR('validation-trends', validationTrendsFetcher, {
+    const { data: validationTrends, isLoading: isValidationLoading } = useSWR(`validation-trends|${dbKey}`, validationTrendsFetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
     });
 
     // Key size timeline for animated chart
-    const { data: keySizeTimeline, isLoading: isKeySizeLoading } = useSWR('key-size-timeline', keySizeTimelineFetcher, {
+    const { data: keySizeTimeline, isLoading: isKeySizeLoading } = useSWR(`key-size-timeline|${dbKey}`, keySizeTimelineFetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
     });
@@ -219,7 +228,7 @@ export default function TrendsAnalyticsPage() {
     };
 
     // Certificates with filters
-    const certsKey = isRestoring ? null : `certs|${filterType}|${filterValue}|${currentPage}|${searchQuery}`;
+    const certsKey = isRestoring ? null : `certs|${filterType}|${filterValue}|${currentPage}|${searchQuery}|${dbKey}`;
     const { data: certsData, isLoading: isCertsLoading } = useSWR(certsKey, certificatesFetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 30000,

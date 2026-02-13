@@ -30,6 +30,7 @@ from .views import (
     SANDistributionView,
     SANTLDBreakdownView,
     SANWildcardBreakdownView,
+    SANFilteredCertsView,
     # Trends Analytics page views
     TrendsStatsView,
     ExpirationForecastView,
@@ -42,6 +43,12 @@ from .views import (
     SharedKeyByIssuerView,
     SharedKeyTimelineView,
     SharedKeyHeatmapView,
+    SharedKeysListView,
+    SharedKeyDetailView,
+    # Database Management view functions
+    get_current_database,
+    get_available_databases,
+    switch_database,
 )
 
 urlpatterns = [
@@ -84,6 +91,7 @@ urlpatterns = [
     path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
     path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
     path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
+    path('san-filtered-certs/', SANFilteredCertsView.as_view(), name='san_filtered_certs'),
     
     # Trends Analytics APIs
     path('trends/stats/', TrendsStatsView.as_view(), name='trends_stats'),
@@ -98,7 +106,14 @@ urlpatterns = [
     path('shared-keys/by-issuer/', SharedKeyByIssuerView.as_view(), name='shared_key_by_issuer'),
     path('shared-keys/timeline/', SharedKeyTimelineView.as_view(), name='shared_key_timeline'),
     path('shared-keys/heatmap/', SharedKeyHeatmapView.as_view(), name='shared_key_heatmap'),
+    path('shared-keys/list/', SharedKeysListView.as_view(), name='shared_keys_list'),
+    path('shared-keys/detail/<str:public_key_hash>/', SharedKeyDetailView.as_view(), name='shared_key_detail'),
     
     # Notifications API
     path('notifications/', NotificationView.as_view(), name='notifications'),
+    
+    # Database Management APIs
+    path('databases/current/', get_current_database, name='current_database'),
+    path('databases/available/', get_available_databases, name='available_databases'),
+    path('databases/switch/', switch_database, name='switch_database'),
 ]

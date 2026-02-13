@@ -549,6 +549,30 @@ class SANAnalyticsController:
         result = CertificateModel.get_san_wildcard_breakdown_fast()  # ⚡ Changed to fast version
         cache.set('san_wildcard', cache_params, result)
         return result
+    
+    @staticmethod
+    def get_san_filtered_certs(filter_type: str, filter_value: str = None, 
+                              page: int = 1, page_size: int = 50) -> Dict:
+        """⚡ OPTIMIZED: Get filtered certificates from pre-computed collections (cached 2 min)"""
+        cache_params = {
+            'filter_type': filter_type,
+            'filter_value': filter_value,
+            'page': page,
+            'page_size': page_size
+        }
+        
+        cached = cache.get('san_filtered_certs', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_san_filtered_certs_fast(
+            filter_type=filter_type,
+            filter_value=filter_value,
+            page=page,
+            page_size=page_size
+        )
+        cache.set('san_filtered_certs', cache_params, result)
+        return result
 
 
 class TrendsController:
@@ -695,6 +719,53 @@ class SharedKeyController:
         
         result = CertificateModel.get_shared_key_heatmap_fast(limit)  # ⚡ Changed to fast version
         cache.set('shared_key_heatmap', cache_params, result, ttl=600)
+        return result
+    
+    @staticmethod
+    def get_list(page: int = 1, page_size: int = 10, sort_by: str = 'certificate_count', 
+                 sort_order: str = 'desc', risk_level: str = None, key_type: str = None,
+                 min_cert_count: int = None, issuer: str = None) -> Dict:
+        """Get paginated list of shared key groups for table view (cached 5 min)"""
+        cache_params = {
+            'page': page, 
+            'page_size': page_size,
+            'sort_by': sort_by,
+            'sort_order': sort_order,
+            'risk_level': risk_level,
+            'key_type': key_type,
+            'min_cert_count': min_cert_count,
+            'issuer': issuer
+        }
+        
+        cached = cache.get('shared_keys_list', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_keys_list(
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            risk_level=risk_level,
+            key_type=key_type,
+            min_cert_count=min_cert_count,
+            issuer=issuer
+        )
+        
+        cache.set('shared_keys_list', cache_params, result, ttl=300)  # Cache for 5 minutes
+        return result
+    
+    @staticmethod
+    def get_detail(public_key_hash: str) -> Dict:
+        """Get full details for a specific shared key group (cached 10 min)"""
+        cache_params = {'public_key_hash': public_key_hash}
+        
+        cached = cache.get('shared_key_detail', cache_params)
+        if cached:
+            return cached
+        
+        result = CertificateModel.get_shared_key_detail(public_key_hash)
+        cache.set('shared_key_detail', cache_params, result, ttl=600)
         return result
 
 

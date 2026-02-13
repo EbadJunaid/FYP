@@ -103,6 +103,19 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
     const [pagination, setPagination] = useState<PaginationState>(initialPagination);
     const [activeFilter, setActiveFilter] = useState<ActiveFilter>({ type: 'all' });
 
+    // Use refs for values needed in callbacks to avoid recreating callbacks
+    const activeFilterRef = useRef(activeFilter);
+    const paginationRef = useRef(pagination);
+    
+    // Update refs when state changes
+    useEffect(() => {
+        activeFilterRef.current = activeFilter;
+    }, [activeFilter]);
+    
+    useEffect(() => {
+        paginationRef.current = pagination;
+    }, [pagination]);
+
     // Page cache to avoid re-fetching previously loaded pages
     // Key format: "filterType:filterValue:page" -> cached result
     const pageCacheRef = useRef<Map<string, { certificates: ScanEntry[]; total: number }>>(new Map());
@@ -156,6 +169,7 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 }));
             }).catch((error) => {
                 console.error('Error loading fast APIs:', error);
+                setState((prev) => ({ ...prev, isLoading: false }));
             });
 
             // Phase 2: Load SLOW APIs independently (global-health, future-risk)
@@ -208,9 +222,10 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 error: 'Failed to load dashboard data. Please try again.',
             }));
         }
-    }, []);
+    }, []); // Empty deps for stable reference
 
-    // Load data on mount
+    // Load data on mount - runs when component mounts
+    // Also re-runs if loadDashboardData reference changes (won't happen with empty deps)
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
@@ -450,14 +465,18 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
     }, [getCacheKey]);
 
     // Set page for pagination - fetches new page data from API
+    // Using refs to avoid recreating callback on every pagination/filter change
     const setPage = useCallback(async (page: number) => {
-        const maxPage = Math.ceil(pagination.totalItems / pagination.itemsPerPage);
+        const currentPagination = paginationRef.current;
+        const currentActiveFilter = activeFilterRef.current;
+        
+        const maxPage = Math.ceil(currentPagination.totalItems / currentPagination.itemsPerPage);
         const newPage = Math.max(1, Math.min(page, maxPage));
 
-        if (newPage === pagination.currentPage) return;
+        if (newPage === currentPagination.currentPage) return;
 
         // Check page cache first
-        const cacheKey = getCacheKey(activeFilter.type, activeFilter.value, newPage);
+        const cacheKey = getCacheKey(currentActiveFilter.type, currentActiveFilter.value, newPage);
         const cachedData = pageCacheRef.current.get(cacheKey);
 
         if (cachedData) {
@@ -481,8 +500,8 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
             let result;
             const pageSize = 10;
 
-            // Fetch based on active filter type
-            switch (activeFilter.type) {
+            // Fetch based on active filter type - use ref value
+            switch (currentActiveFilter.type) {
                 case 'all':
                     result = await fetchCertificates({ page: newPage, pageSize });
                     break;
@@ -497,18 +516,18 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                     result = await fetchCertificates({ page: newPage, pageSize, hasVulnerabilities: true });
                     break;
                 case 'ca':
-                    result = await fetchCertificates({ page: newPage, pageSize, issuer: activeFilter.value });
+                    result = await fetchCertificates({ page: newPage, pageSize, issuer: currentActiveFilter.value });
                     break;
                 case 'geographic':
-                    result = await fetchCertificates({ page: newPage, pageSize, country: activeFilter.value });
+                    result = await fetchCertificates({ page: newPage, pageSize, country: currentActiveFilter.value });
                     break;
                 case 'encryption':
-                    result = await fetchCertificates({ page: newPage, pageSize, encryptionType: activeFilter.value });
+                    result = await fetchCertificates({ page: newPage, pageSize, encryptionType: currentActiveFilter.value });
                     break;
                 case 'validityTrend':
                     // Parse month/year from value like "Jan 2026"
                     const vMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    const vParts = (activeFilter.value as string)?.split(' ') || [];
+                    const vParts = (currentActiveFilter.value as string)?.split(' ') || [];
                     const vMonthName = vParts[0];
                     const vYear = parseInt(vParts[1] || '2026');
                     const vMonthIndex = vMonthNames.indexOf(vMonthName) + 1;
@@ -538,7 +557,7 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
             console.error('Pagination error:', error);
             setState((prev) => ({ ...prev, isLoading: false }));
         }
-    }, [activeFilter, pagination.totalItems, pagination.itemsPerPage, pagination.currentPage, getCacheKey]);
+    }, [getCacheKey]); // Only depends on getCacheKey now!
 
     // Reset filters and refresh data
     const resetFilters = useCallback(() => {

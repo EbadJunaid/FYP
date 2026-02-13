@@ -4,60 +4,73 @@ import React, { useState, useCallback, useRef, useTransition, useEffect } from '
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import Card from '@/components/Card';
-import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
-import DownloadModal from '@/components/DownloadModal';
 import { CertificateIcon, AlertIcon, ShieldIcon, KeyIcon } from '@/components/icons/Icons';
-import { fetchCertificates } from '@/controllers/pageController';
-import { ScanEntry } from '@/types/dashboard';
-import { useSearch } from '@/context/SearchContext';
+import { useSearchOptional } from '@/context/SearchContext';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import {
     apiClient,
     SharedKeyStats,
     SharedKeyDistributionEntry,
     SharedKeyIssuerEntry,
-    SharedKeyTimelineEntry,
     SharedKeyHeatmapEntry
 } from '@/services/apiClient';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    AreaChart, Area, Cell
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
+
+// TypeScript interfaces for shared keys list
+interface SharedKeyIssuerInfo {
+    organization: string;
+    common_name?: string;
+    certificate_count: number;
+}
+
+interface SharedKeyListItem {
+    public_key_hash: string;
+    public_key_hash_short: string;
+    certificate_count: number;
+    total_domains: number;
+    sample_domains: string[];
+    total_sans: number;
+    sample_sans: string[];
+    key_type: string;
+    issuers: SharedKeyIssuerInfo[];
+    issuer_count: number;
+    risk_level: 'HIGH' | 'MEDIUM' | 'LOW';
+}
 
 const STORAGE_KEY = 'shared-keys-state';
 
 // Card info tooltips
 const cardInfoTooltips: Record<string, string> = {
-    uniqueKeys: 'Total number of distinct public keys across all certificates.',
-    sharedGroups: 'Number of public keys that appear in more than one certificate. Click to view all at-risk certificates.',
+    totalKeys: 'Total number of distinct public keys in the system, including both shared and unique keys.',
+    uniqueKeys: 'Number of public keys that are used by only ONE certificate (truly unique, not shared with any other certificate).',
+    sharedGroups: 'Number of public keys that appear in more than one certificate (security risk).',
     atRisk: 'Total certificates that share a public key with at least one other certificate.',
     mostAffected: 'The domain with the most certificates sharing a single key.',
 };
-
-// Filter type
-type FilterType = 'all' | 'shared' | 'issuer' | 'bucket';
 
 // SWR fetchers
 const statsFetcher = () => apiClient.getSharedKeyStats();
 const distributionFetcher = () => apiClient.getSharedKeyDistribution();
 const issuerFetcher = () => apiClient.getSharedKeysByIssuer(10);
-const timelineFetcher = () => apiClient.getSharedKeyTimeline(12);
 const heatmapFetcher = () => apiClient.getSharedKeyHeatmap(10);
 
-// Certificates fetcher with shared key filters
-const certificatesFetcher = async (key: string) => {
+// Shared keys list fetcher
+const sharedKeysListFetcher = async (key: string) => {
     const parts = key.split('|');
-    const filterType = parts[1];
-    const filterValue = parts[2];
-    const page = parseInt(parts[3]) || 1;
-    const search = parts[4] || undefined;
-
-    return fetchCertificates({
-        page,
-        pageSize: 10,
-        search,
-        shared_key: filterType === 'shared' ? true : undefined,
-    });
+    const page = parseInt(parts[1]) || 1;
+    const pageSize = parseInt(parts[2]) || 10;
+    const sortBy = parts[3] || 'certificate_count';
+    const sortOrder = parts[4] || 'desc';
+    
+    const response = await fetch(`http://localhost:8000/api/shared-keys/list/?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`);
+    const json = await response.json();
+    if (json.success && json.data) {
+        return json.data;
+    }
+    return { results: [], pagination: { total: 0, total_pages: 0 } };
 };
 
 // Chart colors
@@ -67,24 +80,31 @@ export default function SharedKeysPage() {
     const router = useRouter();
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
+    const dbKey = useDatabaseKey('shared-keys');
 
-    // State for filters
-    const [filterType, setFilterType] = useState<FilterType>('all');
-    const [filterValue, setFilterValue] = useState<string>('');
+    // Clear search query on unmount
+    const searchContext = useSearchOptional();
+    useEffect(() => {
+        return () => {
+            if (searchContext) {
+                searchContext.setSearchQuery('');
+            }
+        };
+    }, [searchContext]);
+
+    // State for table
     const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('certificate_count');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [isRestoring, setIsRestoring] = useState(true);
-    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
-
-    const { searchQuery } = useSearch();
 
     // Restore state on mount
     useEffect(() => {
         try {
             const saved = sessionStorage.getItem(STORAGE_KEY);
             if (saved) {
-                const { filterType: ft, filterValue: fv, page, scrollY } = JSON.parse(saved);
-                if (ft) setFilterType(ft);
-                if (fv) setFilterValue(fv);
+                const { page, scrollY } = JSON.parse(saved);
                 if (page) setCurrentPage(page);
                 if (scrollY) setTimeout(() => window.scrollTo(0, scrollY), 150);
                 sessionStorage.removeItem(STORAGE_KEY);
@@ -99,86 +119,76 @@ export default function SharedKeysPage() {
     const saveState = useCallback(() => {
         try {
             sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-                filterType,
-                filterValue,
                 page: currentPage,
                 scrollY: window.scrollY
             }));
         } catch (e) {
             console.error('Error saving state:', e);
         }
-    }, [filterType, filterValue, currentPage]);
+    }, [currentPage]);
 
     // API Data fetching with SWR
     const { data: stats, isLoading: isStatsLoading } = useSWR<SharedKeyStats>(
-        'shared-key-stats',
+        `shared-key-stats|${dbKey}`,
         statsFetcher,
         { dedupingInterval: 300000, revalidateOnFocus: false }
     );
 
     const { data: distribution, isLoading: isDistLoading } = useSWR<SharedKeyDistributionEntry[]>(
-        'shared-key-distribution',
+        `shared-key-distribution|${dbKey}`,
         distributionFetcher,
         { dedupingInterval: 300000, revalidateOnFocus: false }
     );
 
     const { data: issuerData, isLoading: isIssuerLoading } = useSWR<SharedKeyIssuerEntry[]>(
-        'shared-key-issuer',
+        `shared-key-issuer|${dbKey}`,
         issuerFetcher,
         { dedupingInterval: 300000, revalidateOnFocus: false }
     );
 
-    const { data: timeline, isLoading: isTimelineLoading } = useSWR<SharedKeyTimelineEntry[]>(
-        'shared-key-timeline',
-        timelineFetcher,
-        { dedupingInterval: 600000, revalidateOnFocus: false }
-    );
-
     const { data: heatmap, isLoading: isHeatmapLoading } = useSWR<SharedKeyHeatmapEntry[]>(
-        'shared-key-heatmap',
+        `shared-key-heatmap|${dbKey}`,
         heatmapFetcher,
         { dedupingInterval: 300000, revalidateOnFocus: false }
     );
 
-    // Certificates table data
-    const { data: certificatesData, isLoading: isTableLoading } = useSWR(
-        isRestoring ? null : `shared-certs|${filterType}|${filterValue}|${currentPage}|${searchQuery}`,
-        certificatesFetcher,
+    // Shared keys list data (NEW)
+    const { data: sharedKeysResponse, isLoading: isTableLoading } = useSWR(
+        isRestoring ? null : `shared-keys-list|${currentPage}|${pageSize}|${sortBy}|${sortOrder}|${dbKey}`,
+        sharedKeysListFetcher,
         { dedupingInterval: 60000, revalidateOnFocus: false }
     );
 
-    const tableData: ScanEntry[] = certificatesData?.certificates || [];
-    const totalPages = certificatesData?.pagination?.totalPages || 1;
-    const totalItems = certificatesData?.pagination?.total || 0;
+    const sharedKeysList: SharedKeyListItem[] = sharedKeysResponse?.results || [];
+    const totalPages = sharedKeysResponse?.pagination?.total_pages || 1;
+    const totalItems = sharedKeysResponse?.pagination?.total || 0;
 
     // Handlers
-    const handleCardClick = useCallback((type: FilterType, value?: string) => {
-        startTransition(() => {
-            setFilterType(type);
-            setFilterValue(value || '');
-            setCurrentPage(1);
-        });
-        setTimeout(() => {
-            tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-    }, []);
-
     const handlePageChange = useCallback((page: number) => {
         setCurrentPage(page);
     }, []);
 
-    const handleRowClick = useCallback((entry: ScanEntry) => {
+    const handleRowClick = useCallback((publicKeyHash: string) => {
         saveState();
-        router.push(`/certificate/${entry.id}`);
+        router.push(`/dashboard/shared-keys/${publicKeyHash}`);
     }, [saveState, router]);
 
-    // Get table title based on filter
-    const getTableTitle = () => {
-        if (filterType === 'shared') return 'Certificates with Shared Keys';
-        if (filterType === 'issuer') return `Certificates by Issuer: ${filterValue}`;
-        if (filterType === 'bucket') return `Certificates in Group Size: ${filterValue}`;
-        return 'All Certificates';
-    };
+    const handleSort = useCallback((field: string) => {
+        if (sortBy === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(field);
+            setSortOrder('desc');
+        }
+        setCurrentPage(1);
+    }, [sortBy, sortOrder]);
+
+    const handleCardClick = useCallback((type: string) => {
+        // Scroll to the shared keys table
+        if (tableRef.current) {
+            tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, []);
 
     // Transform heatmap data for display
     const getHeatmapData = (): { issuerMap: Record<string, Record<string, number>>; keyTypeList: string[] } => {
@@ -211,12 +221,18 @@ export default function SharedKeysPage() {
                 </div>
             </div>
 
-            {/* Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Metric Cards - First Row: Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <MetricCard
+                    label="Total Public Keys"
+                    value={stats?.total_public_keys?.toLocaleString() || '0'}
+                    icon={<KeyIcon className="w-6 h-6 text-primary-blue" />}
+                    infoTooltip={cardInfoTooltips.totalKeys}
+                />
                 <MetricCard
                     label="Unique Public Keys"
-                    value={stats?.unique_keys?.toLocaleString() || '0'}
-                    icon={<CertificateIcon className="w-6 h-6 text-primary-blue" />}
+                    value={stats?.unique_public_keys?.toLocaleString() || '0'}
+                    icon={<CertificateIcon className="w-6 h-6 text-primary-green" />}
                     infoTooltip={cardInfoTooltips.uniqueKeys}
                 />
                 <MetricCard
@@ -235,7 +251,7 @@ export default function SharedKeysPage() {
                 />
                 <MetricCard
                     label="Most Affected Domain"
-                    value={stats?.most_affected_domain?.name?.substring(0, 20) || 'N/A'}
+                    value={stats?.most_affected_domain?.name || 'N/A'}
                     icon={<KeyIcon className="w-6 h-6 text-primary-purple" />}
                     infoTooltip={cardInfoTooltips.mostAffected}
                 />
@@ -317,41 +333,6 @@ export default function SharedKeysPage() {
                 </Card>
             </div>
 
-            {/* Timeline */}
-            <Card title="Key Reuse Timeline" subtitle="New certificates per month joining shared key groups" infoTooltip="Shows trend of key reuse over time. An upward trend indicates growing security risk.">
-                <div className="h-72">
-                    {isTimelineLoading ? (
-                        <div className="flex items-center justify-center h-full">
-                            <div className="text-text-muted">Loading...</div>
-                        </div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <AreaChart data={timeline || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="sharedGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
-                                <YAxis stroke="#9ca3af" fontSize={12} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="count"
-                                    stroke="#ef4444"
-                                    fill="url(#sharedGradient)"
-                                    strokeWidth={2}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    )}
-                </div>
-            </Card>
-
             {/* Heatmap Table */}
             <Card title="Issuer × Key Type Matrix" infoTooltip="Shows which issuer/key-type combinations have the most shared keys.">
                 <div className="overflow-x-auto">
@@ -408,71 +389,162 @@ export default function SharedKeysPage() {
                 </div>
             </Card>
 
-            {/* Certificates Table */}
+            {/* Shared Keys Table */}
             <div ref={tableRef}>
                 <Card
-                    title={getTableTitle()}
-                    subtitle="Certificates potentially affected by shared key vulnerabilities"
-                    headerAction={
-                        <div className="flex items-center gap-3">
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => handleCardClick('all')}
-                                    className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${filterType === 'all'
-                                        ? 'bg-primary-blue text-white'
-                                        : 'bg-card-bg text-text-secondary border border-card-border hover:bg-card-border'
-                                        }`}
-                                >
-                                    All
-                                </button>
-                                <button
-                                    onClick={() => handleCardClick('shared')}
-                                    className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${filterType === 'shared'
-                                        ? 'bg-primary-blue text-white'
-                                        : 'bg-card-bg text-text-secondary border border-card-border hover:bg-card-border'
-                                        }`}
-                                >
-                                    At Risk
-                                </button>
-                            </div>
-                            <button
-                                onClick={() => setIsDownloadModalOpen(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                            </button>
-                        </div>
-                    }
+                    title="Shared Key Groups"
+                    subtitle={`${totalItems} groups with certificates sharing the same public key`}
                 >
                     <div className={`transition-opacity duration-200 ${isTableLoading || isPending ? 'opacity-50' : 'opacity-100'}`}>
-                        {tableData.length === 0 && isTableLoading ? (
+                        {isTableLoading ? (
                             <div className="flex items-center justify-center h-64">
-                                <div className="text-text-muted">Loading certificates...</div>
+                                <div className="text-text-muted">Loading shared key groups...</div>
+                            </div>
+                        ) : sharedKeysList.length === 0 ? (
+                            <div className="flex items-center justify-center h-64">
+                                <div className="text-text-muted">No shared key groups found</div>
                             </div>
                         ) : (
-                            <DataTable
-                                data={tableData}
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={handlePageChange}
-                                onRowClick={handleRowClick}
-                            />
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-card-border">
+                                            <th className="text-left py-3 px-4 text-text-secondary font-medium cursor-pointer hover:text-text-primary"
+                                                onClick={() => handleSort('public_key_hash')}>
+                                                Public Key Hash
+                                            </th>
+                                            <th className="text-center py-3 px-4 text-text-secondary font-medium cursor-pointer hover:text-text-primary"
+                                                onClick={() => handleSort('certificate_count')}>
+                                                Cert Count {sortBy === 'certificate_count' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th className="text-left py-3 px-4 text-text-secondary font-medium">
+                                                Sample Domains
+                                            </th>
+                                            <th className="text-left py-3 px-4 text-text-secondary font-medium">
+                                                Issuers
+                                            </th>
+                                            <th className="text-center py-3 px-4 text-text-secondary font-medium cursor-pointer hover:text-text-primary"
+                                                onClick={() => handleSort('total_sans')}>
+                                                Total SANs {sortBy === 'total_sans' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th className="text-center py-3 px-4 text-text-secondary font-medium">
+                                                Key Type
+                                            </th>
+                                            <th className="text-center py-3 px-4 text-text-secondary font-medium cursor-pointer hover:text-text-primary"
+                                                onClick={() => handleSort('risk_level')}>
+                                                Risk {sortBy === 'risk_level' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th className="text-center py-3 px-4 text-text-secondary font-medium">
+                                                Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sharedKeysList.map((group) => (
+                                            <tr key={group.public_key_hash} 
+                                                className="border-b border-card-border/50 hover:bg-card-border/20 cursor-pointer transition-colors"
+                                                onClick={() => handleRowClick(group.public_key_hash)}>
+                                                <td className="py-3 px-4 font-mono text-xs text-text-primary">
+                                                    <div className="flex items-center gap-2">
+                                                        <span title={group.public_key_hash}>{group.public_key_hash_short || group.public_key_hash.substring(0, 16)}...</span>
+                                                    </div>
+                                                </td>
+                                                <td className="text-center py-3 px-4">
+                                                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-blue/20 text-primary-blue">
+                                                        {group.certificate_count}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-4 text-text-primary">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {group.sample_domains.slice(0, 2).map((domain, idx) => (
+                                                            <span key={idx} className="text-xs truncate max-w-[200px]" title={domain}>{domain}</span>
+                                                        ))}
+                                                        {group.total_domains > 2 && (
+                                                            <span className="text-xs text-text-muted">+{group.total_domains - 2} more</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 text-text-primary">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {group.issuers.slice(0, 2).map((issuer, idx) => (
+                                                            <span key={idx} className="text-xs truncate max-w-[180px]" title={issuer.organization}>
+                                                                {issuer.organization} ({issuer.certificate_count})
+                                                            </span>
+                                                        ))}
+                                                        {group.issuer_count > 2 && (
+                                                            <span className="text-xs text-text-muted">+{group.issuer_count - 2} more</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="text-center py-3 px-4">
+                                                    <div className="flex flex-col items-center gap-0.5">
+                                                        <span className="text-sm font-semibold text-text-primary">{group.total_sans}</span>
+                                                        {group.sample_sans.length > 0 && (
+                                                            <span className="text-xs text-text-muted" title={group.sample_sans.join(', ')}>
+                                                                {group.sample_sans.slice(0, 3).join(', ')}...
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="text-center py-3 px-4">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-card-border text-text-primary">
+                                                        {group.key_type}
+                                                    </span>
+                                                </td>
+                                                <td className="text-center py-3 px-4">
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                                        group.risk_level === 'HIGH' ? 'bg-red-500/20 text-red-500' :
+                                                        group.risk_level === 'MEDIUM' ? 'bg-orange-500/20 text-orange-500' :
+                                                        'bg-green-500/20 text-green-500'
+                                                    }`}>
+                                                        {group.risk_level}
+                                                    </span>
+                                                </td>
+                                                <td className="text-center py-3 px-4">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRowClick(group.public_key_hash);
+                                                        }}
+                                                        className="px-3 py-1 text-xs font-medium text-primary-blue hover:text-primary-blue/80 transition-colors"
+                                                    >
+                                                        View Details →
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+
+                                {/* Pagination */}
+                                {totalPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4 px-4 py-3 border-t border-card-border">
+                                        <div className="text-sm text-text-muted">
+                                            Showing page {currentPage} of {totalPages} ({totalItems} total groups)
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handlePageChange(currentPage - 1)}
+                                                disabled={currentPage === 1}
+                                                className="px-3 py-1.5 text-sm rounded-lg border border-card-border text-text-primary hover:bg-card-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                Previous
+                                            </button>
+                                            <button
+                                                onClick={() => handlePageChange(currentPage + 1)}
+                                                disabled={currentPage === totalPages}
+                                                className="px-3 py-1.5 text-sm rounded-lg border border-card-border text-text-primary hover:bg-card-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </Card>
             </div>
-
-            {/* Download Modal */}
-            <DownloadModal
-                isOpen={isDownloadModalOpen}
-                onClose={() => setIsDownloadModalOpen(false)}
-                currentPageData={tableData}
-                activeFilter={{ type: 'all' }}
-                totalCount={totalItems}
-            />
         </div>
     );
 }

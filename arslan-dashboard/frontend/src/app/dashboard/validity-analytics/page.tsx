@@ -11,6 +11,7 @@ import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageCont
 import { ScanEntry, DashboardMetrics } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
 import { apiClient, ValidityStats, ValidityDistributionEntry, IssuanceTimelineEntry, ValidityTrend } from '@/services/apiClient';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     Legend, PieChart, Pie, Cell
@@ -137,8 +138,16 @@ export default function ValidityAnalyticsPage() {
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
     const [isRestoring, setIsRestoring] = useState(true);
+    const dbKey = useDatabaseKey('validity');
 
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+
+    // Clear search query on unmount
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     const STORAGE_KEY = 'validity-analytics-state';
 
@@ -205,36 +214,36 @@ export default function ValidityAnalyticsPage() {
 
     // SWR hooks
     const { data: validityStats, isLoading: isStatsLoading } = useSWR<ValidityStats>(
-        'validity-stats',
+        `validity-stats|${dbKey}`,
         validityStatsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     const { data: distribution, isLoading: isDistLoading } = useSWR<ValidityDistributionEntry[]>(
-        'validity-distribution',
+        `validity-distribution|${dbKey}`,
         validityDistributionFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     const { data: timeline, isLoading: isTimelineLoading } = useSWR<IssuanceTimelineEntry[]>(
-        'issuance-timeline',
+        `issuance-timeline|${dbKey}`,
         issuanceTimelineFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     const { data: validityTrends, isLoading: isTrendsLoading } = useSWR<ValidityTrend[]>(
-        ['validity-trends', granularity],
+        ['validity-trends', granularity, dbKey],
         () => apiClient.getValidityTrends(12, granularity),
         { revalidateOnFocus: false, dedupingInterval: 300000, keepPreviousData: true }
     );
 
     const { data: metrics } = useSWR<DashboardMetrics>(
-        'dashboard-metrics',
+        `dashboard-metrics|${dbKey}`,
         metricsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
-    const swrKey = `validity-certs|${filter}|${currentPage}|${searchQuery || ''}`;
+    const swrKey = `validity-certs|${filter}|${currentPage}|${searchQuery || ''}|${dbKey}`;
     const { data: tableResult, isLoading: isTableLoading } = useSWR(
         swrKey,
         certificatesFetcher,

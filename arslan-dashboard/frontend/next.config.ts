@@ -1,7 +1,9 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
+  // ... your existing config
+  devIndicators: {
+    buildActivity: false,       // Hides build indicator
+    buildActivityPosition: 'bottom-right',
+  },
+  // or completely disable:
+  reactStrictMode: true,
 };
-
-export default nextConfig;

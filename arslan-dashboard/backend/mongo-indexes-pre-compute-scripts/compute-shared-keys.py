@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Pre-compute Shared Keys Analytics - stores all shared key data
-This script should be run periodically (e.g., every 6-12 hours via cron job)
+Pre-compute Shared Keys Analytics with Detailed Certificate Data
+This script stores comprehensive information for each shared key group
+for both table view and detail page display.
 """
 
 import sys
@@ -30,14 +31,37 @@ def print_error(message):
 def print_info(message):
     print_progress(f"ℹ {message}", YELLOW)
 
+def get_key_size(cert):
+    """Extract key size from certificate"""
+    try:
+        if cert.get('parsed', {}).get('subject_key_info', {}).get('rsa_public_key'):
+            return cert['parsed']['subject_key_info']['rsa_public_key'].get('length', 0)
+        elif cert.get('parsed', {}).get('subject_key_info', {}).get('ecdsa_public_key'):
+            return cert['parsed']['subject_key_info']['ecdsa_public_key'].get('length', 0)
+        return 0
+    except:
+        return 0
+
+def calculate_days_until_expiry(validity_end_str):
+    """Calculate days until certificate expiry"""
+    try:
+        if not validity_end_str:
+            return None
+        end_date = datetime.fromisoformat(validity_end_str.replace('Z', '+00:00'))
+        now = datetime.now(timezone.utc)
+        delta = end_date - now
+        return delta.days
+    except:
+        return None
+
 def main():
     print_progress("=" * 70, BOLD)
-    print_progress("SHARED KEYS ANALYTICS MATERIALIZED VIEW GENERATOR", BOLD)
+    print_progress("SHARED KEYS DETAILED ANALYTICS GENERATOR", BOLD)
     print_progress("=" * 70, BOLD)
     print()
     
     # Connect to MongoDB
-    print_progress("Step 1/5: Connecting to MongoDB...")
+    print_progress("Step 1/4: Connecting to MongoDB...")
     try:
         client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
@@ -46,35 +70,38 @@ def main():
         print_error("Failed to connect to MongoDB. Is it running?")
         sys.exit(1)
     
-    print_progress("Step 2/5: Accessing source database...")
+    print_progress("Step 2/4: Accessing databases...")
     source_db = client['tranco-latest-8-lakh']
     source_collection = source_db['certificates']
     
     total_docs = source_collection.estimated_document_count()
     print_success(f"Found {total_docs:,} total certificates")
     
-    print_progress("Step 3/5: Setting up target database...")
     target_db = client['tranco-latest-8-lakh-results']
     
-    # Clear old collections completely
-    print_info("Clearing old collections...")
-    for coll_name in ['shared-keys-groups', 'shared-keys-stats', 'shared-keys-distribution', 
-                      'shared-keys-by-issuer', 'shared-keys-timeline', 'shared-keys-heatmap']:
+    # Clear ALL old shared keys collections
+    print_info("Deleting old shared keys collections...")
+    old_collections = [
+        'shared-keys-groups', 'shared-keys-stats', 'shared-keys-distribution', 
+        'shared-keys-by-issuer', 'shared-keys-timeline', 'shared-keys-heatmap'
+    ]
+    for coll_name in old_collections:
         try:
             target_db[coll_name].drop()
-        except Exception as e:
-            pass  # Ignore if collection doesn't exist
+            print_info(f"  Dropped: {coll_name}")
+        except Exception:
+            pass
     
-    print_success("Target collections ready")
+    print_success("Old collections deleted")
     
-    print_progress("Step 4/5: Computing shared key groups...")
-    print_info("This will take 3-5 minutes to analyze all certificates...")
+    print_progress("Step 3/4: Identifying shared keys...")
+    print_info("This will take 10-15 minutes to analyze all certificates...")
     print()
     
     start_time = datetime.now()
     
-    # Step A: Find all truly shared keys (keys with 2+ distinct cert fingerprints)
-    print_info("Step 4A: Identifying truly shared public keys...")
+    # Find all shared public keys
+    print_info("Finding shared public keys...")
     shared_keys_pipeline = [
         {'$match': {
             'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
@@ -98,273 +125,333 @@ def main():
         print_error("No shared keys found. Exiting.")
         sys.exit(0)
     
-    # Store shared key groups for fast lookup
-    print_info("Storing shared key groups...")
-    groups_collection = target_db['shared-keys-groups']
+    # Process each shared key group and collect detailed certificate information
+    print_info("Processing shared key groups for detailed information...")
+    print_info(f"This will process {len(shared_key_groups):,} groups...")
+    print()
     
-    shared_fingerprints = []
-    groups_docs = []
-    for i, group in enumerate(shared_key_groups):
-        shared_fingerprints.append(group['_id'])
-        groups_docs.append({
-            '_id': group['_id'],
-            'distinct_certs': group['distinct_certs'],
-            'cert_count': group['cert_count'],
-            'computed_at': datetime.now(timezone.utc)
-        })
+    detailed_collection = target_db['shared-keys-detailed']
+    processed_count = 0
+    total_certs_at_risk = 0
     
-    if groups_docs:
-        groups_collection.insert_many(groups_docs)
-        groups_collection.create_index('distinct_certs')
-        print_success(f"Stored {len(groups_docs):,} shared key groups")
+    for idx, group in enumerate(shared_key_groups):
+        if (idx + 1) % 100 == 0:
+            print_info(f"  Processed {idx + 1:,}/{len(shared_key_groups):,} groups...")
+        
+        public_key_hash = group['_id']
+        
+        # Fetch all certificates using this public key
+        certificates = list(source_collection.find({
+            'parsed.subject_key_info.fingerprint_sha256': public_key_hash
+        }))
+        
+        if not certificates:
+            continue
+        
+        # Extract detailed information for each certificate
+        certificate_details = []
+        all_domains = set()
+        all_sans = []
+        issuer_map = {}
+        
+        for cert in certificates:
+            try:
+                parsed = cert.get('parsed', {})
+                extensions = parsed.get('extensions', {})
+                san_ext = extensions.get('subject_alt_name', {})
+                sans = san_ext.get('dns_names', [])
+                
+                # Get issuer information
+                issuer_info = parsed.get('issuer', {})
+                issuer_org = issuer_info.get('organization', ['Unknown'])[0] if issuer_info.get('organization') else 'Unknown'
+                issuer_cn = issuer_info.get('common_name', ['Unknown'])[0] if issuer_info.get('common_name') else 'Unknown'
+                issuer_dn = parsed.get('issuer_dn', 'Unknown')
+                issuer_country = issuer_info.get('country', ['Unknown'])[0] if issuer_info.get('country') else 'Unknown'
+                
+                # Track issuer count
+                if issuer_org not in issuer_map:
+                    issuer_map[issuer_org] = {'name': issuer_org, 'cn': issuer_cn, 'count': 0}
+                issuer_map[issuer_org]['count'] += 1
+                
+                # Get validity information
+                validity = parsed.get('validity', {})
+                validity_start = validity.get('start', '')
+                validity_end = validity.get('end', '')
+                validity_length_seconds = validity.get('length', 0)
+                validity_days = validity_length_seconds / 86400 if validity_length_seconds else 0
+                
+                days_until_expiry = calculate_days_until_expiry(validity_end)
+                is_expired = days_until_expiry is not None and days_until_expiry < 0
+                is_expiring_soon = days_until_expiry is not None and 0 <= days_until_expiry < 30
+                
+                # Get subject information
+                subject_info = parsed.get('subject', {})
+                subject_cn = subject_info.get('common_name', ['Unknown'])[0] if subject_info.get('common_name') else 'Unknown'
+                subject_dn = parsed.get('subject_dn', 'Unknown')
+                
+                # Get key information
+                key_info = parsed.get('subject_key_info', {})
+                key_algo = key_info.get('key_algorithm', {}).get('name', 'Unknown')
+                key_size = get_key_size(cert)
+                key_type = f"{key_algo}-{key_size}" if key_size > 0 else key_algo
+                
+                # Get signature information
+                signature_info = parsed.get('signature_algorithm', {})
+                signature_algo = signature_info.get('name', 'Unknown')
+                
+                # Get validation level
+                validation_level = parsed.get('validation_level', 'Unknown')
+                
+                # Check for wildcard SANs
+                wildcard_sans = [san for san in sans if '*' in san]
+                has_wildcard = len(wildcard_sans) > 0
+                
+                # Get certificate fingerprint
+                cert_fingerprint = parsed.get('fingerprint_sha256', 'Unknown')
+                
+                # Get certificate ID (MongoDB _id)
+                cert_id = str(cert.get('_id', ''))
+                
+                # Get serial number
+                serial_number = parsed.get('serial_number', 'Unknown')
+                
+                # Get self-signed status
+                is_self_signed = parsed.get('signature', {}).get('self_signed', False)
+                
+                # Get domain
+                domain = cert.get('domain', 'Unknown')
+                all_domains.add(domain)
+                all_sans.extend(sans)
+                
+                # Get scanned_at
+                scanned_at = cert.get('scanned_at')
+                if scanned_at:
+                    scanned_at = scanned_at.isoformat() if hasattr(scanned_at, 'isoformat') else str(scanned_at)
+                
+                # Extended key usage
+                eku = extensions.get('extended_key_usage', {})
+                extended_key_usage = []
+                if eku.get('server_auth'):
+                    extended_key_usage.append('serverAuth')
+                if eku.get('client_auth'):
+                    extended_key_usage.append('clientAuth')
+                
+                # OCSP and issuer URLs
+                aia = extensions.get('authority_info_access', {})
+                ocsp_urls = aia.get('ocsp_urls', [])
+                issuer_urls = aia.get('issuer_urls', [])
+                
+                # Build certificate detail object
+                cert_detail = {
+                    'certificate_id': cert_id,  # MongoDB _id for linking to detail page
+                    'certificate_fingerprint': cert_fingerprint,
+                    'certificate_fingerprint_short': cert_fingerprint[:16] if cert_fingerprint != 'Unknown' else 'Unknown',
+                    'domain': domain,
+                    'sans': sans,
+                    'sans_count': len(sans),
+                    'has_wildcard': has_wildcard,
+                    'wildcard_sans': wildcard_sans,
+                    'subject_cn': subject_cn,
+                    'subject_dn': subject_dn,
+                    'issuer_organization': issuer_org,
+                    'issuer_cn': issuer_cn,
+                    'issuer_dn': issuer_dn,
+                    'issuer_country': issuer_country,
+                    'validity_start': validity_start,
+                    'validity_end': validity_end,
+                    'validity_days': int(validity_days),
+                    'is_expired': is_expired,
+                    'days_until_expiry': days_until_expiry,
+                    'is_expiring_soon': is_expiring_soon,
+                    'validation_level': validation_level,
+                    'key_algorithm': key_algo,
+                    'key_size': key_size,
+                    'key_type': key_type,
+                    'signature_algorithm': signature_algo,
+                    'is_self_signed': is_self_signed,
+                    'serial_number': str(serial_number),
+                    'extended_key_usage': extended_key_usage,
+                    'ocsp_urls': ocsp_urls,
+                    'issuer_urls': issuer_urls,
+                    'scanned_at': scanned_at
+                }
+                
+                certificate_details.append(cert_detail)
+                
+            except Exception as e:
+                print_error(f"Error processing certificate: {str(e)}")
+                continue
+        
+        if not certificate_details:
+            continue
+        
+        # Calculate risk level
+        cert_count = len(certificate_details)
+        total_sans = len(set(all_sans))
+        
+        if cert_count >= 5 or total_sans >= 20:
+            risk_level = 'HIGH'
+        elif cert_count >= 3 or total_sans >= 10:
+            risk_level = 'MEDIUM'
+        else:
+            risk_level = 'LOW'
+        
+        # Generate risk factors
+        risk_factors = [
+            f"{cert_count} certificates share the same private key",
+            f"{len(all_domains)} different domains affected",
+            f"{total_sans} SANs at risk if private key is compromised"
+        ]
+        
+        if len(issuer_map) > 1:
+            risk_factors.append(f"Certificates from {len(issuer_map)} different Certificate Authorities")
+        
+        # Get most affected domain (domain with most SANs)
+        domain_sans_count = {}
+        for cert_detail in certificate_details:
+            domain = cert_detail['domain']
+            sans_count = cert_detail['sans_count']
+            if domain not in domain_sans_count or sans_count > domain_sans_count[domain]:
+                domain_sans_count[domain] = sans_count
+        
+        most_affected_domain = max(domain_sans_count.items(), key=lambda x: x[1]) if domain_sans_count else ('Unknown', 0)
+        
+        # Get key type from first certificate
+        key_type = certificate_details[0]['key_type']
+        key_algo = certificate_details[0]['key_algorithm']
+        key_size = certificate_details[0]['key_size']
+        
+        # Build issuers list
+        issuers_list = [
+            {
+                'organization': issuer_data['name'],
+                'common_name': issuer_data['cn'],
+                'certificate_count': issuer_data['count']
+            }
+            for issuer_data in issuer_map.values()
+        ]
+        
+        # Sort issuers by count descending
+        issuers_list.sort(key=lambda x: x['certificate_count'], reverse=True)
+        
+        # Sample domains (first 3)
+        sample_domains = list(all_domains)[:3]
+        
+        # Sample SANs (first 5 unique)
+        unique_sans = list(set(all_sans))
+        sample_sans = unique_sans[:5]
+        
+        # Build final document
+        document = {
+            '_id': public_key_hash,
+            'public_key_hash': public_key_hash,
+            'public_key_hash_short': public_key_hash[:16],
+            
+            # Summary for table view
+            'certificate_count': cert_count,
+            'total_domains': len(all_domains),
+            'sample_domains': sample_domains,
+            'total_sans': total_sans,
+            'sample_sans': sample_sans,
+            'unique_sans': unique_sans,
+            
+            # Key information
+            'key_algorithm': key_algo,
+            'key_size': key_size,
+            'key_type': key_type,
+            
+            # Issuers
+            'issuers': issuers_list,
+            'issuer_count': len(issuers_list),
+            
+            # Risk assessment
+            'risk_level': risk_level,
+            'risk_factors': risk_factors,
+            
+            # Most affected
+            'most_affected_domain': {
+                'domain': most_affected_domain[0],
+                'sans_count': most_affected_domain[1]
+            },
+            
+            # Full certificate details for detail page
+            'certificates': certificate_details,
+            
+            # Metadata
+            'computed_at': datetime.now(timezone.utc),
+            'last_updated': datetime.now(timezone.utc)
+        }
+        
+        # Store document
+        detailed_collection.replace_one(
+            {'_id': public_key_hash},
+            document,
+            upsert=True
+        )
+        
+        processed_count += 1
+        total_certs_at_risk += cert_count
     
-    # Step B: Compute overall stats
-    print_info("Step 4B: Computing overall statistics...")
+    print_success(f"Processed {processed_count:,} shared key groups")
+    print_success(f"Total certificates at risk: {total_certs_at_risk:,}")
+    print()
     
-    # Count unique keys
-    unique_keys_result = list(source_collection.aggregate([
-        {'$match': {
-            'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None}
-        }},
-        {'$group': {'_id': '$parsed.subject_key_info.fingerprint_sha256'}},
-        {'$count': 'total'}
-    ], allowDiskUse=True))
+    # Create indexes
+    print_progress("Step 4/4: Creating indexes...")
     
-    unique_keys = unique_keys_result[0]['total'] if unique_keys_result else 0
+    detailed_collection.create_index([('certificate_count', -1)])
+    detailed_collection.create_index([('total_sans', -1)])
+    detailed_collection.create_index([('risk_level', 1)])
+    detailed_collection.create_index([('key_type', 1)])
+    detailed_collection.create_index([('issuer_count', 1)])
+    detailed_collection.create_index([('certificates.domain', 1)])
+    detailed_collection.create_index([('issuers.organization', 1)])
+    detailed_collection.create_index([('computed_at', -1)])
     
-    # Count certificates at risk
-    total_certs_at_risk = sum(g['cert_count'] for g in shared_key_groups)
+    print_success("Indexes created")
     
-    # Find most affected domain
-    top_domain_pipeline = [
-        {'$match': {
-            'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-        }},
-        {'$group': {
-            '_id': {'$arrayElemAt': ['$parsed.names', 0]},
-            'key_fingerprint': {'$first': '$parsed.subject_key_info.fingerprint_sha256'},
-            'count': {'$sum': 1}
-        }},
-        {'$sort': {'count': -1}},
-        {'$limit': 1}
-    ]
+    # Calculate key statistics
+    print_progress("Calculating public key statistics...")
     
-    top_domain_result = list(source_collection.aggregate(top_domain_pipeline, allowDiskUse=True))
-    top_domain = top_domain_result[0] if top_domain_result else {'_id': 'N/A', 'count': 0}
+    # Total Public Keys = All distinct keys (including shared ones)
+    # Formula: non-shared keys + shared key groups
+    total_public_keys = total_docs - total_certs_at_risk + processed_count
     
-    stats_doc = {
-        '_id': 'shared_keys_stats',
-        'unique_keys': unique_keys,
-        'shared_key_groups': len(shared_key_groups),
-        'certificates_at_risk': total_certs_at_risk,
-        'most_affected_domain': {
-            'name': top_domain.get('_id', 'N/A'),
-            'count': top_domain.get('count', 0)
-        },
-        'computed_at': datetime.now(timezone.utc)
+    # Unique Public Keys = Keys used by only ONE certificate (truly unique, not shared)
+    # Formula: total certificates - certificates at risk
+    unique_public_keys = total_docs - total_certs_at_risk
+    
+    print_success(f"Total Public Keys (distinct): {total_public_keys:,}")
+    print_success(f"Unique Public Keys (non-shared): {unique_public_keys:,}")
+    print_success(f"Shared Public Keys: {processed_count:,}")
+    
+    # Store metadata
+    metadata = {
+        '_id': 'metadata',
+        'last_computed': datetime.now(timezone.utc),
+        'computation_duration_seconds': (datetime.now() - start_time).total_seconds(),
+        'total_shared_groups': processed_count,
+        'total_certs_at_risk': total_certs_at_risk,
+        'total_certificates_scanned': total_docs,
+        'total_public_keys': total_public_keys,
+        'unique_public_keys': unique_public_keys
     }
     
-    target_db['shared-keys-stats'].insert_one(stats_doc)
-    print_success("Stored statistics")
-    print_info(f"  • Unique Keys: {unique_keys:,}")
-    print_info(f"  • Shared Key Groups: {len(shared_key_groups):,}")
-    print_info(f"  • Certificates at Risk: {total_certs_at_risk:,}")
-    print()
-    
-    # Step C: Compute distribution
-    print_info("Step 4C: Computing distribution...")
-    
-    distribution = [
-        {'bucket': '2', 'count': 0},
-        {'bucket': '3-5', 'count': 0},
-        {'bucket': '6-10', 'count': 0},
-        {'bucket': '10+', 'count': 0}
-    ]
-    
-    for group in shared_key_groups:
-        dc = group['distinct_certs']
-        if dc == 2:
-            distribution[0]['count'] += 1
-        elif 3 <= dc <= 5:
-            distribution[1]['count'] += 1
-        elif 6 <= dc <= 10:
-            distribution[2]['count'] += 1
-        else:
-            distribution[3]['count'] += 1
-    
-    dist_docs = []
-    for i, d in enumerate(distribution):
-        dist_docs.append({
-            'bucket_id': i,
-            'bucket': d['bucket'],
-            'count': d['count'],
-            'computed_at': datetime.now(timezone.utc)
-        })
-    
-    target_db['shared-keys-distribution'].insert_many(dist_docs)
-    print_success("Stored distribution")
-    for d in distribution:
-        print_info(f"  • {d['bucket']:<10} = {d['count']:,} groups")
-    print()
-    
-    # Step D: Compute by issuer
-    print_info("Step 4D: Computing by issuer (top 100)...")
-    
-    issuer_pipeline = [
-        {'$match': {
-            'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-        }},
-        {'$group': {
-            '_id': {'$ifNull': [{'$arrayElemAt': ['$parsed.issuer.organization', 0]}, 'Unknown']},
-            'shared_certs': {'$sum': 1}
-        }},
-        {'$sort': {'shared_certs': -1}},
-        {'$limit': 100}
-    ]
-    
-    issuer_results = list(source_collection.aggregate(issuer_pipeline, allowDiskUse=True))
-    
-    issuer_docs = []
-    for i, r in enumerate(issuer_results):
-        issuer_docs.append({
-            'rank': i + 1,
-            'issuer': r['_id'],
-            'shared_certs': r['shared_certs'],
-            'computed_at': datetime.now(timezone.utc)
-        })
-    
-    if issuer_docs:
-        target_db['shared-keys-by-issuer'].insert_many(issuer_docs)
-        target_db['shared-keys-by-issuer'].create_index('rank')
-        print_success(f"Stored {len(issuer_docs)} issuers")
-        print_info(f"  Top: {issuer_docs[0]['issuer']} ({issuer_docs[0]['shared_certs']:,} certs)")
-    print()
-    
-    # Step E: Compute timeline
-    print_info("Step 4E: Computing timeline (last 12 months)...")
-    
-    now = datetime.now(timezone.utc)
-    start_date = now - timedelta(days=12 * 30)
-    start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-    
-    timeline_pipeline = [
-        {'$match': {
-            'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints},
-            'parsed.validity.start': {'$gte': start_str}
-        }},
-        {'$project': {
-            'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
-            'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}}
-        }},
-        {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
-        {'$group': {
-            '_id': {'year': '$year', 'month': '$month'},
-            'count': {'$sum': 1}
-        }},
-        {'$sort': {'_id.year': 1, '_id.month': 1}}
-    ]
-    
-    timeline_results = list(source_collection.aggregate(timeline_pipeline, allowDiskUse=True))
-    
-    month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    
-    timeline_docs = []
-    for i, r in enumerate(timeline_results):
-        year = r['_id']['year']
-        month = r['_id']['month']
-        timeline_docs.append({
-            'order': i,
-            'month': f"{month_names[month]} {year}",
-            'monthNum': month,
-            'year': year,
-            'count': r['count'],
-            'computed_at': datetime.now(timezone.utc)
-        })
-    
-    if timeline_docs:
-        target_db['shared-keys-timeline'].insert_many(timeline_docs)
-        target_db['shared-keys-timeline'].create_index('order')
-        print_success(f"Stored {len(timeline_docs)} timeline entries")
-    else:
-        print_info("No timeline data in last 12 months")
-    print()
-    
-    # Step F: Compute heatmap
-    print_info("Step 4F: Computing issuer x key-type heatmap...")
-    
-    heatmap_pipeline = [
-        {'$match': {
-            'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-        }},
-        {'$project': {
-            'issuer': {'$ifNull': [{'$arrayElemAt': ['$parsed.issuer.organization', 0]}, 'Unknown']},
-            'key_algo': {'$ifNull': ['$parsed.subject_key_info.key_algorithm.name', 'Unknown']},
-            'key_length': {'$ifNull': ['$parsed.subject_key_info.rsa_public_key.length', 0]}
-        }},
-        {'$addFields': {
-            'key_type': {
-                '$concat': [
-                    '$key_algo',
-                    '-',
-                    {'$toString': '$key_length'}
-                ]
-            }
-        }},
-        {'$group': {
-            '_id': {'issuer': '$issuer', 'key_type': '$key_type'},
-            'count': {'$sum': 1}
-        }},
-        {'$sort': {'count': -1}}
-    ]
-    
-    heatmap_results = list(source_collection.aggregate(heatmap_pipeline, allowDiskUse=True))
-    
-    heatmap_docs = []
-    for r in heatmap_results:
-        heatmap_docs.append({
-            'issuer': r['_id']['issuer'],
-            'key_type': r['_id']['key_type'],
-            'count': r['count'],
-            'computed_at': datetime.now(timezone.utc)
-        })
-    
-    if heatmap_docs:
-        target_db['shared-keys-heatmap'].insert_many(heatmap_docs)
-        target_db['shared-keys-heatmap'].create_index([('issuer', 1), ('key_type', 1)])
-        target_db['shared-keys-heatmap'].create_index('count')
-        print_success(f"Stored {len(heatmap_docs)} heatmap cells")
-    print()
+    detailed_collection.replace_one({'_id': 'metadata'}, metadata, upsert=True)
+    print_success("Metadata stored")
     
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
     
-    print_progress("Step 5/5: Creating indexes and metadata...")
-    
-    # Store metadata in each collection
-    metadata = {
-        'last_computed': datetime.now(timezone.utc),
-        'computation_duration_seconds': duration,
-        'total_shared_groups': len(shared_key_groups),
-        'total_certs_at_risk': total_certs_at_risk
-    }
-    
-    target_db['shared-keys-groups'].replace_one({'_id': 'metadata'}, {'_id': 'metadata', **metadata}, upsert=True)
-    target_db['shared-keys-stats'].replace_one({'_id': 'metadata'}, {'_id': 'metadata', **metadata}, upsert=True)
-    target_db['shared-keys-distribution'].replace_one({'_id': 'metadata'}, {'_id': 'metadata', **metadata}, upsert=True)
-    target_db['shared-keys-by-issuer'].replace_one({'_id': 'metadata'}, {'_id': 'metadata', **metadata}, upsert=True)
-    target_db['shared-keys-timeline'].replace_one({'_id': 'metadata'}, {'_id': 'metadata', **metadata}, upsert=True)
-    target_db['shared-keys-heatmap'].replace_one({'_id': 'metadata'}, {'_id': 'metadata', **metadata}, upsert=True)
-    
-    print_success("Stored metadata in all collections")
-    
     print()
     print_progress("=" * 70, BOLD)
-    print_success("SHARED KEYS ANALYTICS COMPUTATION COMPLETED!")
+    print_success("SHARED KEYS DETAILED ANALYTICS COMPLETED!")
     print_progress("=" * 70, BOLD)
     print()
-    print_info(f"Computation Time: {BOLD}{duration:.2f}s{RESET}")
-    print_info(f"Shared Key Groups: {BOLD}{len(shared_key_groups):,}{RESET}")
+    print_info(f"Computation Time: {BOLD}{duration:.2f}s{RESET} ({duration/60:.1f} minutes)")
+    print_info(f"Shared Key Groups: {BOLD}{processed_count:,}{RESET}")
     print_info(f"Certificates at Risk: {BOLD}{total_certs_at_risk:,}{RESET}")
+    print_info(f"New Collection: {BOLD}shared-keys-detailed{RESET}")
     print()
     
     client.close()

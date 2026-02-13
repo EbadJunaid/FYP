@@ -190,6 +190,26 @@ export interface SANWildcardBreakdown {
     standard: number;
 }
 
+export interface SANCertReference {
+    cert_id: string;
+    domain: string;
+    san_count: number;
+    sample_sans: string[];
+    issuer: string[];
+    expiry: string;
+    encryption?: string;  // ⚡ Enriched from main collection
+    country?: string;     // ⚡ Enriched from main collection
+    vulnerabilities?: string;  // ⚡ Enriched from main collection
+}
+
+export interface SANFilteredCertsResponse {
+    certificates: SANCertReference[];
+    total: number;
+    page: number;
+    page_size: number;
+    has_more: boolean;
+}
+
 // Trends Analytics interfaces
 export interface TrendsStats {
     velocity_30d: number;
@@ -515,6 +535,20 @@ class ApiClient {
         return this.fetch<SANWildcardBreakdown>('/san-wildcard-breakdown/');
     }
 
+    async getSANFilteredCerts(params: {
+        filter_type: 'wildcard' | 'multi-domain' | 'san-count' | 'tld';
+        filter_value?: string;
+        page?: number;
+        page_size?: number;
+    }): Promise<SANFilteredCertsResponse> {
+        const query = new URLSearchParams();
+        query.append('filter_type', params.filter_type);
+        if (params.filter_value) query.append('filter_value', params.filter_value);
+        if (params.page) query.append('page', params.page.toString());
+        if (params.page_size) query.append('page_size', params.page_size.toString());
+        return this.fetch<SANFilteredCertsResponse>(`/san-filtered-certs/?${query.toString()}`);
+    }
+
     // Trends Analytics APIs
     async getTrendsStats(): Promise<TrendsStats> {
         return this.fetch<TrendsStats>('/trends/stats/');
@@ -699,7 +733,8 @@ export interface IssuerAlgorithmEntry {
 
 // Shared Keys Analytics types
 export interface SharedKeyStats {
-    unique_keys: number;
+    total_public_keys: number;
+    unique_public_keys: number;
     shared_key_groups: number;
     certificates_at_risk: number;
     most_affected_domain: {

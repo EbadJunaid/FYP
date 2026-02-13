@@ -10,6 +10,7 @@ import { CertificateIcon, CheckCircleIcon, ErrorCircleIcon, ChartPieIcon } from 
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry, DashboardMetrics } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 
 // Define the filter types for this page
 type FilterType = 'all' | 'active' | 'expired';
@@ -60,11 +61,19 @@ export default function ActiveVsExpiredPage() {
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
     const [isRestoring, setIsRestoring] = useState(true);
+    const dbKey = useDatabaseKey('active-vs-expired');
 
     const STORAGE_KEY = 'active-vs-expired-state';
 
     // Get search query from context
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+
+    // Clear search query on unmount
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     // Restore state from sessionStorage on mount
     useEffect(() => {
@@ -121,7 +130,7 @@ export default function ActiveVsExpiredPage() {
 
     // SWR for metrics with caching (revalidate every 5 min)
     const { data: metrics, isLoading: isMetricsLoading } = useSWR<DashboardMetrics>(
-        'active-vs-expired-metrics',
+        `active-vs-expired-metrics|${dbKey}`,
         metricsFetcher,
         {
             revalidateOnFocus: false,
@@ -131,7 +140,7 @@ export default function ActiveVsExpiredPage() {
     );
 
     // SWR for table data with unique key including filter, page, and search
-    const swrKey = `certificates|${filter}|${currentPage}|${searchQuery || ''}`;
+    const swrKey = `active-vs-expired-certs|${filter}|${currentPage}|${searchQuery || ''}|${dbKey}`;
     const { data: tableResult, isLoading: isTableLoading } = useSWR(
         swrKey,
         certificatesFetcher,

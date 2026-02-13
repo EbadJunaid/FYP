@@ -710,7 +710,7 @@ class CertificateModel:
         if shared_key:
             try:
                 # Get shared key fingerprints from pre-computed materialized view
-                shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-groups']
+                shared_groups_collection = results_db['shared-keys-groups']
                 
                 # Get all shared key fingerprints (excluding metadata doc)
                 shared_fingerprints = list(shared_groups_collection.find(
@@ -817,7 +817,7 @@ class CertificateModel:
             # ULTRA-FAST: Get count from pre-computed CA analytics for exact issuer matches
             # This avoids expensive count operations on large result sets
             try:
-                ca_analytics = MongoDBClient.get_results_db()['ca-analytics']
+                ca_analytics = results_db['ca-analytics']
                 ca_doc = ca_analytics.find_one({'name': issuer})
                 if ca_doc:
                     total = ca_doc['count']
@@ -1250,7 +1250,7 @@ class CertificateModel:
         
         try:
             # Read from pre-computed collection
-            ca_analytics_collection = MongoDBClient.get_results_db()['ca-analytics']
+            ca_analytics_collection = results_db['ca-analytics']
             
             # Get metadata to check freshness
             metadata = ca_analytics_collection.find_one({'_id': 'metadata'})
@@ -1476,7 +1476,7 @@ class CertificateModel:
         
         try:
             # Read from pre-computed collection
-            geo_collection = MongoDBClient.get_results_db()['geographic-distribution']
+            geo_collection = results_db['geographic-distribution']
             
             # Get metadata to check freshness
             metadata = geo_collection.find_one({'_id': 'metadata'})
@@ -1621,7 +1621,7 @@ class CertificateModel:
         """
         from .db import MongoDBClient
         from datetime import datetime, timezone, timedelta
-        collection = MongoDBClient.get_results_db()['validity-stats']
+        collection = results_db['validity-stats']
         
         # Get the pre-computed document
         result = collection.find_one({})
@@ -1667,7 +1667,7 @@ class CertificateModel:
         """
         from .db import MongoDBClient
         from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['validity-distribution']
+        collection = results_db['validity-distribution']
         
         # Get pre-computed distribution, sorted by bucketId
         distribution = list(collection.find({}).sort('bucketId', 1))
@@ -1716,7 +1716,7 @@ class CertificateModel:
         """
         from .db import MongoDBClient
         from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['issuance-timeline']
+        collection = results_db['issuance-timeline']
         
         # Query pre-computed timeline for this month count
         query = {'months': months}
@@ -2231,7 +2231,7 @@ class CertificateModel:
         """
         from .db import MongoDBClient
         from datetime import datetime, timezone, timedelta
-        collection = MongoDBClient.get_results_db()['signature-stats']
+        collection = results_db['signature-stats']
         
         # Get the pre-computed document
         result = collection.find_one({})
@@ -2277,7 +2277,7 @@ class CertificateModel:
         """
         from .db import MongoDBClient
         from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['hash-trends']
+        collection = results_db['hash-trends']
         
         # Query pre-computed trends for this granularity
         query = {'granularity': granularity, 'months': months}
@@ -2327,7 +2327,7 @@ class CertificateModel:
         """
         from .db import MongoDBClient
         from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['issuer-algorithm-matrix']
+        collection = results_db['issuer-algorithm-matrix']
         
         # Get pre-computed matrix, sorted by count descending, limited
         matrix = list(collection.find({}).sort('count', -1).limit(limit))
@@ -2849,7 +2849,7 @@ class CertificateModel:
         To update pre-computed data:
             python compute_ca_stats.py
         """
-        stats_collection = MongoDBClient.get_results_db()['ca-stats']
+        stats_collection = results_db['ca-stats']
         
         # Read the single pre-computed document
         stats_doc = stats_collection.find_one({'_id': 'ca_stats'})
@@ -2983,7 +2983,7 @@ class CertificateModel:
         To update pre-computed data:
             python compute_issuer_validation_matrix.py
         """
-        matrix_collection = MongoDBClient.get_results_db()['issuer-validation-matrix']
+        matrix_collection = results_db['issuer-validation-matrix']
         
         # Get top issuers by total count
         pipeline = [
@@ -3312,7 +3312,7 @@ class CertificateModel:
         
         Performance: ~0.001s (vs 120s+ for original)
         """
-        stats_collection = MongoDBClient.get_results_db()['san-stats']
+        stats_collection = results_db['san-stats']
         print("hahhaha")
         
         doc = stats_collection.find_one({'_id': 'san_stats'})
@@ -3337,7 +3337,7 @@ class CertificateModel:
             
         Performance: ~0.001s (vs 120s+ for original)
         """
-        distribution_collection = MongoDBClient.get_results_db()['san-distribution']
+        distribution_collection = results_db['san-distribution']
         
         # Exclude metadata document
         results = list(distribution_collection.find(
@@ -3363,7 +3363,7 @@ class CertificateModel:
             
         Performance: ~0.001s (vs 120s+ for original)
         """
-        tld_collection = MongoDBClient.get_results_db()['san-tld-certs']
+        tld_collection = results_db['san-tld-certs']
         
         # Get TLDs sorted by certificate count
         results = list(tld_collection.find(
@@ -3390,7 +3390,7 @@ class CertificateModel:
             
         Performance: ~0.001s (vs 120s+ for original)
         """
-        stats_collection = MongoDBClient.get_results_db()['san-stats']
+        stats_collection = results_db['san-stats']
         
         doc = stats_collection.find_one({'_id': 'san_stats'})
         
@@ -3431,19 +3431,19 @@ class CertificateModel:
         
         # Select collection based on filter type
         if filter_type == 'wildcard':
-            collection = MongoDBClient.get_results_db()['san-wildcard-certs']
+            collection = results_db['san-wildcard-certs']
             query = {}
         elif filter_type == 'standard':
-            collection = MongoDBClient.get_results_db()['san-standard-certs']
+            collection = results_db['san-standard-certs']
             query = {}
         elif filter_type == 'multi-domain':
-            collection = MongoDBClient.get_results_db()['san-multi-domain-certs']
+            collection = results_db['san-multi-domain-certs']
             query = {}
         elif filter_type == 'san-count':
             # Query san-count-groups collection
             if not filter_value:
                 raise ValueError("filter_value required for san-count filter")
-            collection = MongoDBClient.get_results_db()['san-count-groups']
+            collection = results_db['san-count-groups']
             try:
                 doc = collection.find_one({'_id': filter_value})
                 if not doc:
@@ -3484,7 +3484,7 @@ class CertificateModel:
             # Query san-tld-certs collection
             if not filter_value:
                 raise ValueError("filter_value required for tld filter")
-            collection = MongoDBClient.get_results_db()['san-tld-certs']
+            collection = results_db['san-tld-certs']
             try:
                 doc = collection.find_one({'_id': filter_value})
                 if not doc:
@@ -4251,8 +4251,8 @@ class CertificateModel:
         
         Performance: ~0.01s
         """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        certs_collection = MongoDBClient.get_results_db()['certificates']
+        shared_keys_collection = results_db['shared-keys-detailed']
+        certs_collection = results_db['certificates']
         
         # Check if metadata exists
         metadata = shared_keys_collection.find_one({'_id': 'metadata'})
@@ -4303,7 +4303,7 @@ class CertificateModel:
             
         Performance: ~0.02s
         """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        shared_keys_collection = results_db['shared-keys-detailed']
         
         # Define buckets
         buckets = [
@@ -4343,7 +4343,7 @@ class CertificateModel:
             
         Performance: ~0.02s
         """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        shared_keys_collection = results_db['shared-keys-detailed']
         
         # Aggregate to get total shared certs by issuer
         pipeline = [
@@ -4379,14 +4379,14 @@ class CertificateModel:
         Performance: ~0.1s
         """
         from datetime import datetime, timedelta
-        certs_collection = MongoDBClient.get_results_db()['certificates']
+        certs_collection = results_db['certificates']
         
         # Calculate start date (N months ago)
         end_date = datetime.now()
         start_date = end_date - timedelta(days=months * 30)
         
         # Get all shared public key hashes
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        shared_keys_collection = results_db['shared-keys-detailed']
         shared_hashes = shared_keys_collection.distinct('public_key_hash', {'_id': {'$ne': 'metadata'}})
         
         if not shared_hashes:
@@ -4442,7 +4442,7 @@ class CertificateModel:
             
         Performance: ~0.03s
         """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        shared_keys_collection = results_db['shared-keys-detailed']
         
         # Aggregate to get issuer x key_type counts
         pipeline = [
@@ -4502,7 +4502,7 @@ class CertificateModel:
         Returns:
             Dictionary with paginated results and metadata
         """
-        collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        collection = results_db['shared-keys-detailed']
         
         # Build filter query
         query = {'_id': {'$ne': 'metadata'}}
@@ -4595,7 +4595,7 @@ class CertificateModel:
         Raises:
             ValueError: If shared key group not found
         """
-        collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        collection = results_db['shared-keys-detailed']
         
         # Find the document
         doc = collection.find_one({'_id': public_key_hash})

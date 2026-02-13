@@ -13,6 +13,7 @@ import apiClient, { CAStats, IssuerValidationEntry, CALeaderboardEntry } from '@
 import { fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry } from '@/types/dashboard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 
 const STORAGE_KEY = 'ca-analytics-state';
 
@@ -73,7 +74,15 @@ const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
 export default function CAAnalyticsPage() {
     const router = useRouter();
     const tableRef = useRef<HTMLDivElement>(null);
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+    const dbKey = useDatabaseKey('ca');
+
+    // Clear search query on unmount to prevent it carrying over to other pages
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     // State - default to top CA filter (set after data loads)
     const [filterType, setFilterType] = useState<FilterType>('issuer');
@@ -85,19 +94,19 @@ export default function CAAnalyticsPage() {
 
     // SWR data fetching
     const { data: caStats, isLoading: isStatsLoading } = useSWR<CAStats>(
-        'ca-stats',
+        `ca-stats|${dbKey}`,
         caStatsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     const { data: caDistribution, isLoading: isDistLoading } = useSWR<CALeaderboardEntry[]>(
-        'ca-distribution',
+        `ca-distribution|${dbKey}`,
         caDistributionFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
     const { data: issuerValidationMatrix, isLoading: isMatrixLoading } = useSWR<IssuerValidationEntry[]>(
-        'issuer-validation-matrix',
+        `issuer-validation-matrix|${dbKey}`,
         issuerValidationFetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
@@ -161,11 +170,11 @@ export default function CAAnalyticsPage() {
     const getSWRKey = () => {
         // For self_signed, we don't need filterValue
         if (filterType === 'self_signed') {
-            return `ca-certs|self_signed|true|${currentPage}|${searchQuery || ''}`;
+            return `ca-certs|self_signed|true|${currentPage}|${searchQuery || ''}|${dbKey}`;
         }
         // For issuer and heatmap, we need filterValue
         if (filterValue) {
-            return `ca-certs|${filterType}|${filterValue}|${currentPage}|${searchQuery || ''}`;
+            return `ca-certs|${filterType}|${filterValue}|${currentPage}|${searchQuery || ''}|${dbKey}`;
         }
         return null;
     };

@@ -10,6 +10,7 @@ import { CertificateIcon, ClockIcon, AlertIcon, TrendUpIcon } from '@/components
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { useSearch } from '@/context/SearchContext';
 import { DashboardMetrics, ScanEntry } from '@/types/dashboard';
+import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 
 const STORAGE_KEY = 'overview-state';
 
@@ -36,8 +37,16 @@ export default function OverviewPage() {
     const [isRestoring, setIsRestoring] = useState(true);
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
+    const dbKey = useDatabaseKey('overview');
 
-    const { searchQuery } = useSearch();
+    const { searchQuery, setSearchQuery } = useSearch();
+
+    // Clear search query on unmount to prevent it carrying over to other pages
+    useEffect(() => {
+        return () => {
+            setSearchQuery('');
+        };
+    }, [setSearchQuery]);
 
     // Restore state from sessionStorage on mount
     useEffect(() => {
@@ -59,13 +68,13 @@ export default function OverviewPage() {
 
     // SWR for metrics
     const { data: metrics, isLoading: isMetricsLoading } = useSWR<DashboardMetrics>(
-        'overview-metrics',
+        `overview-metrics|${dbKey}`,
         metricsFetcher,
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     );
 
     // SWR for certificates with search
-    const swrKey = `overview-certs|${currentPage}|${searchQuery || ''}`;
+    const swrKey = `overview-certs|${currentPage}|${searchQuery || ''}|${dbKey}`;
     const { data: certsData, isLoading: isCertsLoading } = useSWR(
         swrKey,
         certificatesFetcher,

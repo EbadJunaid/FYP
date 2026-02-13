@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/context/ThemeContext';
 import { apiClient, NotificationItem } from '@/services/apiClient';
+import DatabaseSwitcher from '@/components/DatabaseSwitcher';
 import {
     SearchIcon,
     BellIcon,
@@ -51,6 +52,18 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
     const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
     const searchInputRef = useRef<HTMLInputElement>(null);
     const notificationRef = useRef<HTMLDivElement>(null);
+    
+    // Store callbacks in refs to avoid recreating debounced functions
+    const onSearchRef = useRef(onSearch);
+    useEffect(() => {
+        onSearchRef.current = onSearch;
+    }, [onSearch]);
+    
+    // Store read IDs in ref to avoid recreating fetchNotifications
+    const readNotificationIdsRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        readNotificationIdsRef.current = readNotificationIds;
+    }, [readNotificationIds]);
 
     // Debounce timer ref
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -58,36 +71,38 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
     // Get current page title dynamically
     const currentPageTitle = pageTitles[pathname] || 'Dashboard';
 
-    // Load read notification IDs from localStorage
+    // Load read notification IDs from localStorage - ONCE
     useEffect(() => {
         const storedReadIds = localStorage.getItem('readNotificationIds');
         if (storedReadIds) {
-            setReadNotificationIds(new Set(JSON.parse(storedReadIds)));
+            const ids = new Set(JSON.parse(storedReadIds));
+            setReadNotificationIds(ids);
+            readNotificationIdsRef.current = ids;
         }
-    }, []);
+    }, []); // Empty deps = run once
 
-    // Fetch notifications from API
+    // Fetch notifications from API - stable callback
     const fetchNotifications = useCallback(async () => {
         setIsLoadingNotifications(true);
         try {
             const response = await apiClient.getNotifications();
             setNotifications(response.notifications);
-            // Calculate unread count (excluding already read)
-            const unread = response.notifications.filter(n => !readNotificationIds.has(n.id)).length;
+            // Calculate unread count using ref (current value)
+            const unread = response.notifications.filter(n => !readNotificationIdsRef.current.has(n.id)).length;
             setUnreadCount(unread);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
         } finally {
             setIsLoadingNotifications(false);
         }
-    }, [readNotificationIds]);
+    }, []); // No dependencies - stable reference
 
     // Fetch on mount and every 5 minutes
     useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, [fetchNotifications]);
+    }, [fetchNotifications]); // Only depends on stable fetchNotifications
 
     // Ctrl+K keyboard shortcut to focus search
     useEffect(() => {
@@ -114,15 +129,15 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Debounced search handler
+    // Debounced search handler - stable reference
     const debouncedSearch = useCallback((query: string) => {
         if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current);
         }
         debounceTimerRef.current = setTimeout(() => {
-            onSearch(query);
+            onSearchRef.current(query); // Use ref to get latest callback
         }, 300);
-    }, [onSearch]);
+    }, []); // No dependencies - stable reference
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
@@ -255,6 +270,9 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
 
                 {/* Right Section - Actions */}
                 <div className="flex items-center gap-2">
+                    {/* Database Switcher */}
+                    <DatabaseSwitcher />
+
                     {/* Theme Toggle */}
                     <button
                         onClick={toggleTheme}
