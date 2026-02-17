@@ -16,7 +16,8 @@ from .views import (
     GeographicDistributionView,
     FutureRiskView,
     VulnerabilitiesView,
-    NotificationView,
+    # COMMENT FOR NOTIFICATION ICON - Import
+    # NotificationView,
     ValidityStatsView,
     ValidityDistributionView,
     IssuanceTimelineView,
@@ -109,8 +110,11 @@ urlpatterns = [
     path('shared-keys/list/', SharedKeysListView.as_view(), name='shared_keys_list'),
     path('shared-keys/detail/<str:public_key_hash>/', SharedKeyDetailView.as_view(), name='shared_key_detail'),
     
+    # ============================================================
+    # COMMENT FOR NOTIFICATION ICON - Backend URL
+    # ============================================================
     # Notifications API
-    path('notifications/', NotificationView.as_view(), name='notifications'),
+    # path('notifications/', NotificationView.as_view(), name='notifications'),
     
     # Database Management APIs
     path('databases/current/', get_current_database, name='current_database'),

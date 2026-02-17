@@ -14,7 +14,7 @@ const navItems: NavItem[] = [
     { id: 'signature-hash', label: 'Signature & Hash', icon: 'signature', href: '/dashboard/signature-hash' },
     { id: 'ca-analytics', label: 'CA Analytics', icon: 'ca', href: '/dashboard/ca-analytics' },
     { id: 'san-analytics', label: 'SAN Analytics', icon: 'san', href: '/dashboard/san-analytics' },
-    { id: 'trends', label: 'Trends', icon: 'trends', href: '/dashboard/trends' },
+    // { id: 'trends', label: 'Trends', icon: 'trends', href: '/dashboard/trends' },
     // { id: 'type-distribution', label: 'Type Distribution', icon: 'type', href: '/dashboard/type-distribution' },
     // { id: 'issuer-organizations', label: 'Issuer Organizations', icon: 'issuer', href: '/dashboard/issuer-organizations' },
     // { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },

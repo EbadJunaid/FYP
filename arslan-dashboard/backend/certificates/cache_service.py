@@ -44,7 +44,10 @@ TTL_CONFIG = {
     'validity_trends': 1800,      # 8 minutes
     'geographic': 1800,           # 8 minutes
     'future_risk': 1800,          # 8 minutes
-    'notifications': 1800,         # 2 minute (time-sensitive)
+    # ============================================================
+    # COMMENT FOR NOTIFICATION ICON - Cache TTL
+    # ============================================================
+    # 'notifications': 1800,         # 2 minute (time-sensitive)
     'unique_filters': 1800,       # 8 minutes
     # Signature and Hashes page caches
     'signature_stats': 1800,      # 8 minutes

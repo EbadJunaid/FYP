@@ -478,21 +478,25 @@ class ValidityAnalysisController:
         return result
 
 
-class NotificationController:
-    """Controller for notification-related operations"""
-    
-    @staticmethod
-    def get_notifications() -> Dict:
-        """Get all notifications (cached 2 min - time sensitive)"""
-        cache_params = {}
-        
-        cached = cache.get('notifications', cache_params)
-        if cached:
-            return cached
-        
-        result = CertificateModel.get_notifications()
-        cache.set('notifications', cache_params, result)
-        return result
+# ============================================================
+# COMMENT FOR NOTIFICATION ICON - Backend Controller
+# ============================================================
+# class NotificationController:
+#     """Controller for notification-related operations"""
+#     
+#     @staticmethod
+#     def get_notifications() -> Dict:
+#         """Get all notifications (cached 2 min - time sensitive)"""
+#         cache_params = {}
+#         
+#         cached = cache.get('notifications', cache_params)
+#         if cached:
+#             return cached
+#         
+#         result = CertificateModel.get_notifications()
+#         cache.set('notifications', cache_params, result)
+#         return result
+pass
 
 
 class SANAnalyticsController:

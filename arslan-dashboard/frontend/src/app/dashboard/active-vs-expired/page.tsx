@@ -6,20 +6,21 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import DownloadModal from '@/components/DownloadModal';
-import { CertificateIcon, CheckCircleIcon, ErrorCircleIcon, ChartPieIcon } from '@/components/icons/Icons';
+import { CertificateIcon, CheckCircleIcon, ErrorCircleIcon, ClockIcon } from '@/components/icons/Icons';
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry, DashboardMetrics } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 
 // Define the filter types for this page
-type FilterType = 'all' | 'active' | 'expired';
+type FilterType = 'all' | 'active' | 'expired' | 'expiring_soon';
 
 // Map filter to API status parameter
 const filterToStatus: Record<FilterType, string | undefined> = {
     all: undefined,
     active: 'VALID',
     expired: 'EXPIRED',
+    expiring_soon: 'EXPIRING_SOON',
 };
 
 // Card info tooltips
@@ -27,7 +28,7 @@ const cardInfoTooltips: Record<string, string> = {
     total: 'Total count of all SSL certificates in the database, including active, expired, and expiring soon.',
     active: 'Certificates that are currently valid and have not yet reached their expiration date.',
     expired: 'Certificates that have passed their expiration date and are no longer valid.',
-    activeRate: 'Percentage of active certificates relative to total certificates - indicates overall certificate health.',
+    expiringSoon: 'Certificates expiring within the next 30 days that need immediate attention.',
 };
 
 // Table titles based on filter
@@ -35,6 +36,7 @@ const tableTitles: Record<FilterType, string> = {
     all: 'All Certificates',
     active: 'Active Certificates',
     expired: 'Expired Certificates',
+    expiring_soon: 'Expiring Soon Certificates',
 };
 
 // SWR fetcher functions
@@ -186,7 +188,7 @@ export default function ActiveVsExpiredPage() {
     const totalCount = metrics?.activeCertificates.total || 0;
     const activeCount = metrics?.activeCertificates.count || 0;
     const expiredCount = metrics?.expiredCertificates?.count || 0;
-    const activeRate = totalCount > 0 ? ((activeCount / totalCount) * 100).toFixed(1) : '0.0';
+    const expiringSoonCount = metrics?.expiringSoon?.count || 0;
 
     // Handle download
     const handleDownload = useCallback(() => {
@@ -242,19 +244,21 @@ export default function ActiveVsExpiredPage() {
                     infoTooltip={cardInfoTooltips.expired}
                 />
 
-                {/* Active Rate - Not clickable */}
+                {/* Expiring Soon - Clickable */}
                 <MetricCard
-                    icon={<ChartPieIcon className="w-6 h-6 text-accent-purple" />}
-                    iconBgColor="bg-accent-purple/15"
-                    value={`${activeRate}%`}
-                    label="Active Rate"
-                    infoTooltip={cardInfoTooltips.activeRate}
+                    icon={<ClockIcon className="w-6 h-6 text-accent-yellow" />}
+                    iconBgColor="bg-accent-yellow/15"
+                    value={expiringSoonCount.toLocaleString()}
+                    label="Expiring Soon"
+                    badge={expiringSoonCount > 0 ? { text: 'Action Needed', variant: 'warning' } : undefined}
+                    onClick={() => handleCardClick('expiring_soon')}
+                    infoTooltip={cardInfoTooltips.expiringSoon}
                 />
             </div>
 
             {/* Filter Tabs */}
             <div className="flex gap-2">
-                {(['all', 'active', 'expired'] as const).map((f) => (
+                {(['all', 'active', 'expired', 'expiring_soon'] as const).map((f) => (
                     <button
                         key={f}
                         onClick={() => handleFilterChange(f)}
@@ -263,7 +267,9 @@ export default function ActiveVsExpiredPage() {
                             : 'bg-card-bg text-text-secondary hover:bg-card-border border border-card-border'
                             }`}
                     >
-                        {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+                        {f === 'all' ? 'All' : 
+                         f === 'expiring_soon' ? 'Expiring Soon' :
+                         f.charAt(0).toUpperCase() + f.slice(1)}
                         {filter === f && (
                             <span className="">
                                 {/* {totalItems} */}

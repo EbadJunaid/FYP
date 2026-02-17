@@ -23,6 +23,7 @@ interface MetricCardProps {
     };
     onClick?: () => void;
     detailsLink?: string;
+    onDetailsClick?: (e: React.MouseEvent) => void;
     infoTooltip?: string;
 }
 
@@ -35,6 +36,7 @@ export default function MetricCard({
     badge,
     onClick,
     detailsLink,
+    onDetailsClick,
     infoTooltip,
 }: MetricCardProps) {
     const [showTooltip, setShowTooltip] = useState(false);
@@ -104,14 +106,24 @@ export default function MetricCard({
             <div className="flex items-end justify-between">
                 <p className="text-3xl font-bold text-text-primary">{value}</p>
                 {detailsLink && (
-                    <Link
-                        href={detailsLink}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1 text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
-                    >
-                        View details
-                        <ChevronRightIcon className="w-4 h-4" />
-                    </Link>
+                    onDetailsClick ? (
+                        <button
+                            onClick={onDetailsClick}
+                            className="flex items-center gap-1 text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
+                        >
+                            View details
+                            <ChevronRightIcon className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <Link
+                            href={detailsLink}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
+                        >
+                            View details
+                            <ChevronRightIcon className="w-4 h-4" />
+                        </Link>
+                    )
                 )}
             </div>
         </div>

@@ -11,7 +11,8 @@ from .controllers import (
     DashboardController,
     CertificateController,
     AnalyticsController,
-    NotificationController
+    # COMMENT FOR NOTIFICATION ICON - Import
+    # NotificationController
 )
 from .db import MongoDBClient
 
@@ -1169,19 +1170,23 @@ def switch_database(request):
         return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class NotificationView(View):
-    """
-    GET /api/notifications
-    Returns real-time notifications based on certificate status
-    (expiring soon, vulnerabilities, weak encryption, etc.)
-    """
-    def get(self, request):
-        try:
-            result = NotificationController.get_notifications()
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+# ============================================================
+# COMMENT FOR NOTIFICATION ICON - Backend View
+# ============================================================
+# @method_decorator(csrf_exempt, name='dispatch')
+# class NotificationView(View):
+#     """
+#     GET /api/notifications
+#     Returns real-time notifications based on certificate status
+#     (expiring soon, vulnerabilities, weak encryption, etc.)
+#     """
+#     def get(self, request):
+#         try:
+#             result = NotificationController.get_notifications()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+pass
 
 
 # Keep legacy view for backwards compatibility

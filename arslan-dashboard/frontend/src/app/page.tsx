@@ -8,6 +8,7 @@ import Header from '@/components/layout/Header';
 import MobileDrawer from '@/components/layout/MobileDrawer';
 import FilterModal from '@/components/FilterModal';
 import DownloadModal from '@/components/DownloadModal';
+import NotDevelopedModal from '@/components/NotDevelopedModal';
 import { NotificationItem } from '@/services/apiClient';
 
 // Dashboard Cards
@@ -42,6 +43,7 @@ function DashboardContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
 
   const { metrics, encryptionStrength, futureRisk, caLeaderboard, geographicDistribution, validityTrend, filters } = state;
 
@@ -58,9 +60,9 @@ function DashboardContent() {
     scrollToTable();
   };
 
-  // Handle View Full Report button
+  // Handle View Full Report button - Show coming soon modal
   const handleViewFullReport = () => {
-    router.push('/dashboard/trends');
+    setComingSoonModalOpen(true);
   };
 
   // Handle download scans - opens modal
@@ -105,7 +107,7 @@ function DashboardContent() {
           onMenuClick={() => setMobileMenuOpen(true)}
           onSearch={handleSearch}
           onFilterClick={() => setFilterModalOpen(true)}
-          onNotificationClick={handleNotificationClick}
+          /* onNotificationClick={handleNotificationClick} */ // COMMENT FOR NOTIFICATION ICON
         />
 
         {/* Main Content */}
@@ -165,7 +167,11 @@ function DashboardContent() {
                 value={metrics.criticalVulnerabilities.count}
                 label="Critical Vulnerabilities"
                 onClick={() => handleCardClickWithScroll('vulnerabilities')}
-                detailsLink="/dashboard/vulnerabilities"
+                detailsLink="#"
+                onDetailsClick={(e) => {
+                  e.stopPropagation();
+                  setComingSoonModalOpen(true);
+                }}
                 infoTooltip="Certificates with security issues detected by ZLint analysis"
               />
             )}
@@ -235,7 +241,6 @@ function DashboardContent() {
               data={paginatedScans}
               title={tableTitle}
               onRowClick={(entry) => console.log('Scan row clicked:', entry)}
-              onFilterClick={() => setFilterModalOpen(true)}
               onDownloadClick={handleDownloadScans}
               currentPage={pagination.currentPage}
               totalPages={totalPages}
@@ -260,6 +265,12 @@ function DashboardContent() {
         currentPageData={paginatedScans}
         activeFilter={activeFilter}
         totalCount={pagination.totalItems}
+      />
+
+      {/* Coming Soon Modal */}
+      <NotDevelopedModal
+        isOpen={comingSoonModalOpen}
+        onClose={() => setComingSoonModalOpen(false)}
       />
     </div>
   );

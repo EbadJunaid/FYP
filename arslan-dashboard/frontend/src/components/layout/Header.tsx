@@ -3,11 +3,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/context/ThemeContext';
-import { apiClient, NotificationItem } from '@/services/apiClient';
+// ============================================================
+// COMMENT FOR NOTIFICATION ICON - Frontend Import
+// ============================================================
+// import { apiClient, NotificationItem } from '@/services/apiClient';
 import DatabaseSwitcher from '@/components/DatabaseSwitcher';
 import {
     SearchIcon,
-    BellIcon,
+    // BellIcon,  // COMMENT FOR NOTIFICATION ICON
     SunIcon,
     MoonIcon,
     MenuIcon,
@@ -18,7 +21,10 @@ interface HeaderProps {
     onMenuClick: () => void;
     onSearch: (query: string) => void;
     onFilterClick: () => void;
-    onNotificationClick?: (notification: NotificationItem) => void;
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Frontend Prop
+    // ============================================================
+    // onNotificationClick?: (notification: NotificationItem) => void;
 }
 
 // Page title mapping
@@ -41,17 +47,20 @@ const pageTitles: Record<string, string> = {
     '/dashboard/shared-public-keys': 'Shared Public Keys',
 };
 
-export default function Header({ onMenuClick, onSearch, onFilterClick, onNotificationClick }: HeaderProps) {
+export default function Header({ onMenuClick, onSearch, onFilterClick /*, onNotificationClick */ }: HeaderProps) {
     const pathname = usePathname();
     const { theme, toggleTheme } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
-    const [showNotifications, setShowNotifications] = useState(false);
-    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
-    const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Frontend State Variables
+    // ============================================================
+    // const [showNotifications, setShowNotifications] = useState(false);
+    // const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    // const [unreadCount, setUnreadCount] = useState(0);
+    // const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+    // const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const notificationRef = useRef<HTMLDivElement>(null);
+    // const notificationRef = useRef<HTMLDivElement>(null);  // COMMENT FOR NOTIFICATION ICON
     
     // Store callbacks in refs to avoid recreating debounced functions
     const onSearchRef = useRef(onSearch);
@@ -59,11 +68,14 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
         onSearchRef.current = onSearch;
     }, [onSearch]);
     
-    // Store read IDs in ref to avoid recreating fetchNotifications
-    const readNotificationIdsRef = useRef<Set<string>>(new Set());
-    useEffect(() => {
-        readNotificationIdsRef.current = readNotificationIds;
-    }, [readNotificationIds]);
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Frontend Effects & Handlers
+    // ============================================================
+    // // Store read IDs in ref to avoid recreating fetchNotifications
+    // const readNotificationIdsRef = useRef<Set<string>>(new Set());
+    // useEffect(() => {
+    //     readNotificationIdsRef.current = readNotificationIds;
+    // }, [readNotificationIds]);
 
     // Debounce timer ref
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,38 +83,47 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
     // Get current page title dynamically
     const currentPageTitle = pageTitles[pathname] || 'Dashboard';
 
-    // Load read notification IDs from localStorage - ONCE
-    useEffect(() => {
-        const storedReadIds = localStorage.getItem('readNotificationIds');
-        if (storedReadIds) {
-            const ids = new Set(JSON.parse(storedReadIds));
-            setReadNotificationIds(ids);
-            readNotificationIdsRef.current = ids;
-        }
-    }, []); // Empty deps = run once
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Load read notification IDs
+    // ============================================================
+    // // Load read notification IDs from localStorage - ONCE
+    // useEffect(() => {
+    //     const storedReadIds = localStorage.getItem('readNotificationIds');
+    //     if (storedReadIds) {
+    //         const ids = new Set(JSON.parse(storedReadIds));
+    //         setReadNotificationIds(ids);
+    //         readNotificationIdsRef.current = ids;
+    //     }
+    // }, []); // Empty deps = run once
 
-    // Fetch notifications from API - stable callback
-    const fetchNotifications = useCallback(async () => {
-        setIsLoadingNotifications(true);
-        try {
-            const response = await apiClient.getNotifications();
-            setNotifications(response.notifications);
-            // Calculate unread count using ref (current value)
-            const unread = response.notifications.filter(n => !readNotificationIdsRef.current.has(n.id)).length;
-            setUnreadCount(unread);
-        } catch (error) {
-            console.error('Failed to fetch notifications:', error);
-        } finally {
-            setIsLoadingNotifications(false);
-        }
-    }, []); // No dependencies - stable reference
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Fetch notifications from API
+    // ============================================================
+    // // Fetch notifications from API - stable callback
+    // const fetchNotifications = useCallback(async () => {
+    //     setIsLoadingNotifications(true);
+    //     try {
+    //         const response = await apiClient.getNotifications();
+    //         setNotifications(response.notifications);
+    //         // Calculate unread count using ref (current value)
+    //         const unread = response.notifications.filter(n => !readNotificationIdsRef.current.has(n.id)).length;
+    //         setUnreadCount(unread);
+    //     } catch (error) {
+    //         console.error('Failed to fetch notifications:', error);
+    //     } finally {
+    //         setIsLoadingNotifications(false);
+    //     }
+    // }, []); // No dependencies - stable reference
 
-    // Fetch on mount and every 5 minutes
-    useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, [fetchNotifications]); // Only depends on stable fetchNotifications
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Fetch on mount and every 5 minutes
+    // ============================================================
+    // // Fetch on mount and every 5 minutes
+    // useEffect(() => {
+    //     fetchNotifications();
+    //     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    //     return () => clearInterval(interval);
+    // }, [fetchNotifications]); // Only depends on stable fetchNotifications
 
     // Ctrl+K keyboard shortcut to focus search
     useEffect(() => {
@@ -117,17 +138,20 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    // Close notifications when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
-                setShowNotifications(false);
-            }
-        };
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Close notifications when clicking outside
+    // ============================================================
+    // // Close notifications when clicking outside
+    // useEffect(() => {
+    //     const handleClickOutside = (e: MouseEvent) => {
+    //         if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+    //             setShowNotifications(false);
+    //         }
+    //     };
 
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    //     document.addEventListener('mousedown', handleClickOutside);
+    //     return () => document.removeEventListener('mousedown', handleClickOutside);
+    // }, []);
 
     // Debounced search handler - stable reference
     const debouncedSearch = useCallback((query: string) => {
@@ -153,67 +177,70 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
         onSearch(searchQuery);
     };
 
-    // Mark notification as read
-    const markAsRead = (notificationId: string) => {
-        const newReadIds = new Set(readNotificationIds);
-        newReadIds.add(notificationId);
-        setReadNotificationIds(newReadIds);
-        localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(newReadIds)));
-        setUnreadCount(prev => Math.max(0, prev - 1));
-    };
+    // ============================================================
+    // COMMENT FOR NOTIFICATION ICON - Notification Handlers
+    // ============================================================
+    // // Mark notification as read
+    // const markAsRead = (notificationId: string) => {
+    //     const newReadIds = new Set(readNotificationIds);
+    //     newReadIds.add(notificationId);
+    //     setReadNotificationIds(newReadIds);
+    //     localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(newReadIds)));
+    //     setUnreadCount(prev => Math.max(0, prev - 1));
+    // };
 
-    // Mark all notifications as read
-    const markAllAsRead = () => {
-        const allIds = new Set(notifications.map(n => n.id));
-        setReadNotificationIds(allIds);
-        localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(allIds)));
-        setUnreadCount(0);
-    };
+    // // Mark all notifications as read
+    // const markAllAsRead = () => {
+    //     const allIds = new Set(notifications.map(n => n.id));
+    //     setReadNotificationIds(allIds);
+    //     localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(allIds)));
+    //     setUnreadCount(0);
+    // };
 
-    // Handle notification click
-    const handleNotificationItemClick = (notification: NotificationItem) => {
-        markAsRead(notification.id);
-        setShowNotifications(false);
-        if (onNotificationClick) {
-            onNotificationClick(notification);
-        }
-    };
+    // // Handle notification click
+    // const handleNotificationItemClick = (notification: NotificationItem) => {
+    //     markAsRead(notification.id);
+    //     setShowNotifications(false);
+    //     if (onNotificationClick) {
+    //         onNotificationClick(notification);
+    //     }
+    // };
 
-    // Remove notification (dismiss from view)
-    const removeNotification = (e: React.MouseEvent, notificationId: string) => {
-        e.stopPropagation();
-        markAsRead(notificationId);
-        // Optionally hide from list (UI only, will reappear on next fetch if still relevant)
-        setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    };
+    // // Remove notification (dismiss from view)
+    // const removeNotification = (e: React.MouseEvent, notificationId: string) => {
+    //     e.stopPropagation();
+    //     markAsRead(notificationId);
+    //     // Optionally hide from list (UI only, will reappear on next fetch if still relevant)
+    //     setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    // };
 
-    const getNotificationIcon = (type: string) => {
-        switch (type) {
-            case 'error':
-                return <span className="text-accent-red text-sm">!</span>;
-            case 'warning':
-                return <span className="text-accent-yellow text-sm">⚠</span>;
-            case 'success':
-                return <span className="text-accent-green text-sm">✓</span>;
-            default:
-                return <span className="text-text-muted text-sm">•</span>;
-        }
-    };
+    // const getNotificationIcon = (type: string) => {
+    //     switch (type) {
+    //         case 'error':
+    //             return <span className="text-accent-red text-sm">!</span>;
+    //         case 'warning':
+    //             return <span className="text-accent-yellow text-sm">⚠</span>;
+    //         case 'success':
+    //             return <span className="text-accent-green text-sm">✓</span>;
+    //         default:
+    //             return <span className="text-text-muted text-sm">•</span>;
+    //     }
+    // };
 
-    const getNotificationBg = (type: string) => {
-        switch (type) {
-            case 'error':
-                return 'bg-accent-red/15';
-            case 'warning':
-                return 'bg-accent-yellow/15';
-            case 'success':
-                return 'bg-accent-green/15';
-            default:
-                return 'bg-card-border';
-        }
-    };
+    // const getNotificationBg = (type: string) => {
+    //     switch (type) {
+    //         case 'error':
+    //             return 'bg-accent-red/15';
+    //         case 'warning':
+    //             return 'bg-accent-yellow/15';
+    //         case 'success':
+    //             return 'bg-accent-green/15';
+    //         default:
+    //             return 'bg-card-border';
+    //     }
+    // };
 
-    const isRead = (notificationId: string) => readNotificationIds.has(notificationId);
+    // const isRead = (notificationId: string) => readNotificationIds.has(notificationId);
 
     return (
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-card-border">
@@ -282,15 +309,17 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                         {theme === 'dark' ? <SunIcon size={20} /> : <MoonIcon size={20} />}
                     </button>
 
+                    {/* ============================================================ */}
+                    {/* COMMENT FOR NOTIFICATION ICON - Notification Button & Dropdown */}
+                    {/* ============================================================ */}
                     {/* Notifications */}
-                    <div className="relative" ref={notificationRef}>
+                    {/* <div className="relative" ref={notificationRef}>
                         <button
                             onClick={() => setShowNotifications(!showNotifications)}
                             className="relative p-2.5 rounded-xl text-text-secondary hover:bg-card-bg hover:text-text-primary transition-colors"
                             aria-label="Notifications"
                         >
                             <BellIcon size={20} />
-                            {/* Notification Badge with count */}
                             {unreadCount > 0 && (
                                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-accent-red text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                                     {unreadCount > 9 ? '9+' : unreadCount}
@@ -298,7 +327,6 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                             )}
                         </button>
 
-                        {/* Notifications Dropdown */}
                         {showNotifications && (
                             <div className="absolute right-0 top-full mt-2 w-80 bg-card-bg border border-card-border rounded-xl shadow-xl animate-fade-in z-50">
                                 <div className="flex items-center justify-between px-4 py-3 border-b border-card-border">
@@ -327,8 +355,7 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                                         notifications.map((notification) => (
                                             <div
                                                 key={notification.id}
-                                                className={`flex gap-3 p-3 rounded-lg hover:bg-background cursor-pointer transition-colors group ${isRead(notification.id) ? 'opacity-60' : ''
-                                                    }`}
+                                                className={`flex gap-3 p-3 rounded-lg hover:bg-background cursor-pointer transition-colors group ${isRead(notification.id) ? 'opacity-60' : ''}`}
                                                 onClick={() => handleNotificationItemClick(notification)}
                                             >
                                                 <div className={`w-8 h-8 rounded-full ${getNotificationBg(notification.type)} flex items-center justify-center flex-shrink-0`}>
@@ -338,7 +365,6 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                                                     <p className="text-sm text-text-primary">{notification.title}</p>
                                                     <p className="text-xs text-text-muted mt-0.5">{notification.description}</p>
                                                 </div>
-                                                {/* Remove button */}
                                                 <button
                                                     onClick={(e) => removeNotification(e, notification.id)}
                                                     className="opacity-0 group-hover:opacity-100 p-1 text-text-muted hover:text-accent-red transition-all"
@@ -356,7 +382,6 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                                     <div className="px-4 py-3 border-t border-card-border">
                                         <button
                                             onClick={() => {
-                                                // Refresh notifications
                                                 fetchNotifications();
                                             }}
                                             className="w-full text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
@@ -367,7 +392,7 @@ export default function Header({ onMenuClick, onSearch, onFilterClick, onNotific
                                 )}
                             </div>
                         )}
-                    </div>
+                    </div> */}
 
                     {/* Filters Button */}
                     <button

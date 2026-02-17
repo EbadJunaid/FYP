@@ -1,0 +1,42 @@
+graph LR
+    %% Define Styles for colors
+    classDef storage fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef app fill:#fff3e0,stroke:#ff6f00,stroke-width:2px;
+    classDef ext fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,stroke-dasharray: 5 5;
+
+    %% --- NODES ---
+    
+    %% Box 1 (Top)
+    Input("<b>Rapid 7 (≈ 15.8 million)</b><br/><b>Tranco (≈ 4.62 million)</b><br/><b>Cloudflare (≈ 2 million)</b>"):::app
+    
+    %% Box 2 (Bottom newly added) 
+    Input2("<b>IPv4 based ranges</b><br/>(e.g., Other Source)"):::app
+    
+    subgraph "Python Crawler (V3)"
+        Doctor["Doctor Thread<br/>(Self-Healing)"]:::app
+        Workers["Worker Thread Pool<br/>(30 Threads)"]:::app
+    end
+    
+    subgraph "External Systems"
+        Internet((The Internet)):::ext
+        ZCert[["zcertificate Binary"]]:::ext
+    end
+    
+    MongoDB[("MongoDB<br/>(Status Queue & Results)")]:::storage
+
+    %% --- FLOWS ---
+
+    %% 1. Initialization (Both boxes connect to MongoDB)
+    Input -->|"1. Load Domains"| MongoDB
+    Input2 -->|"1. Load Domains"| MongoDB
+    
+    %% 2. The Worker Loop
+    MongoDB <-->|"2. Fetch Job / Save Status"| Workers
+    Workers -->|"3. Get Raw PEM"| Internet
+    Workers <-->|"4. Parse with ZLint"| ZCert
+    
+    %% 3. Saving
+    Workers -->|"5. Save Final JSON"| MongoDB
+    
+    %% 4. Maintenance
+    Doctor -.->|"Monitor Stale Jobs"| MongoDB
