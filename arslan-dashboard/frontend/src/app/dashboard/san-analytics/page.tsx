@@ -256,8 +256,15 @@ export default function SANAnalyticsPage() {
             page: currentPage,
             scrollY: window.scrollY
         }));
-        // Use cert_id if available, otherwise fallback to id
-        const certId = (entry as any).cert_id || entry.id;
+        
+        // Get pure certificate ID (cert_id field is always clean)
+        const certId = (entry as any).cert_id || entry.id.split('-')[0];
+        console.log('SAN Analytics - Row clicked:', {
+            fullId: entry.id,
+            certId: certId,
+            domain: entry.domain
+        });
+        
         router.push(`/certificate/${certId}`);
     }, [filterType, filterValue, currentPage, router]);
 
@@ -565,6 +572,7 @@ export default function SANAnalyticsPage() {
                                 onPageChange={handlePageChange}
                                 onRowClick={handleRowClick}
                                 showSanColumn={true}
+                                enableNavigation={false}  // ⚡ Disable DataTable's navigation - we handle it ourselves!
                             />
                         )}
                     </div>

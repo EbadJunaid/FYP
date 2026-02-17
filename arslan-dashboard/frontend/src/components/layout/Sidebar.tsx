@@ -17,7 +17,7 @@ const navItems: NavItem[] = [
     // { id: 'trends', label: 'Trends', icon: 'trends', href: '/dashboard/trends' },
     // { id: 'type-distribution', label: 'Type Distribution', icon: 'type', href: '/dashboard/type-distribution' },
     // { id: 'issuer-organizations', label: 'Issuer Organizations', icon: 'issuer', href: '/dashboard/issuer-organizations' },
-    // { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },
+    { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },
     // { id: 'subject-names', label: 'Subject Names', icon: 'subject', href: '/dashboard/subject-names' },
     // { id: 'cas-vs-domains', label: 'CAs vs Domains', icon: 'domains', href: '/dashboard/cas-vs-domains' },
     // { id: 'cas-vs-urls', label: 'CAs vs URLs', icon: 'urls', href: '/dashboard/cas-vs-urls' },

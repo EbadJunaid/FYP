@@ -94,8 +94,10 @@ export interface CALeaderboardEntry {
 export interface GeographicEntry {
     id: string;
     country: string;
+    count: number;
     percentage: number;
     color: string;
+    certificate_ids?: string[];  // Array of certificate IDs for this country
 }
 
 // Validity Trend Data Point

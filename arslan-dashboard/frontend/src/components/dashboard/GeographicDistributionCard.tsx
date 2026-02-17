@@ -23,20 +23,24 @@ export default function GeographicDistributionCard({ data, onItemClick }: Geogra
                     <div
                         key={item.id}
                         onClick={() => onItemClick?.(item)}
-                        className="flex items-center gap-3 cursor-pointer group"
+                        className="cursor-pointer group"
                     >
-                        {/* Progress Bar */}
-                        <div className="flex-1 h-7 bg-background rounded-lg overflow-hidden relative">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm text-text-primary group-hover:text-primary-blue transition-colors">
+                                {item.country}
+                            </span>
+                            <span className="text-sm font-medium text-text-secondary">
+                                {item.percentage}%
+                            </span>
+                        </div>
+                        <div className="h-2 bg-background rounded-full overflow-hidden">
                             <div
-                                className="h-full rounded-lg transition-all duration-500 group-hover:opacity-80"
+                                className="h-full rounded-full transition-all duration-500 group-hover:opacity-80"
                                 style={{
-                                    width: `${item.percentage}%`,
+                                    width: `${Math.min(item.percentage * 2, 100)}%`,
                                     backgroundColor: item.color,
                                 }}
                             />
-                            <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-white mix-blend-difference">
-                                {item.country}
-                            </span>
                         </div>
                     </div>
                 ))}

@@ -597,14 +597,14 @@ class TrendsController:
     
     @staticmethod
     def get_issuance_timeline(months: int = 12) -> List:
-        """Get certificate issuance timeline (cached 15 min)"""
+        """Get certificate issuance timeline (cached 15 min) - USES FAST PRE-COMPUTED METHOD"""
         cache_params = {'months': months}
         
         cached = cache.get('issuance_timeline', cache_params)
         if cached:
             return cached
         
-        result = CertificateModel.get_issuance_timeline(months)
+        result = CertificateModel.get_issuance_timeline_fast(months)
         cache.set('issuance_timeline', cache_params, result)
         return result
     

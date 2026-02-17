@@ -121,6 +121,7 @@ export interface GeographicEntry {
     count: number;
     percentage: number;
     color: string;
+    certificate_ids?: string[];  // Array of certificate IDs for this country
 }
 
 export interface FutureRisk {
