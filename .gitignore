@@ -14,13 +14,9 @@ archive/old-dashboard/backend/overview/__pycache__
 archive/old-dashboard/backend/.env
 archive/old-dashboard/backend/overview/migrations
 archive/old-dashboard/frontend/out
-
-
-
-dashboard/frontend/.next
-dashboard/frontend/node_modules
-dashboard/frontend/package-lock.json
-dashboard/frontend/.env.local
+archive/old-dashboard/frontend/.next/
+archive/old-dashboard/frontend/node_modules/
+archive/old-dashboard/frontend/.env.local
 
 
 ### arslan-dashboard
