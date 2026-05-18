@@ -5,14 +5,15 @@ SSL-Certificates-Crawler-copy
 .vscode
 other-ai-setups
 
-### Dashboard 
+### archive/old-Dashboard 
 
-dashboard/.vscode
-dashboard/backend/__pycache__
-dashboard/backend/SSL_Dashboard/__pycache__
-dashboard/backend/overview/__pycache__
-dashboard/backend/.env
-dashboard/backend/overview/migrations
+archive/old-dashboard/.vscode
+archive/old-dashboard/backend/__pycache__
+archive/old-dashboard/backend/SSL_Dashboard/__pycache__
+archive/old-dashboard/backend/overview/__pycache__
+archive/old-dashboard/backend/.env
+archive/old-dashboard/backend/overview/migrations
+archive/old-dashboard/frontend/out
 
 
 
