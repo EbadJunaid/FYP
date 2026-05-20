@@ -3214,7 +3214,7 @@ class CertificateModel:
             }},
             {'$bucket': {
                 'groupBy': '$sanCount',
-                'boundaries': [0, 1, 2, 4, 6, 11, 21, 51],
+                'boundaries': [0, 1, 2, 4, 6, 11, 31, 51],
                 'default': '50+',
                 'output': {'count': {'$sum': 1}}
             }}
@@ -3229,8 +3229,8 @@ class CertificateModel:
             2: '2-3',
             4: '4-5',
             6: '6-10',
-            11: '11-20',
-            21: '21-50',
+            11: '11-30',
+            31: '31-50',
             '50+': '50+'
         }
         

@@ -42,16 +42,23 @@ arslan-dashboard/unique.json
 arslan-dashboard/validity_analysis.md
 arslan-dashboard/errors_in_caching.txt
 
-
-helping-material
-reports
-arslan-dashboard/README-old.md
-
-.vscode
-
 arslan-dashboard/backend/node_modules
 
 arslan-dashboard/temp/
 arslan-dashboard/backend/CA_ANALYTICS_SETUP.md
 arslan-dashboard/backend/MULTIPLE_DATABASE_GUIDE.md
 arslan-dashboard/backend/UNDERSTANDING_INDEXES.md
+arslan-dashboard/README-old.md
+arslan-dashboard/data-sample.json
+arslan-dashboard/data-sample.json
+
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/archive-2
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/not-used-scripts
+
+helping-material
+reports
+slides
+
+.vscode
+
+

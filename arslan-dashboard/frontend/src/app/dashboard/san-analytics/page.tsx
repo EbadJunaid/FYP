@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useTransition, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useTransition, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
@@ -151,6 +151,12 @@ const certificatesFetcher = async (key: string) => {
 // Chart colors
 const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#14b8a6', '#6366f1', '#ec4899', '#84cc16'];
 const PIE_COLORS = { wildcard: '#f59e0b', standard: '#10b981' };
+const formatSanBucketLabel = (bucket: string) => {
+    if (bucket === '1') return '1 SAN';
+    if (bucket === '0') return '0 SANs';
+    return `${bucket} SANs`;
+};
+const SAN_BUCKET_TICKS = ['0', '1', '2-3', '4-5', '6-10', '11-30', '31-50', '50+'];
 
 export default function SANAnalyticsPage() {
     const router = useRouter();
@@ -228,6 +234,19 @@ export default function SANAnalyticsPage() {
 
     const tableData = certsData?.certificates || [];
     const totalPages = certsData?.pagination?.totalPages || 1;
+    const distributionData = useMemo(() => {
+        if (!sanDistribution || sanDistribution.length === 0) {
+            return SAN_BUCKET_TICKS.map((bucket) => ({ bucket, count: 0 }));
+        }
+
+        const byBucket = new Map(
+            sanDistribution.map((entry) => [String(entry.bucket), entry])
+        );
+
+        return SAN_BUCKET_TICKS.map((bucket) => (
+            byBucket.get(bucket) || { bucket, count: 0 }
+        ));
+    }, [sanDistribution]);
 
     // Scroll to table on search
     useEffect(() => {
@@ -385,13 +404,21 @@ export default function SANAnalyticsPage() {
                             </div>
                         ) : (
                             <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={0}>
-                                <BarChart data={sanDistribution || []} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                                <BarChart data={distributionData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                    <XAxis dataKey="bucket" stroke="#9ca3af" fontSize={12} />
+                                    <XAxis
+                                        dataKey="bucket"
+                                        stroke="#9ca3af"
+                                        fontSize={12}
+                                        tickFormatter={(value) => formatSanBucketLabel(String(value))}
+                                        ticks={SAN_BUCKET_TICKS}
+                                        interval={0}
+                                    />
                                     <YAxis stroke="#9ca3af" fontSize={12} />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                                         formatter={(value) => [Number(value).toLocaleString(), 'Certificates']}
+                                        labelFormatter={(label) => formatSanBucketLabel(String(label))}
                                     />
                                     <Bar
                                         dataKey="count"
@@ -535,7 +562,7 @@ export default function SANAnalyticsPage() {
                                 className="px-3 py-1.5 text-sm font-medium rounded-md bg-card-bg border border-card-border text-text-secondary hover:text-primary-blue focus:outline-none focus:ring-2 focus:ring-primary-blue/50"
                             >
                                 <option value="">SAN Count...</option>
-                                <option value="0">0 SANs</option>
+                                <option value="0">0</option>
                                 <option value="1">1 SAN</option>
                                 <option value="2-3">2-3 SANs</option>
                                 <option value="4-5">4-5 SANs</option>

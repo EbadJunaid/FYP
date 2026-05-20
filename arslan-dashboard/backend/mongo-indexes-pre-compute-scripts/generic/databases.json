@@ -1,0 +1,14 @@
+{
+  "databases": [
+    {
+      "id": "test-tranco",
+      "main": "test-api-tranco",
+      "results": "test-api-tranco-results"
+    },
+    {
+      "id": "test-pakistani",
+      "main": "test-api-pakistani",
+      "results": "test-api-pakistani-results"
+    }
+  ]
+}
