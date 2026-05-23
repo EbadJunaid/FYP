@@ -375,6 +375,485 @@ class CertificateModel:
         }
     
     @classmethod
+    # def get_all(cls, page: int = 1, page_size: int = 10, 
+    #             status: Optional[str] = None, 
+    #             country: Optional[str] = None,
+    #             issuer: Optional[str] = None,
+    #             search: Optional[str] = None,
+    #             encryption_type: Optional[str] = None,
+    #             has_vulnerabilities: Optional[bool] = None,
+    #             expiring_month: Optional[int] = None,
+    #             expiring_year: Optional[int] = None,
+    #             expiring_days: Optional[int] = None,
+    #             validity_bucket: Optional[str] = None,
+    #             issued_month: Optional[int] = None,
+    #             issued_year: Optional[int] = None,
+    #             issued_within_days: Optional[int] = None,
+    #             # New Signature/Hash page filters
+    #             signature_algorithm: Optional[str] = None,
+    #             weak_hash: Optional[bool] = None,
+    #             self_signed: Optional[bool] = None,
+    #             key_size: Optional[int] = None,
+    #             hash_type: Optional[str] = None,
+    #             # SAN Analytics page filters
+    #             san_tld: Optional[str] = None,
+    #             san_type: Optional[str] = None,
+    #             san_count_min: Optional[int] = None,
+    #             san_count_max: Optional[int] = None,
+    #             expiring_start: Optional[str] = None,
+    #             expiring_end: Optional[str] = None,
+    #             # Shared Keys page filter
+    #             shared_key: Optional[bool] = None,
+    #             fingerprint: Optional[str] = None,
+    #             base_filter: Optional[Dict] = None) -> Dict:
+    #     """Get paginated list of certificates with optional filters
+        
+    #     Args:
+    #         expiring_days: Filter for certs expiring within N days (e.g., 30, 60, 90)
+    #         validity_bucket: Filter by validity period bucket (e.g., "0-90", "90-365", "365-730", "730+")
+    #         issued_month: Filter by issuance month (1-12)
+    #         issued_year: Filter by issuance year (e.g., 2025)
+    #         issued_within_days: Filter for certs issued within N days (e.g., 30)
+    #         signature_algorithm: Filter by exact signature algorithm (e.g., "SHA256-RSA")
+    #         weak_hash: Filter certs with weak hash (MD5, SHA-1)
+    #         self_signed: Filter self-signed certificates
+    #         key_size: Filter by exact key size (e.g., 2048, 4096)
+    #         hash_type: Filter by hash algorithm (e.g., "SHA-256", "SHA-1")
+    #         san_tld: Filter by TLD in SAN entries (e.g., ".com", ".pk")
+    #         san_type: Filter by SAN type ("wildcard" or "standard")
+    #         san_count_min: Filter by minimum SAN count
+    #         san_count_max: Filter by maximum SAN count
+    #         expiring_start: Filter by exact expiration start date (ISO string)
+    #         expiring_end: Filter by exact expiration end date (ISO string)
+    #         shared_key: Filter for certs involved in true key reuse (different certs sharing same public key)
+    #         base_filter: Global filter query from build_filter_query() - merged with specific filters
+    #     """
+        
+    #     now = cls.get_current_time_iso()
+    #     now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+    #     # Build query based on filters
+    #     query = {}
+        
+    #     # Apply base filter from global filters (date range, etc)
+    #     if base_filter:
+    #         query = base_filter.copy()
+        
+    #     if search:
+    #         query['$or'] = [
+    #             {'parsed.subject.common_name': {'$regex': search, '$options': 'i'}},
+    #             {'domain': {'$regex': search, '$options': 'i'}}
+    #         ]
+        
+    #     if issuer:
+    #         if issuer.lower() == 'others':
+    #             # Get top 10 CAs and exclude them using $nin
+    #             top_ca_pipeline = [
+    #                 {'$project': {
+    #                     'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}
+    #                 }},
+    #                 {'$match': {'issuer_org': {'$exists': True, '$ne': None}}},
+    #                 {'$group': {
+    #                     '_id': '$issuer_org',
+    #                     'count': {'$sum': 1}
+    #                 }},
+    #                 {'$sort': {'count': -1}},
+    #                 {'$limit': 10}
+    #             ]
+    #             top_cas = [r['_id'] for r in cls.collection.aggregate(top_ca_pipeline)]
+    #             # Match certificates where issuer is NOT in top 10
+    #             query['$and'] = query.get('$and', [])
+    #             query['$and'].append({
+    #                 '$or': [
+    #                     {'parsed.issuer.organization': {'$nin': top_cas}},
+    #                     {'parsed.issuer.organization': {'$exists': False}}
+    #                 ]
+    #             })
+    #         else:
+    #             query['parsed.issuer.organization'] = {'$regex': issuer, '$options': 'i'}
+        
+    #     # Apply status filter - VALID includes ALL non-expired certificates
+    #     if status:
+    #         status_upper = status.upper()
+    #         if status_upper == 'EXPIRED':
+    #             query['parsed.validity.end'] = {'$lt': now}
+    #         elif status_upper == 'EXPIRING_SOON':
+    #             query['parsed.validity.end'] = {'$gte': now, '$lte': now_plus_30}
+    #         elif status_upper == 'VALID':
+    #             # VALID = ALL non-expired certificates (includes expiring_soon)
+    #             query['parsed.validity.end'] = {'$gt': now}
+        
+    #     # Filter by encryption type (e.g., "RSA 2048", "ECDSA 256")
+    #     if encryption_type:
+    #         parts = encryption_type.split()
+    #         if len(parts) >= 1:
+    #             algo_name = parts[0]
+    #             query['parsed.subject_key_info.key_algorithm.name'] = algo_name
+    #             if len(parts) >= 2:
+    #                 try:
+    #                     key_length = int(parts[1])
+    #                     # Check both RSA and ECDSA key length fields
+    #                     if algo_name.upper() == 'RSA':
+    #                         query['parsed.subject_key_info.rsa_public_key.length'] = key_length
+    #                     elif algo_name.upper() in ['ECDSA', 'EC']:
+    #                         query['parsed.subject_key_info.ecdsa_public_key.length'] = key_length
+    #                 except ValueError:
+    #                     pass
+        
+    #     # Filter by exact signature algorithm (e.g., "SHA256-RSA", "ECDSA-SHA256")
+    #     if signature_algorithm:
+    #         query['parsed.signature_algorithm.name'] = signature_algorithm
+        
+    #     # Filter by weak hash (SHA-1, MD5) - for Weak Hash Alert card
+    #     if weak_hash:
+    #         query['$or'] = query.get('$or', [])
+    #         if not query['$or']:
+    #             query['$or'] = [
+    #                 {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
+    #                 {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
+    #             ]
+        
+    #     # Filter by self-signed certificates
+    #     if self_signed:
+    #         query['parsed.signature.self_signed'] = True
+        
+    #     # Filter by exact key size (e.g., 2048, 4096)
+    #     if key_size:
+    #         query['$or'] = query.get('$or', [])
+    #         if not query['$or']:
+    #             query['$or'] = [
+    #                 {'parsed.subject_key_info.rsa_public_key.length': key_size},
+    #                 {'parsed.subject_key_info.ecdsa_public_key.length': key_size}
+    #             ]
+        
+    #     # Filter by hash type (e.g., "SHA-256", "SHA-1")
+    #     if hash_type:
+    #         # Map hash type to regex pattern for signature_algorithm.name
+    #         hash_patterns = {
+    #             'SHA-256': '^SHA256',
+    #             'SHA-384': '^SHA384',
+    #             'SHA-512': '^SHA512',
+    #             'SHA-1': '^SHA1|^SHA-1',
+    #             'MD5': '^MD5'
+    #         }
+    #         pattern = hash_patterns.get(hash_type, f'^{hash_type.replace("-", "")}')
+    #         query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
+        
+    #     # Filter by expiring month/year - get certs that expire/expired in that month
+    #     if expiring_month and expiring_year:
+    #         from calendar import monthrange
+    #         # Get first and last day of the month
+    #         _, last_day = monthrange(expiring_year, expiring_month)
+    #         month_start = f"{expiring_year}-{expiring_month:02d}-01T00:00:00Z"
+    #         month_end = f"{expiring_year}-{expiring_month:02d}-{last_day:02d}T23:59:59Z"
+    #         query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
+        
+    #     # Filter by custom expiration range (e.g. for weekly view)
+    #     if expiring_start and expiring_end:
+    #         # If both month filter and range filter are present, range takes precedence
+    #         # or we could combine them, but range is usually more specific
+    #         query['parsed.validity.end'] = {'$gte': expiring_start, '$lte': expiring_end}
+        
+    #     # Filter by issued month/year - get certs that were issued (validFrom) in that month
+    #     if issued_month and issued_year:
+    #         from calendar import monthrange
+    #         # Get first and last day of the month
+    #         _, last_day = monthrange(issued_year, issued_month)
+    #         month_start = f"{issued_year}-{issued_month:02d}-01T00:00:00Z"
+    #         month_end = f"{issued_year}-{issued_month:02d}-{last_day:02d}T23:59:59Z"
+    #         query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
+        
+    #     # Filter by shared key fingerprint (Drill-down from shared key groups)
+    #     if fingerprint:
+    #         query['parsed.subject_key_info.fingerprint_sha256'] = fingerprint
+
+    #     # Shared key filter - finding certificates that share keys
+    #     if shared_key:
+    #         # This requires a two-step process or aggregation if we want to be precise
+    #         # For list view, we usually just want to know "is this cert using a shared key?"
+    #         # We can use the pre-calculated field if available, or rely on the fact
+    #         # that we might have filtered by fingerprint.
+    #         # If checking for "any shared key", it's complex in a simple find() query without a flag.
+    #         # Assuming we have a flag or using aggregation.
+    #         # For now, if just listing, we might rely on the 'fingerprint' filter being used.
+    #         pass
+
+    #         past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    #         # Certificates with validity start date within the last N days
+    #         query['parsed.validity.start'] = {
+    #             '$gte': past_date,  # Issued within last N days
+    #             '$lte': now  # Up to now
+    #         }
+        
+    #     # Filter by expiring within N days (distinct from 30-day expiring_soon status)
+    #     if expiring_days:
+    #         now_dt = datetime.now(timezone.utc)
+    #         target_date = (now_dt + timedelta(days=expiring_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    #         # Override any existing validity.end filter
+    #         query['parsed.validity.end'] = {
+    #             '$gt': now,  # Not yet expired
+    #             '$lte': target_date  # Within expiring_days window
+    #         }
+        
+    #     # Filter by validity period bucket (duration in days)
+    #     if validity_bucket:
+    #         # Extract min/max days from bucket string
+    #         # Buckets: "0-90", "90-365", "365-730", "730+"
+    #         bucket_ranges = {
+    #             '0-90': (0, 90),
+    #             '90-365': (90, 365),
+    #             '365-730': (365, 730),
+    #             '730+': (730, 100000)
+    #         }
+    #         if validity_bucket in bucket_ranges:
+    #             min_days, max_days = bucket_ranges[validity_bucket]
+    #             # Use aggregation to compute duration and filter
+    #             # For simplicity, we'll convert to ms range
+    #             min_ms = min_days * 86400000
+    #             max_ms = max_days * 86400000
+                
+    #             # Use aggregation pipeline for duration-based filtering
+    #             pipeline = [
+    #                 {'$match': query} if query else {'$match': {}},
+    #                 {'$addFields': {
+    #                     'validFromDate': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}},
+    #                     'validToDate': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}
+    #                 }},
+    #                 {'$addFields': {
+    #                     'durationMs': {'$subtract': ['$validToDate', '$validFromDate']}
+    #                 }},
+    #                 {'$match': {
+    #                     'durationMs': {'$gte': min_ms, '$lt': max_ms}
+    #                 }},
+    #                 {'$facet': {
+    #                     'data': [{'$skip': (page - 1) * page_size}, {'$limit': page_size}],
+    #                     'count': [{'$count': 'total'}]
+    #                 }}
+    #             ]
+                
+    #             try:
+    #                 result = list(cls.collection.aggregate(pipeline))
+    #                 if result:
+    #                     data = result[0].get('data', [])
+    #                     count_data = result[0].get('count', [])
+    #                     total = count_data[0]['total'] if count_data else 0
+                        
+    #                     certificates = [cls.serialize_certificate(doc) for doc in data]
+    #                     return {
+    #                         'certificates': certificates,
+    #                         'pagination': {
+    #                             'page': page,
+    #                             'pageSize': page_size,
+    #                             'total': total,
+    #                             'totalPages': max(1, (total + page_size - 1) // page_size)
+    #                         }
+    #                     }
+    #             except Exception as e:
+    #                 print(f"Validity bucket filter error: {e}")
+                
+    #             return {
+    #                 'certificates': [],
+    #                 'pagination': {
+    #                     'page': page,
+    #                     'pageSize': page_size,
+    #                     'total': 0,
+    #                     'totalPages': 0
+    #                 }
+    #             }
+        
+    #     # Handle has_vulnerabilities - merge with main query (respects global filters)
+    #     if has_vulnerabilities:
+    #         # Add vulnerability filter to existing query (which may have base_filter)
+    #         query['zlint.errors_present'] = True
+        
+    #     # Handle country filter BEFORE pagination using aggregation pipeline
+    #     # Country is derived from TLD, so we need to compute it for each document
+    #     if country:
+    #         # Use aggregation to compute country from domain TLD and filter
+    #         # Build reverse TLD lookup for matching
+    #         tld_values_for_country = [tld for tld, cntry in TLD_TO_COUNTRY.items() if cntry == country]
+            
+    #         # Build regex patterns for TLD matching
+    #         tld_patterns = []
+    #         for tld in tld_values_for_country:
+    #             if '.' in tld:
+    #                 # Two-part TLD like 'co.uk' - escape the dot
+    #                 escaped_tld = tld.replace('.', r'\.')
+    #                 tld_patterns.append(r'.*\.' + escaped_tld + '$')
+    #             else:
+    #                 # Single TLD
+    #                 tld_patterns.append(r'.*\.' + tld + '$')
+            
+    #         if tld_patterns:
+    #             # Add TLD filter to query
+    #             tld_regex = '|'.join(tld_patterns)
+    #             if '$and' in query:
+    #                 query['$and'].append({'domain': {'$regex': tld_regex, '$options': 'i'}})
+    #             else:
+    #                 query['domain'] = {'$regex': tld_regex, '$options': 'i'}
+    #         else:
+    #             # No TLDs map to this country, return empty result
+    #             return {
+    #                 'certificates': [],
+    #                 'pagination': {
+    #                     'page': page,
+    #                     'pageSize': page_size,
+    #                     'total': 0,
+    #                     'totalPages': 0
+    #                 }
+    #             }
+        
+    #     # SAN TLD filter - filter certs where any dns_name ends with the TLD
+    #     if san_tld:
+    #         # Remove leading dot if present for regex
+    #         tld_pattern = san_tld.lstrip('.')
+    #         # Match dns_names ending with the TLD
+    #         query['parsed.extensions.subject_alt_name.dns_names'] = {
+    #             '$regex': f'\\.{tld_pattern}$',
+    #             '$options': 'i'
+    #         }
+        
+    #     # SAN type filter - filter by wildcard or standard SANs
+    #     if san_type:
+    #         if san_type.lower() == 'wildcard':
+    #             # Match certs with at least one wildcard SAN (starts with *.)
+    #             query['parsed.extensions.subject_alt_name.dns_names'] = {
+    #                 '$regex': '^\\*\\.',
+    #                 '$options': 'i'
+    #             }
+    #         elif san_type.lower() == 'standard':
+    #             # Match certs where no SAN starts with *. 
+    #             # This is trickier - we'll use $not to exclude wildcards
+    #             query['$and'] = query.get('$and', [])
+    #             query['$and'].append({
+    #                 'parsed.extensions.subject_alt_name.dns_names': {
+    #                     '$exists': True,
+    #                     '$ne': []
+    #                 }
+    #             })
+    #             query['$and'].append({
+    #                 'parsed.extensions.subject_alt_name.dns_names': {
+    #                     '$not': {'$regex': '^\\*\\.'}
+    #                 }
+                    
+    #                 })
+        
+        
+    #     # Fingerprint filter - for drill-down from Shared Key Groups
+    #     if fingerprint:
+    #         query['parsed.subject_key_info.fingerprint_sha256'] = fingerprint
+
+    #     # Shared key filter - only show certs that share public key with different certificates
+    #     if shared_key:
+    #         # Find all public key fingerprints that are shared by 2+ distinct certs
+    #         shared_keys_pipeline = [
+    #             {'$match': {
+    #                 'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+    #                 'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+    #             }},
+    #             {'$group': {
+    #                 '_id': '$parsed.subject_key_info.fingerprint_sha256',
+    #                 'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+    #             }},
+    #             {'$addFields': {
+    #                 'distinct_certs': {'$size': '$cert_fingerprints'}
+    #             }},
+    #             {'$match': {'distinct_certs': {'$gt': 1}}},
+    #             {'$project': {'_id': 1}}
+    #         ]
+            
+    #         shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
+            
+    #         if shared_fingerprints:
+    #             # Filter certs to only those with shared public keys
+    #             if '$and' not in query:
+    #                 query['$and'] = []
+    #             query['$and'].append({
+    #                 'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
+    #             })
+    #         else:
+    #             # No shared keys found, return empty result
+    #             return {
+    #                 'certificates': [],
+    #                 'pagination': {
+    #                     'page': page,
+    #                     'pageSize': page_size,
+    #                     'total': 0,
+    #                     'totalPages': 0
+    #                 }
+    #             }
+        
+    #     # SAN count filter - filter by number of SANs (dns_names array size)
+    #     if san_count_min is not None or san_count_max is not None:
+    #         # Use aggregation pipeline for array size filtering
+    #         pipeline = [
+    #             {'$match': query if query else {}},
+    #             # Add a field for the count of dns_names
+    #             {'$addFields': {
+    #                 'sanCount': {
+    #                     '$size': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]}
+    #                 }
+    #             }},
+    #         ]
+            
+    #         # Build match condition for san count
+    #         san_count_match = {}
+    #         if san_count_min is not None:
+    #             san_count_match['$gte'] = san_count_min
+    #         if san_count_max is not None:
+    #             san_count_match['$lte'] = san_count_max
+            
+    #         if san_count_match:
+    #             pipeline.append({'$match': {'sanCount': san_count_match}})
+            
+    #         # Get total count first
+    #         count_pipeline = pipeline + [{'$count': 'total'}]
+    #         count_result = list(cls.collection.aggregate(count_pipeline, allowDiskUse=True))
+    #         total = count_result[0]['total'] if count_result else 0
+            
+    #         # Get paginated results
+    #         skip = (page - 1) * page_size
+    #         result_pipeline = pipeline + [
+    #             {'$skip': skip},
+    #             {'$limit': page_size}
+    #         ]
+            
+    #         certificates = []
+    #         for doc in cls.collection.aggregate(result_pipeline, allowDiskUse=True):
+    #             cert = cls.serialize_certificate(doc)
+    #             certificates.append(cert)
+            
+    #         return {
+    #             'certificates': certificates,
+    #             'pagination': {
+    #                 'page': page,
+    #                 'pageSize': page_size,
+    #                 'total': total,
+    #                 'totalPages': max(1, (total + page_size - 1) // page_size)
+    #             }
+    #         }
+        
+    #     # Get total count with filters applied
+    #     total = cls.collection.count_documents(query)
+        
+    #     # Get paginated results
+    #     skip = (page - 1) * page_size
+    #     cursor = cls.collection.find(query).skip(skip).limit(page_size)
+        
+    #     certificates = []
+    #     for doc in cursor:
+    #         cert = cls.serialize_certificate(doc)
+    #         certificates.append(cert)
+        
+    #     return {
+    #         'certificates': certificates,
+    #         'pagination': {
+    #             'page': page,
+    #             'pageSize': page_size,
+    #             'total': total,
+    #             'totalPages': max(1, (total + page_size - 1) // page_size)
+    #         }
+    #     }
     def get_all(cls, page: int = 1, page_size: int = 10, 
                 status: Optional[str] = None, 
                 country: Optional[str] = None,
@@ -468,9 +947,9 @@ class CertificateModel:
                     ]
                 })
             else:
-                # OPTIMIZED: Use the indexed parsed.issuer_org_primary field for exact match
-                # This is MUCH faster than regex on the array field
-                query['parsed.issuer_org_primary'] = issuer
+                # FIX: Use the actual issuer.organization field that exists in the database
+                # parsed.issuer.organization is an array, so we use $in to match any element
+                query['parsed.issuer.organization'] = {'$in': [issuer]}
         
         # Apply status filter - VALID includes ALL non-expired certificates
         if status:
@@ -845,12 +1324,15 @@ class CertificateModel:
             try:
                 ca_analytics = MongoDBClient.get_results_db()['ca-analytics']
                 ca_doc = ca_analytics.find_one({'name': issuer})
+                print("before if condition")
                 if ca_doc:
+                    print("hello in if codition")
                     total = ca_doc['count']
                 else:
+                    print("hello in else codition")
                     # Fallback to aggregation count if not in pre-computed data
                     pipeline = [{'$match': query}, {'$count': 'total'}]
-                    count_result = list(cls.collection.aggregate(pipeline, hint='idx_issuer_org_primary'))
+                    count_result = list(cls.collection.aggregate(pipeline))
                     total = count_result[0]['total'] if count_result else 0
             except Exception as e:
                 # Fallback to standard count on error
@@ -866,10 +1348,10 @@ class CertificateModel:
             # Text search: MongoDB automatically uses text index, no hint needed
             cursor = cls.collection.find(query).sort('_id', 1).skip(skip).limit(page_size)
         elif issuer:
-            # Issuer filter: Use issuer index WITHOUT sort to avoid expensive in-memory sort
+            # Issuer filter: Return results in natural order to avoid expensive in-memory sort
             # MongoDB would have to sort 339K+ documents if we add sort here
             # Better to return results in natural order (insertion order)
-            cursor = cls.collection.find(query).hint('idx_issuer_org_primary').skip(skip).limit(page_size)
+            cursor = cls.collection.find(query).skip(skip).limit(page_size)
         else:
             # Regular query: Use hint to optimize with _id index
             cursor = cls.collection.find(query).sort('_id', 1).hint('_id_').skip(skip).limit(page_size)
@@ -3343,6 +3825,7 @@ class CertificateModel:
     # ===========================
     
     @classmethod
+    #san stats function 1
     def get_san_stats_fast(cls) -> Dict[str, Any]:
         """
         ⚡ OPTIMIZED: Get SAN statistics from pre-computed materialized view.
@@ -3372,6 +3855,7 @@ class CertificateModel:
         }
     
     @classmethod
+    #san distribution function 2
     def get_san_distribution_fast(cls) -> List[Dict[str, Any]]:
         """
         ⚡ OPTIMIZED: Get SAN distribution from pre-computed materialized view.

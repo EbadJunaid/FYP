@@ -17,8 +17,8 @@ import argparse
 from pymongo import MongoClient
 
 DEFAULT_PAIRS = [
-    ("tranco-latest-8-lakh", "test-api-tranco"),
-    ("pakistani-domains", "test-api-pakistani"),
+    ("tranco-latest-8-lakh", "api-tranco"),
+    ("pakistani-domains", "api-pakistani"),
 ]
 
 

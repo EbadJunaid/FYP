@@ -1,14 +1,14 @@
 {
   "databases": [
     {
-      "id": "test-tranco",
-      "main": "test-api-tranco",
-      "results": "test-api-tranco-results"
+      "id": "tranco-latest-8-lakh",
+      "main": "tranco-latest-8-lakh",
+      "results": "tranco-latest-8-lakh-results"
     },
     {
-      "id": "test-pakistani",
-      "main": "test-api-pakistani",
-      "results": "test-api-pakistani-results"
+      "id": "pakistani-domains",
+      "main": "pakistani-domains",
+      "results": "pakistani-domains-results"
     }
   ]
 }
