@@ -5,41 +5,48 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from .db import db, MongoDBClient  # Don't import results_db directly - use MongoDBClient.get_results_db() instead
+from .shared_keys_models import SharedKeyModel
+from .san_models import SANModel
+from .trends_models import TrendsModel
+from .ca_models import CAModel
+from .signature_hash_models import SignatureHashModel
+from .shared_models import SharedModels
+from .validity_models import ValidityModels
 
 # TLD to Country mapping for deriving country from domain
-TLD_TO_COUNTRY = {
-    'pk': 'Pakistan',
-    'us': 'United States',
-    'com': 'United States',
-    'uk': 'United Kingdom',
-    'co.uk': 'United Kingdom',
-    'de': 'Germany',
-    'fr': 'France',
-    'jp': 'Japan',
-    'ca': 'Canada',
-    'au': 'Australia',
-    'nl': 'Netherlands',
-    'in': 'India',
-    'cn': 'China',
-    'br': 'Brazil',
-    'kr': 'South Korea',
-    'sg': 'Singapore',
-    'ie': 'Ireland',
-    'se': 'Sweden',
-    'ch': 'Switzerland',
-    'it': 'Italy',
-    'es': 'Spain',
-    'ru': 'Russia',
-    'mx': 'Mexico',
-    'za': 'South Africa',
-    'nz': 'New Zealand',
-    'org': 'International',
-    'net': 'International',
-    'io': 'International',
-    'dev': 'International',
-    'ebad': 'ebad',  # For testing unknown TLD handling
-    'soy' : 'say' # For testing again 
-}
+# TLD_TO_COUNTRY = {
+#     'pk': 'Pakistan',
+#     'us': 'United States',
+#     'com': 'United States',
+#     'uk': 'United Kingdom',
+#     'co.uk': 'United Kingdom',
+#     'de': 'Germany',
+#     'fr': 'France',
+#     'jp': 'Japan',
+#     'ca': 'Canada',
+#     'au': 'Australia',
+#     'nl': 'Netherlands',
+#     'in': 'India',
+#     'cn': 'China',
+#     'br': 'Brazil',
+#     'kr': 'South Korea',
+#     'sg': 'Singapore',
+#     'ie': 'Ireland',
+#     'se': 'Sweden',
+#     'ch': 'Switzerland',
+#     'it': 'Italy',
+#     'es': 'Spain',
+#     'ru': 'Russia',
+#     'mx': 'Mexico',
+#     'za': 'South Africa',
+#     'nz': 'New Zealand',
+#     'org': 'International',
+#     'net': 'International',
+#     'io': 'International',
+#     'dev': 'International',
+#     'ebad': 'ebad',  # For testing unknown TLD handling
+#     'soy' : 'say' # For testing again 
+# }
 
 
 class CertificateModel:
@@ -49,27 +56,7 @@ class CertificateModel:
     """
     collection = db['certificates']
     
-    @staticmethod
-    def get_current_time_iso() -> str:
-        """Get current time in ISO format for MongoDB queries"""
-        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    
-    @staticmethod
-    def get_tld_country(domain: str) -> str:
-        """Derive country from domain TLD"""
-        if not domain:
-            return 'Unknown'
-        parts = domain.lower().split('.')
-        if len(parts) >= 2:
-            # Check for two-part TLDs first (e.g., co.uk)
-            two_part_tld = '.'.join(parts[-2:])
-            if two_part_tld in TLD_TO_COUNTRY:
-                return TLD_TO_COUNTRY[two_part_tld]
-            # Check single TLD
-            tld = parts[-1]
-            return TLD_TO_COUNTRY.get(tld, 'Unknown')
-        return 'Unknown'
-    
+   
     @staticmethod
     def get_status(validity_end: str) -> str:
         """Determine certificate status based on validity end date"""
@@ -375,485 +362,6 @@ class CertificateModel:
         }
     
     @classmethod
-    # def get_all(cls, page: int = 1, page_size: int = 10, 
-    #             status: Optional[str] = None, 
-    #             country: Optional[str] = None,
-    #             issuer: Optional[str] = None,
-    #             search: Optional[str] = None,
-    #             encryption_type: Optional[str] = None,
-    #             has_vulnerabilities: Optional[bool] = None,
-    #             expiring_month: Optional[int] = None,
-    #             expiring_year: Optional[int] = None,
-    #             expiring_days: Optional[int] = None,
-    #             validity_bucket: Optional[str] = None,
-    #             issued_month: Optional[int] = None,
-    #             issued_year: Optional[int] = None,
-    #             issued_within_days: Optional[int] = None,
-    #             # New Signature/Hash page filters
-    #             signature_algorithm: Optional[str] = None,
-    #             weak_hash: Optional[bool] = None,
-    #             self_signed: Optional[bool] = None,
-    #             key_size: Optional[int] = None,
-    #             hash_type: Optional[str] = None,
-    #             # SAN Analytics page filters
-    #             san_tld: Optional[str] = None,
-    #             san_type: Optional[str] = None,
-    #             san_count_min: Optional[int] = None,
-    #             san_count_max: Optional[int] = None,
-    #             expiring_start: Optional[str] = None,
-    #             expiring_end: Optional[str] = None,
-    #             # Shared Keys page filter
-    #             shared_key: Optional[bool] = None,
-    #             fingerprint: Optional[str] = None,
-    #             base_filter: Optional[Dict] = None) -> Dict:
-    #     """Get paginated list of certificates with optional filters
-        
-    #     Args:
-    #         expiring_days: Filter for certs expiring within N days (e.g., 30, 60, 90)
-    #         validity_bucket: Filter by validity period bucket (e.g., "0-90", "90-365", "365-730", "730+")
-    #         issued_month: Filter by issuance month (1-12)
-    #         issued_year: Filter by issuance year (e.g., 2025)
-    #         issued_within_days: Filter for certs issued within N days (e.g., 30)
-    #         signature_algorithm: Filter by exact signature algorithm (e.g., "SHA256-RSA")
-    #         weak_hash: Filter certs with weak hash (MD5, SHA-1)
-    #         self_signed: Filter self-signed certificates
-    #         key_size: Filter by exact key size (e.g., 2048, 4096)
-    #         hash_type: Filter by hash algorithm (e.g., "SHA-256", "SHA-1")
-    #         san_tld: Filter by TLD in SAN entries (e.g., ".com", ".pk")
-    #         san_type: Filter by SAN type ("wildcard" or "standard")
-    #         san_count_min: Filter by minimum SAN count
-    #         san_count_max: Filter by maximum SAN count
-    #         expiring_start: Filter by exact expiration start date (ISO string)
-    #         expiring_end: Filter by exact expiration end date (ISO string)
-    #         shared_key: Filter for certs involved in true key reuse (different certs sharing same public key)
-    #         base_filter: Global filter query from build_filter_query() - merged with specific filters
-    #     """
-        
-    #     now = cls.get_current_time_iso()
-    #     now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-    #     # Build query based on filters
-    #     query = {}
-        
-    #     # Apply base filter from global filters (date range, etc)
-    #     if base_filter:
-    #         query = base_filter.copy()
-        
-    #     if search:
-    #         query['$or'] = [
-    #             {'parsed.subject.common_name': {'$regex': search, '$options': 'i'}},
-    #             {'domain': {'$regex': search, '$options': 'i'}}
-    #         ]
-        
-    #     if issuer:
-    #         if issuer.lower() == 'others':
-    #             # Get top 10 CAs and exclude them using $nin
-    #             top_ca_pipeline = [
-    #                 {'$project': {
-    #                     'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}
-    #                 }},
-    #                 {'$match': {'issuer_org': {'$exists': True, '$ne': None}}},
-    #                 {'$group': {
-    #                     '_id': '$issuer_org',
-    #                     'count': {'$sum': 1}
-    #                 }},
-    #                 {'$sort': {'count': -1}},
-    #                 {'$limit': 10}
-    #             ]
-    #             top_cas = [r['_id'] for r in cls.collection.aggregate(top_ca_pipeline)]
-    #             # Match certificates where issuer is NOT in top 10
-    #             query['$and'] = query.get('$and', [])
-    #             query['$and'].append({
-    #                 '$or': [
-    #                     {'parsed.issuer.organization': {'$nin': top_cas}},
-    #                     {'parsed.issuer.organization': {'$exists': False}}
-    #                 ]
-    #             })
-    #         else:
-    #             query['parsed.issuer.organization'] = {'$regex': issuer, '$options': 'i'}
-        
-    #     # Apply status filter - VALID includes ALL non-expired certificates
-    #     if status:
-    #         status_upper = status.upper()
-    #         if status_upper == 'EXPIRED':
-    #             query['parsed.validity.end'] = {'$lt': now}
-    #         elif status_upper == 'EXPIRING_SOON':
-    #             query['parsed.validity.end'] = {'$gte': now, '$lte': now_plus_30}
-    #         elif status_upper == 'VALID':
-    #             # VALID = ALL non-expired certificates (includes expiring_soon)
-    #             query['parsed.validity.end'] = {'$gt': now}
-        
-    #     # Filter by encryption type (e.g., "RSA 2048", "ECDSA 256")
-    #     if encryption_type:
-    #         parts = encryption_type.split()
-    #         if len(parts) >= 1:
-    #             algo_name = parts[0]
-    #             query['parsed.subject_key_info.key_algorithm.name'] = algo_name
-    #             if len(parts) >= 2:
-    #                 try:
-    #                     key_length = int(parts[1])
-    #                     # Check both RSA and ECDSA key length fields
-    #                     if algo_name.upper() == 'RSA':
-    #                         query['parsed.subject_key_info.rsa_public_key.length'] = key_length
-    #                     elif algo_name.upper() in ['ECDSA', 'EC']:
-    #                         query['parsed.subject_key_info.ecdsa_public_key.length'] = key_length
-    #                 except ValueError:
-    #                     pass
-        
-    #     # Filter by exact signature algorithm (e.g., "SHA256-RSA", "ECDSA-SHA256")
-    #     if signature_algorithm:
-    #         query['parsed.signature_algorithm.name'] = signature_algorithm
-        
-    #     # Filter by weak hash (SHA-1, MD5) - for Weak Hash Alert card
-    #     if weak_hash:
-    #         query['$or'] = query.get('$or', [])
-    #         if not query['$or']:
-    #             query['$or'] = [
-    #                 {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
-    #                 {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
-    #             ]
-        
-    #     # Filter by self-signed certificates
-    #     if self_signed:
-    #         query['parsed.signature.self_signed'] = True
-        
-    #     # Filter by exact key size (e.g., 2048, 4096)
-    #     if key_size:
-    #         query['$or'] = query.get('$or', [])
-    #         if not query['$or']:
-    #             query['$or'] = [
-    #                 {'parsed.subject_key_info.rsa_public_key.length': key_size},
-    #                 {'parsed.subject_key_info.ecdsa_public_key.length': key_size}
-    #             ]
-        
-    #     # Filter by hash type (e.g., "SHA-256", "SHA-1")
-    #     if hash_type:
-    #         # Map hash type to regex pattern for signature_algorithm.name
-    #         hash_patterns = {
-    #             'SHA-256': '^SHA256',
-    #             'SHA-384': '^SHA384',
-    #             'SHA-512': '^SHA512',
-    #             'SHA-1': '^SHA1|^SHA-1',
-    #             'MD5': '^MD5'
-    #         }
-    #         pattern = hash_patterns.get(hash_type, f'^{hash_type.replace("-", "")}')
-    #         query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
-        
-    #     # Filter by expiring month/year - get certs that expire/expired in that month
-    #     if expiring_month and expiring_year:
-    #         from calendar import monthrange
-    #         # Get first and last day of the month
-    #         _, last_day = monthrange(expiring_year, expiring_month)
-    #         month_start = f"{expiring_year}-{expiring_month:02d}-01T00:00:00Z"
-    #         month_end = f"{expiring_year}-{expiring_month:02d}-{last_day:02d}T23:59:59Z"
-    #         query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
-        
-    #     # Filter by custom expiration range (e.g. for weekly view)
-    #     if expiring_start and expiring_end:
-    #         # If both month filter and range filter are present, range takes precedence
-    #         # or we could combine them, but range is usually more specific
-    #         query['parsed.validity.end'] = {'$gte': expiring_start, '$lte': expiring_end}
-        
-    #     # Filter by issued month/year - get certs that were issued (validFrom) in that month
-    #     if issued_month and issued_year:
-    #         from calendar import monthrange
-    #         # Get first and last day of the month
-    #         _, last_day = monthrange(issued_year, issued_month)
-    #         month_start = f"{issued_year}-{issued_month:02d}-01T00:00:00Z"
-    #         month_end = f"{issued_year}-{issued_month:02d}-{last_day:02d}T23:59:59Z"
-    #         query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
-        
-    #     # Filter by shared key fingerprint (Drill-down from shared key groups)
-    #     if fingerprint:
-    #         query['parsed.subject_key_info.fingerprint_sha256'] = fingerprint
-
-    #     # Shared key filter - finding certificates that share keys
-    #     if shared_key:
-    #         # This requires a two-step process or aggregation if we want to be precise
-    #         # For list view, we usually just want to know "is this cert using a shared key?"
-    #         # We can use the pre-calculated field if available, or rely on the fact
-    #         # that we might have filtered by fingerprint.
-    #         # If checking for "any shared key", it's complex in a simple find() query without a flag.
-    #         # Assuming we have a flag or using aggregation.
-    #         # For now, if just listing, we might rely on the 'fingerprint' filter being used.
-    #         pass
-
-    #         past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    #         # Certificates with validity start date within the last N days
-    #         query['parsed.validity.start'] = {
-    #             '$gte': past_date,  # Issued within last N days
-    #             '$lte': now  # Up to now
-    #         }
-        
-    #     # Filter by expiring within N days (distinct from 30-day expiring_soon status)
-    #     if expiring_days:
-    #         now_dt = datetime.now(timezone.utc)
-    #         target_date = (now_dt + timedelta(days=expiring_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    #         # Override any existing validity.end filter
-    #         query['parsed.validity.end'] = {
-    #             '$gt': now,  # Not yet expired
-    #             '$lte': target_date  # Within expiring_days window
-    #         }
-        
-    #     # Filter by validity period bucket (duration in days)
-    #     if validity_bucket:
-    #         # Extract min/max days from bucket string
-    #         # Buckets: "0-90", "90-365", "365-730", "730+"
-    #         bucket_ranges = {
-    #             '0-90': (0, 90),
-    #             '90-365': (90, 365),
-    #             '365-730': (365, 730),
-    #             '730+': (730, 100000)
-    #         }
-    #         if validity_bucket in bucket_ranges:
-    #             min_days, max_days = bucket_ranges[validity_bucket]
-    #             # Use aggregation to compute duration and filter
-    #             # For simplicity, we'll convert to ms range
-    #             min_ms = min_days * 86400000
-    #             max_ms = max_days * 86400000
-                
-    #             # Use aggregation pipeline for duration-based filtering
-    #             pipeline = [
-    #                 {'$match': query} if query else {'$match': {}},
-    #                 {'$addFields': {
-    #                     'validFromDate': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}},
-    #                     'validToDate': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}
-    #                 }},
-    #                 {'$addFields': {
-    #                     'durationMs': {'$subtract': ['$validToDate', '$validFromDate']}
-    #                 }},
-    #                 {'$match': {
-    #                     'durationMs': {'$gte': min_ms, '$lt': max_ms}
-    #                 }},
-    #                 {'$facet': {
-    #                     'data': [{'$skip': (page - 1) * page_size}, {'$limit': page_size}],
-    #                     'count': [{'$count': 'total'}]
-    #                 }}
-    #             ]
-                
-    #             try:
-    #                 result = list(cls.collection.aggregate(pipeline))
-    #                 if result:
-    #                     data = result[0].get('data', [])
-    #                     count_data = result[0].get('count', [])
-    #                     total = count_data[0]['total'] if count_data else 0
-                        
-    #                     certificates = [cls.serialize_certificate(doc) for doc in data]
-    #                     return {
-    #                         'certificates': certificates,
-    #                         'pagination': {
-    #                             'page': page,
-    #                             'pageSize': page_size,
-    #                             'total': total,
-    #                             'totalPages': max(1, (total + page_size - 1) // page_size)
-    #                         }
-    #                     }
-    #             except Exception as e:
-    #                 print(f"Validity bucket filter error: {e}")
-                
-    #             return {
-    #                 'certificates': [],
-    #                 'pagination': {
-    #                     'page': page,
-    #                     'pageSize': page_size,
-    #                     'total': 0,
-    #                     'totalPages': 0
-    #                 }
-    #             }
-        
-    #     # Handle has_vulnerabilities - merge with main query (respects global filters)
-    #     if has_vulnerabilities:
-    #         # Add vulnerability filter to existing query (which may have base_filter)
-    #         query['zlint.errors_present'] = True
-        
-    #     # Handle country filter BEFORE pagination using aggregation pipeline
-    #     # Country is derived from TLD, so we need to compute it for each document
-    #     if country:
-    #         # Use aggregation to compute country from domain TLD and filter
-    #         # Build reverse TLD lookup for matching
-    #         tld_values_for_country = [tld for tld, cntry in TLD_TO_COUNTRY.items() if cntry == country]
-            
-    #         # Build regex patterns for TLD matching
-    #         tld_patterns = []
-    #         for tld in tld_values_for_country:
-    #             if '.' in tld:
-    #                 # Two-part TLD like 'co.uk' - escape the dot
-    #                 escaped_tld = tld.replace('.', r'\.')
-    #                 tld_patterns.append(r'.*\.' + escaped_tld + '$')
-    #             else:
-    #                 # Single TLD
-    #                 tld_patterns.append(r'.*\.' + tld + '$')
-            
-    #         if tld_patterns:
-    #             # Add TLD filter to query
-    #             tld_regex = '|'.join(tld_patterns)
-    #             if '$and' in query:
-    #                 query['$and'].append({'domain': {'$regex': tld_regex, '$options': 'i'}})
-    #             else:
-    #                 query['domain'] = {'$regex': tld_regex, '$options': 'i'}
-    #         else:
-    #             # No TLDs map to this country, return empty result
-    #             return {
-    #                 'certificates': [],
-    #                 'pagination': {
-    #                     'page': page,
-    #                     'pageSize': page_size,
-    #                     'total': 0,
-    #                     'totalPages': 0
-    #                 }
-    #             }
-        
-    #     # SAN TLD filter - filter certs where any dns_name ends with the TLD
-    #     if san_tld:
-    #         # Remove leading dot if present for regex
-    #         tld_pattern = san_tld.lstrip('.')
-    #         # Match dns_names ending with the TLD
-    #         query['parsed.extensions.subject_alt_name.dns_names'] = {
-    #             '$regex': f'\\.{tld_pattern}$',
-    #             '$options': 'i'
-    #         }
-        
-    #     # SAN type filter - filter by wildcard or standard SANs
-    #     if san_type:
-    #         if san_type.lower() == 'wildcard':
-    #             # Match certs with at least one wildcard SAN (starts with *.)
-    #             query['parsed.extensions.subject_alt_name.dns_names'] = {
-    #                 '$regex': '^\\*\\.',
-    #                 '$options': 'i'
-    #             }
-    #         elif san_type.lower() == 'standard':
-    #             # Match certs where no SAN starts with *. 
-    #             # This is trickier - we'll use $not to exclude wildcards
-    #             query['$and'] = query.get('$and', [])
-    #             query['$and'].append({
-    #                 'parsed.extensions.subject_alt_name.dns_names': {
-    #                     '$exists': True,
-    #                     '$ne': []
-    #                 }
-    #             })
-    #             query['$and'].append({
-    #                 'parsed.extensions.subject_alt_name.dns_names': {
-    #                     '$not': {'$regex': '^\\*\\.'}
-    #                 }
-                    
-    #                 })
-        
-        
-    #     # Fingerprint filter - for drill-down from Shared Key Groups
-    #     if fingerprint:
-    #         query['parsed.subject_key_info.fingerprint_sha256'] = fingerprint
-
-    #     # Shared key filter - only show certs that share public key with different certificates
-    #     if shared_key:
-    #         # Find all public key fingerprints that are shared by 2+ distinct certs
-    #         shared_keys_pipeline = [
-    #             {'$match': {
-    #                 'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-    #                 'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-    #             }},
-    #             {'$group': {
-    #                 '_id': '$parsed.subject_key_info.fingerprint_sha256',
-    #                 'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-    #             }},
-    #             {'$addFields': {
-    #                 'distinct_certs': {'$size': '$cert_fingerprints'}
-    #             }},
-    #             {'$match': {'distinct_certs': {'$gt': 1}}},
-    #             {'$project': {'_id': 1}}
-    #         ]
-            
-    #         shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
-            
-    #         if shared_fingerprints:
-    #             # Filter certs to only those with shared public keys
-    #             if '$and' not in query:
-    #                 query['$and'] = []
-    #             query['$and'].append({
-    #                 'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-    #             })
-    #         else:
-    #             # No shared keys found, return empty result
-    #             return {
-    #                 'certificates': [],
-    #                 'pagination': {
-    #                     'page': page,
-    #                     'pageSize': page_size,
-    #                     'total': 0,
-    #                     'totalPages': 0
-    #                 }
-    #             }
-        
-    #     # SAN count filter - filter by number of SANs (dns_names array size)
-    #     if san_count_min is not None or san_count_max is not None:
-    #         # Use aggregation pipeline for array size filtering
-    #         pipeline = [
-    #             {'$match': query if query else {}},
-    #             # Add a field for the count of dns_names
-    #             {'$addFields': {
-    #                 'sanCount': {
-    #                     '$size': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]}
-    #                 }
-    #             }},
-    #         ]
-            
-    #         # Build match condition for san count
-    #         san_count_match = {}
-    #         if san_count_min is not None:
-    #             san_count_match['$gte'] = san_count_min
-    #         if san_count_max is not None:
-    #             san_count_match['$lte'] = san_count_max
-            
-    #         if san_count_match:
-    #             pipeline.append({'$match': {'sanCount': san_count_match}})
-            
-    #         # Get total count first
-    #         count_pipeline = pipeline + [{'$count': 'total'}]
-    #         count_result = list(cls.collection.aggregate(count_pipeline, allowDiskUse=True))
-    #         total = count_result[0]['total'] if count_result else 0
-            
-    #         # Get paginated results
-    #         skip = (page - 1) * page_size
-    #         result_pipeline = pipeline + [
-    #             {'$skip': skip},
-    #             {'$limit': page_size}
-    #         ]
-            
-    #         certificates = []
-    #         for doc in cls.collection.aggregate(result_pipeline, allowDiskUse=True):
-    #             cert = cls.serialize_certificate(doc)
-    #             certificates.append(cert)
-            
-    #         return {
-    #             'certificates': certificates,
-    #             'pagination': {
-    #                 'page': page,
-    #                 'pageSize': page_size,
-    #                 'total': total,
-    #                 'totalPages': max(1, (total + page_size - 1) // page_size)
-    #             }
-    #         }
-        
-    #     # Get total count with filters applied
-    #     total = cls.collection.count_documents(query)
-        
-    #     # Get paginated results
-    #     skip = (page - 1) * page_size
-    #     cursor = cls.collection.find(query).skip(skip).limit(page_size)
-        
-    #     certificates = []
-    #     for doc in cursor:
-    #         cert = cls.serialize_certificate(doc)
-    #         certificates.append(cert)
-        
-    #     return {
-    #         'certificates': certificates,
-    #         'pagination': {
-    #             'page': page,
-    #             'pageSize': page_size,
-    #             'total': total,
-    #             'totalPages': max(1, (total + page_size - 1) // page_size)
-    #         }
-    #     }
     def get_all(cls, page: int = 1, page_size: int = 10, 
                 status: Optional[str] = None, 
                 country: Optional[str] = None,
@@ -1383,110 +891,6 @@ class CertificateModel:
             print(f"Error getting certificate by ID: {e}")
             return None
     
-    @classmethod
-    def get_dashboard_metrics(cls) -> Dict:
-        """
-        ULTRA-OPTIMIZED: Use estimated count + separate indexed queries.
-        Each query leverages indexes independently (faster than $facet).
-        """
-        import time
-        start_time = time.time()
-        
-        now = cls.get_current_time_iso()
-        now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        print(f"[METRICS] Starting ultra-optimized queries at {cls.get_current_time_iso()}")
-        
-        # Query 1: Total count - USE ESTIMATED (instant!)
-        print("[METRICS] Query 1: Counting total (estimated)...")
-        t1 = time.time()
-        total = cls.collection.estimated_document_count()
-        print(f"[METRICS] Total count: {total} ({time.time()-t1:.3f}s)")
-        
-        if total == 0:
-            return {
-                'globalHealth': {
-                    'score': 0,
-                    'maxScore': 100,
-                    'status': 'CRITICAL',
-                    'lastUpdated': datetime.now(timezone.utc).strftime('%H:%M')
-                },
-                'activeCertificates': {'count': 0, 'total': 0},
-                'expiringSoon': {'count': 0, 'daysThreshold': 30, 'actionNeeded': False},
-                'criticalVulnerabilities': {'count': 0, 'new': 0}
-            }
-        
-        # Query 2: Expired count - INDEXED query on validity.end
-        print("[METRICS] Query 2: Counting expired (indexed)...")
-        t2 = time.time()
-        expired_count = cls.collection.count_documents(
-            {'parsed.validity.end': {'$lt': now}},
-            hint='idx_validity_end'  # Force use of index
-        )
-        print(f"[METRICS] Expired count: {expired_count} ({time.time()-t2:.3f}s)")
-        
-        # Query 3: Expiring soon - INDEXED query on validity.end
-        print("[METRICS] Query 3: Counting expiring soon (indexed)...")
-        t3 = time.time()
-        expiring_count = cls.collection.count_documents(
-            {'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}},
-            hint='idx_validity_end'  # Force use of index
-        )
-        print(f"[METRICS] Expiring count: {expiring_count} ({time.time()-t3:.3f}s)")
-        
-        # Query 4: Vulnerabilities - INDEXED query on zlint.errors_present
-        print("[METRICS] Query 4: Counting vulnerabilities (indexed)...")
-        t4 = time.time()
-        critical_vulns = cls.collection.count_documents(
-            {'zlint.errors_present': True},
-            hint='idx_zlint_errors'  # Force use of index
-        )
-        print(f"[METRICS] Vulnerability count: {critical_vulns} ({time.time()-t4:.3f}s)")
-        
-        # Calculate derived values
-        active_count = total - expired_count
-        
-        # Calculate health score
-        active_percentage = (active_count / total) * 100 if total > 0 else 0
-        vuln_penalty = min(20, (critical_vulns / total) * 100) if total > 0 else 0
-        health_score = int(min(100, max(0, active_percentage - vuln_penalty)))
-        
-        # Determine status
-        if health_score >= 80:
-            health_status = 'SECURE'
-        elif health_score >= 50:
-            health_status = 'AT_RISK'
-        else:
-            health_status = 'CRITICAL'
-        
-        elapsed = time.time() - start_time
-        print(f"[METRICS] ✅ All queries completed in {elapsed:.2f} seconds")
-        print(f"[METRICS] Results - Total: {total}, Expired: {expired_count}, Expiring: {expiring_count}, Vulns: {critical_vulns}")
-        
-        return {
-            'globalHealth': {
-                'score': health_score,
-                'maxScore': 100,
-                'status': health_status,
-                'lastUpdated': datetime.now(timezone.utc).strftime('%H:%M')
-            },
-            'activeCertificates': {
-                'count': active_count,
-                'total': total
-            },
-            'expiringSoon': {
-                'count': expiring_count,
-                'daysThreshold': 30,
-                'actionNeeded': expiring_count > 100
-            },
-            'criticalVulnerabilities': {
-                'count': critical_vulns,
-                'new': max(0, critical_vulns // 10)
-            },
-            'expiredCertificates': {
-                'count': expired_count
-            }
-        }
     
     @classmethod
     def get_unique_filters(cls) -> Dict:
@@ -1630,958 +1034,8 @@ class CertificateModel:
         
         return encryption_data
     
-    @classmethod
-    def get_validity_trends(cls, months_before: int = 4, months_after: int = 4, granularity: str = 'monthly') -> List[Dict]:
-        """Get certificate expiration trends by calendar period
-        
-        Args:
-            months_before: Number of months to look back
-            months_after: Number of months to look ahead
-            granularity: 'monthly' or 'weekly' - determines the grouping period
-        
-        Returns:
-            List of dicts with period, expirations count, and period metadata
-        """
-        from calendar import monthrange
-        from dateutil.relativedelta import relativedelta
-        
-        trends = []
-        now = datetime.now(timezone.utc)
-        
-        if granularity == 'weekly':
-            # Weekly granularity: show last N weeks and next M weeks
-            weeks_before = months_before * 4  # ~4 weeks per month
-            weeks_after = months_after * 4
-            
-            for i in range(-weeks_before, weeks_after + 1):
-                # Calculate week start (Monday) and end (Sunday)
-                week_start = now + timedelta(weeks=i)
-                # Adjust to Monday of that week
-                week_start = week_start - timedelta(days=week_start.weekday())
-                week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-                week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
-                
-                start_str = week_start.strftime('%Y-%m-%dT%H:%M:%SZ')
-                end_str = week_end.strftime('%Y-%m-%dT%H:%M:%SZ')
-                
-                # Count certificates expiring in this week
-                count = cls.collection.count_documents({
-                    'parsed.validity.end': {
-                        '$gte': start_str,
-                        '$lte': end_str
-                    }
-                })
-                
-                # Week label: "Jan 6-12"
-                week_label = f"{week_start.strftime('%b %d')}-{week_end.strftime('%d')}"
-                is_current = (week_start <= now <= week_end)
-                
-                trends.append({
-                    'month': week_label,  # Keep key as 'month' for frontend compatibility
-                    'expirations': count,
-                    'year': week_start.year,
-                    'monthNum': week_start.month,
-                    'weekNum': week_start.isocalendar()[1],
-                    'weekStart': start_str,
-                    'weekEnd': end_str,
-                    'isCurrent': is_current,
-                    'granularity': 'weekly'
-                })
-        else:
-            # Monthly granularity (default)
-            start_offset = -(months_before)
-            end_offset = months_after
-            
-            for i in range(start_offset, end_offset + 1):
-                # Calculate the target month using relativedelta
-                target_date = now + relativedelta(months=i)
-                year = target_date.year
-                month = target_date.month
-                
-                # Get first day and last day of the month
-                _, days_in_month = monthrange(year, month)
-                month_start = datetime(year, month, 1, 0, 0, 0, tzinfo=timezone.utc)
-                month_end = datetime(year, month, days_in_month, 23, 59, 59, tzinfo=timezone.utc)
-                
-                start_str = month_start.strftime('%Y-%m-%dT%H:%M:%SZ')
-                end_str = month_end.strftime('%Y-%m-%dT%H:%M:%SZ')
-                
-                # Count certificates expiring in this month
-                count = cls.collection.count_documents({
-                    'parsed.validity.end': {
-                        '$gte': start_str,
-                        '$lte': end_str
-                    }
-                })
-                
-                # Include year with month name for clarity (e.g., "Jan 2026")
-                month_label = month_start.strftime('%b %Y')
-                is_current = (year == now.year and month == now.month)
-                
-                trends.append({
-                    'month': month_label,
-                    'expirations': count,
-                    'year': year,
-                    'monthNum': month,
-                    'isCurrent': is_current,
-                    'granularity': 'monthly'
-                })
-        
-        return trends
+   
     
-    @classmethod
-    def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        """
-        ⚡ FAST VERSION: Get Certificate Authority distribution from pre-computed collection
-        
-        This method reads from a materialized view that's updated periodically (every 6-12 hours)
-        by the compute_ca_analytics.py script.
-        
-        Performance: ~0.01s (reads from pre-computed results)
-        
-        Limitation: 
-        - Does NOT support base_filter (global filters) - returns full pre-computed data
-        - If you need filtered results, falls back to get_ca_distribution() (slow)
-        
-        Args:
-            limit: Number of top CAs to return (default: 10)
-            base_filter: If provided, falls back to slow method (not supported)
-            
-        Returns:
-            List of CA distribution data in API-ready format
-        """
-        
-        # If filter is provided, fall back to slow method
-        if base_filter:
-            print("[WARNING] CA Analytics: base_filter provided, falling back to slow aggregation")
-            return cls.get_ca_distribution(limit=limit, base_filter=base_filter)
-        
-        try:
-            # Read from pre-computed collection
-            ca_analytics_collection = MongoDBClient.get_results_db()['ca-analytics']
-            
-            # Get metadata to check freshness
-            metadata = ca_analytics_collection.find_one({'_id': 'metadata'})
-            if not metadata:
-                print("[WARNING] CA Analytics: No pre-computed data found, falling back to slow method")
-                return cls.get_ca_distribution(limit=limit, base_filter=None)
-            
-            # Check if data is stale (older than 24 hours)
-            last_computed = metadata.get('last_computed')
-            if last_computed:
-                # Ensure both datetimes are timezone-aware
-                now_utc = datetime.now(timezone.utc)
-                if isinstance(last_computed, datetime):
-                    # If last_computed is naive, make it aware (assume UTC)
-                    if last_computed.tzinfo is None:
-                        last_computed = last_computed.replace(tzinfo=timezone.utc)
-                    
-                    age_hours = (now_utc - last_computed).total_seconds() / 3600
-                    if age_hours > 24:
-                        print(f"[WARNING] CA Analytics: Pre-computed data is {age_hours:.1f} hours old")
-            
-            # Fetch top N CAs
-            ca_records = list(
-                ca_analytics_collection
-                .find({'_id': {'$ne': 'metadata'}})  # Exclude metadata document
-                .sort('rank', 1)  # Sort by rank ascending
-                .limit(limit)
-            )
-            
-            if not ca_records:
-                print("[WARNING] CA Analytics: No CA records found, falling back to slow method")
-                return cls.get_ca_distribution(limit=limit, base_filter=None)
-            
-            # Get total for "Others" calculation
-            total_certificates = metadata.get('total_certificates', 0)
-            top_ca_count = sum(record['count'] for record in ca_records)
-            others_count = max(0, total_certificates - top_ca_count)
-            
-            # Transform to API format
-            ca_list = [
-                {
-                    'id': record['ca_id'],
-                    'name': record['name'],
-                    'count': record['count'],
-                    'maxCount': record['max_count'],
-                    'percentage': record['percentage'],
-                    'color': record['color']
-                }
-                for record in ca_records
-            ]
-            
-            # Add "Others" if needed
-            if others_count > 0 and ca_records:
-                max_count = ca_records[0]['max_count']
-                ca_list.append({
-                    'id': 'ca-others',
-                    'name': 'Others',
-                    'count': others_count,
-                    'maxCount': max_count,
-                    'percentage': round((others_count / total_certificates) * 100, 1),
-                    'color': '#6b7280',
-                    'isOthers': True
-                })
-            
-            return ca_list
-            
-        except Exception as e:
-            print(f"[ERROR] CA Analytics Fast: {str(e)}, falling back to slow method")
-            return cls.get_ca_distribution(limit=limit, base_filter=None)
-    
-    @classmethod
-    def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        """
-        Get Certificate Authority distribution.
-        
-        OPTIMIZATION STRATEGY:
-        The current implementation suffers from 'Fetch Penalty' because the query projects
-        '$arrayElemAt': ['$parsed.issuer.organization', 0], forcing MongoDB to fetch the 
-        full document to get the array element, even though 'idx_issuer_org' exists.
-        
-        FIX:
-        1. NO FILTER (Fast Path):
-           - Use 'idx_issuer_org' which indexes the ARRAY 'parsed.issuer.organization'.
-           - In MongoDB, indexing an array indexes its ELEMENTS.
-           - We can group by 'parsed.issuer.organization' directly. This will count 
-             every occurrence. Since the schema implies one org per issuer usually, 
-             or we want to count distinct issuers found, this works directly on index.
-           - This becomes a Covered Query (PROJECTION-FREE).
-           
-        2. WITH FILTER (Optimized Path):
-           - Remove $project stage at the start to allow index usage for filtering.
-           - Group directly.
-        """
-        
-        # Color palette
-        colors = [
-            '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', 
-            '#06b6d4', '#14b8a6', '#6366f1', '#ec4899', '#84cc16', 
-            '#f97316', '#a855f7', '#22c55e', '#0ea5e9', '#d946ef', 
-            '#eab308', '#6b7280'
-        ]
-
-        # ---------------------------------------------------------
-        # PATH 1: NO FILTER (Zero Fetch / Index Only)
-        # ---------------------------------------------------------
-        if not base_filter:
-            total = cls.collection.estimated_document_count()
-            if total == 0:
-                return []
-
-            # We group directly on the indexed field 'parsed.issuer.organization'.
-            # Note: If 'organization' is an array ["Google Trust Services"], grouping by it
-            # might group by the ARRAY itself or unwind depending on usage. 
-            # Ideally, for a covered query on an array field, we want to unwind or exact match.
-            # However, for 'get_ca_distribution', we usually want the string name.
-            # 
-            # FASTEST APPROACH: Group by the field directly.
-            # Since 'idx_issuer_org' is on 'parsed.issuer.organization', we MUST NOT 
-            # use $arrayElemAt if we want a covered query. We group by the field itself.
-            # MongoDB's index covers the array values.
-            
-            pipeline = [
-                # 1. Unwind preserves index use if it's the first stage
-                {'$unwind': '$parsed.issuer.organization'},
-                # 2. Group by the unwound string (indexed)
-                {'$group': {
-                    '_id': '$parsed.issuer.organization',
-                    'count': {'$sum': 1}
-                }},
-                {'$sort': {'count': -1}},
-                {'$limit': limit}
-            ]
-            
-            # This runs purely on the B-Tree index (IndexScan -> Group)
-            results = list(cls.collection.aggregate(pipeline, hint='idx_issuer_org'))
-
-        # ---------------------------------------------------------
-        # PATH 2: WITH FILTER
-        # ---------------------------------------------------------
-        else:
-            total = cls.collection.count_documents(base_filter)
-            if total == 0:
-                return []
-                
-            pipeline = [
-                {'$match': base_filter},
-                # We still prefer unwind -> group over $project -> $arrayElemAt
-                # because it's friendlier to indexes if base_filter uses the same index
-                {'$unwind': '$parsed.issuer.organization'},
-                {'$group': {
-                    '_id': '$parsed.issuer.organization',
-                    'count': {'$sum': 1}
-                }},
-                {'$sort': {'count': -1}},
-                {'$limit': limit}
-            ]
-            
-            results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-
-        # ---------------------------------------------------------
-        # Formatting (Shared)
-        # ---------------------------------------------------------
-        if not results:
-            return []
-            
-        max_count = results[0]['count']
-        
-        ca_list = [
-            {
-                'id': f'ca-{i}',
-                'name': r['_id'],
-                'count': r['count'],
-                'maxCount': max_count,
-                'percentage': round((r['count'] / total) * 100, 1),
-                'color': colors[i % len(colors)]
-            }
-            for i, r in enumerate(results)
-        ]
-        
-        # Calculate "Others"
-        top_ca_count = sum(r['count'] for r in results)
-        others_count = max(0, total - top_ca_count)
-        
-        if others_count > 0:
-            ca_list.append({
-                'id': 'ca-others',
-                'name': 'Others',
-                'count': others_count,
-                'maxCount': max_count,
-                'percentage': round((others_count / total) * 100, 1),
-                'color': '#6b7280',
-                'isOthers': True
-            })
-            
-        return ca_list
-    
-    @classmethod
-    def get_geographic_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        """
-        ⚡ FAST VERSION: Get Geographic distribution from pre-computed collection
-        
-        This method reads from a materialized view that's updated periodically (every 6-12 hours)
-        by the compute_geographic_distribution.py script.
-        
-        Performance: ~0.01s (reads from pre-computed results)
-        
-        Limitation: 
-        - Does NOT support base_filter (global filters) - returns full pre-computed data
-        - If you need filtered results, falls back to get_geographic_distribution() (slow)
-        
-        Args:
-            limit: Number of top countries to return (default: 10)
-            base_filter: If provided, falls back to slow method (not supported)
-            
-        Returns:
-            List of geographic distribution data in API-ready format
-        """
-        print("I am in fast method bhai sahab")
-        # If filter is provided, fall back to slow method
-        if base_filter:
-            print("[WARNING] Geographic Distribution: base_filter provided, falling back to slow aggregation")
-            return cls.get_geographic_distribution(limit=limit, base_filter=base_filter)
-        
-        try:
-            # Read from pre-computed collection
-            geo_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
-            
-            # Get metadata to check freshness
-            metadata = geo_collection.find_one({'_id': 'metadata'})
-            if not metadata:
-                print("[WARNING] Geographic Distribution: No pre-computed data found, falling back to slow method")
-                return cls.get_geographic_distribution(limit=limit, base_filter=None)
-            
-            # Check if data is stale (older than 24 hours)
-            last_computed = metadata.get('last_computed')
-            if last_computed:
-                # Ensure both datetimes are timezone-aware
-                now_utc = datetime.now(timezone.utc)
-                if isinstance(last_computed, datetime):
-                    # If last_computed is naive, make it aware (assume UTC)
-                    if last_computed.tzinfo is None:
-                        last_computed = last_computed.replace(tzinfo=timezone.utc)
-                    
-                    age_hours = (now_utc - last_computed).total_seconds() / 3600
-                    if age_hours > 24:
-                        print(f"[WARNING] Geographic Distribution: Pre-computed data is {age_hours:.1f} hours old")
-            
-            # Fetch top N countries (excluding 'Others' category - it's for internal use only)
-            geo_records = list(
-                geo_collection
-                .find({
-                    '_id': {'$nin': ['metadata', 'Others']},  # Exclude metadata and Others
-                    'country': {'$ne': 'Others'}  # Double-check country field
-                })
-                .sort('rank', 1)  # Sort by rank ascending
-                .limit(limit)
-            )
-            
-            if not geo_records:
-                print("[WARNING] Geographic Distribution: No records found, falling back to slow method")
-                return cls.get_geographic_distribution(limit=limit, base_filter=None)
-            
-            # Calculate total count (excluding Others) for percentage recalculation
-            total_count = sum(record['count'] for record in geo_records)
-            max_count = geo_records[0]['count'] if geo_records else 1
-            
-            # Transform to API format with recalculated percentages and certificate_ids
-            geo_list = []
-            for record in geo_records:
-                # Recalculate percentage relative to displayed countries only
-                percentage = (record['count'] / total_count * 100) if total_count > 0 else 0
-                
-                # Convert ObjectId to string for JSON serialization
-                cert_ids = record.get('certificate_ids', [])
-                cert_ids_str = [str(oid) for oid in cert_ids] if cert_ids else []
-                
-                geo_list.append({
-                    'id': record.get('geo_id', str(record['_id'])),
-                    'country': record['country'],
-                    'count': record['count'],
-                    'maxCount': max_count,
-                    'percentage': round(percentage, 2),
-                    'color': record['color'],
-                    'certificate_ids': cert_ids_str  # Convert ObjectIds to strings
-                })
-            
-            return geo_list
-            
-        except Exception as e:
-            print(f"[ERROR] Geographic Distribution Fast: {str(e)}, falling back to slow method")
-            return cls.get_geographic_distribution(limit=limit, base_filter=None)
-    
-    @classmethod
-    def get_geographic_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        """Get certificate distribution by country (from domain TLD)
-        Optimized: Compute TLD directly in MongoDB aggregation
-        
-        Args:
-            base_filter: Global filter query - applied before aggregation
-        """
-        
-        # Get total certificates count (with or without filter)
-        if base_filter:
-            total = cls.collection.count_documents(base_filter)
-        else:
-            total = cls.collection.count_documents({})
-        
-        if total == 0:
-            return []
-        
-        # Build aggregation pipeline
-        pipeline = []
-        
-        # Apply base filter first if provided
-        if base_filter:
-            pipeline.append({'$match': base_filter})
-        
-        # Add domain extraction and grouping stages
-        pipeline.extend([
-            {'$match': {'domain': {'$exists': True, '$ne': None, '$ne': ''}}},
-            {'$project': {
-                'domain_parts': {'$split': ['$domain', '.']},
-            }},
-            {'$project': {
-                'tld': {'$arrayElemAt': ['$domain_parts', -1]}
-            }},
-            {'$match': {'tld': {'$exists': True, '$ne': None}}},
-            {'$group': {
-                '_id': '$tld',
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'count': -1}}
-        ])
-        
-        results = list(cls.collection.aggregate(pipeline))
-        
-        # Map TLDs to countries (small dataset, fast in Python)
-        country_counts = {}
-        for r in results:
-            tld = r['_id'].lower() if r['_id'] else 'unknown'
-            country = cls.get_tld_country('example.' + tld)  # Use helper with dummy domain
-            if country != 'Unknown':
-                country_counts[country] = country_counts.get(country, 0) + r['count']
-        
-        # Sort and limit
-        sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
-        
-        colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#6b7280']
-        
-        max_count = sorted_countries[0][1] if sorted_countries else 1
-        
-        return [
-            {
-                'id': f'geo-{i}',
-                'country': country,
-                'count': count,
-                'maxCount': max_count,
-                'percentage': round((count / total) * 100, 1),
-                'color': colors[i % len(colors)]
-            }
-            for i, (country, count) in enumerate(sorted_countries)
-        ]
-
-    @classmethod
-    def get_validity_stats_fast(cls) -> Dict:
-        """
-        Get validity statistics (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.validity-stats (1 document)
-        - Response time: ~0.003 seconds (60,000x faster than original)
-        - Original time: ~180 seconds (aggregation + 3 counts on 878K docs)
-        
-        Returns pre-computed:
-            - averageValidityDays: avg number of days
-            - expiring30Days: count expiring in next 30 days
-            - expiring60Days: count expiring in next 60 days
-            - expiring90Days: count expiring in next 90 days
-            - complianceRate: % of certs with validity <= 398 days
-            - shortestValidityDays: min validity period
-            - longestValidityDays: max validity period
-        """
-        from .db import MongoDBClient
-        from datetime import datetime, timezone, timedelta
-        collection = MongoDBClient.get_results_db()['validity-stats']
-        
-        # Get the pre-computed document
-        result = collection.find_one({})
-        
-        if not result:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning("No pre-computed validity stats found. Run compute_validity_stats.py")
-            return cls.get_validity_stats()
-        
-        # Check data freshness (warn if > 12 hours old)
-        computed_at_str = result.get('computedAt')
-        if computed_at_str:
-            computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-            age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-            if age_hours > 12:
-                import logging
-                logging.warning(f"Pre-computed validity stats is {age_hours:.1f} hours old. Consider running compute_validity_stats.py")
-        
-        # Remove MongoDB _id field and metadata
-        result.pop('_id', None)
-        result.pop('sourceCollection', None)
-        result.pop('computedAt', None)
-        result.pop('referenceDate', None)
-        
-        return result
-    
-    @classmethod
-    def get_validity_distribution_fast(cls) -> list:
-        """
-        Get validity distribution by bucket (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.validity-distribution (4 documents)
-        - Response time: ~0.002 seconds (100,000x faster than original)
-        - Original time: ~200 seconds (complex date aggregation on 878K docs)
-        
-        Returns pre-computed buckets:
-        - <90 days
-        - 90 days - 1 year
-        - 1-2 years
-        - >2 years
-        """
-        from .db import MongoDBClient
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['validity-distribution']
-        
-        # Get pre-computed distribution, sorted by bucketId
-        distribution = list(collection.find({}).sort('bucketId', 1))
-        
-        if not distribution:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning("No pre-computed validity distribution found. Run compute_validity_distribution.py")
-            return cls.get_validity_distribution()
-        
-        # Check data freshness
-        if distribution:
-            computed_at_str = distribution[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 12:
-                    import logging
-                    logging.warning(f"Pre-computed validity distribution is {age_hours:.1f} hours old. Consider running compute_validity_distribution.py")
-        
-        # Remove MongoDB _id and metadata fields
-        for item in distribution:
-            item.pop('_id', None)
-            item.pop('computedAt', None)
-            item.pop('sourceCollection', None)
-            item.pop('bucketId', None)
-        
-        return distribution
-    
-    @classmethod
-    def get_issuance_timeline_fast(cls, months: int = 12) -> list:
-        """
-        Get certificate issuance and expiration timeline (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.issuance-timeline (12-36 documents)
-        - Response time: ~0.004 seconds (62,500x faster than original)
-        - Original time: ~250 seconds (2 complex aggregations on 878K docs)
-        
-        Args:
-            months: Number of months to retrieve (default 12)
-        
-        Returns monthly data:
-            - issued: certificates issued in that month
-            - expiring: certificates expiring in that month
-        """
-        from .db import MongoDBClient
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['issuance-timeline']
-        
-        # Query pre-computed timeline for this month count
-        query = {'months': months}
-        timeline = list(collection.find(query).sort([('year', 1), ('monthNum', 1)]))
-        
-        if not timeline:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning(f"No pre-computed issuance timeline found for {months} months. Run compute_issuance_timeline.py")
-            return cls.get_issuance_timeline(months=months)
-        
-        # Check data freshness
-        if timeline:
-            computed_at_str = timeline[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 12:
-                    import logging
-                    logging.warning(f"Pre-computed issuance timeline is {age_hours:.1f} hours old. Consider running compute_issuance_timeline.py")
-        
-        # Remove MongoDB _id and metadata fields
-        for item in timeline:
-            item.pop('_id', None)
-            item.pop('computedAt', None)
-            item.pop('sourceCollection', None)
-            item.pop('months', None)
-        
-        return timeline
-
-    @classmethod
-    def get_validity_stats(cls) -> Dict:
-        """Get validity statistics for validity analysis page
-        
-        Uses parsed.validity.length (in seconds) for duration calculations.
-        
-        Returns:
-            - averageValidityDays: avg number of days (length / 86400)
-            - expiring30Days: count expiring in next 30 days
-            - expiring60Days: count expiring in next 60 days
-            - expiring90Days: count expiring in next 90 days
-            - complianceRate: % of certs with validity <= 398 days
-            - shortestValidityDays: min validity period
-            - longestValidityDays: max validity period
-        """
-        now = datetime.now(timezone.utc)
-        now_iso = now.strftime('%Y-%m-%dT%H:%M:%SZ')
-        plus_30 = (now + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        plus_60 = (now + timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        plus_90 = (now + timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        # Use parsed.validity.length (in seconds) for duration calculations
-        # This is a pre-computed field in the database
-        pipeline = [
-            {
-                '$match': {
-                    'parsed.validity.length': {'$exists': True, '$gt': 0}
-                }
-            },
-            {
-                '$project': {
-                    'lengthSeconds': '$parsed.validity.length',
-                    # Convert seconds to days for aggregation
-                    'durationDays': {'$divide': ['$parsed.validity.length', 86400]}
-                }
-            },
-            {
-                '$group': {
-                    '_id': None,
-                    'avgDuration': {'$avg': '$durationDays'},
-                    'minDuration': {'$min': '$durationDays'},
-                    'maxDuration': {'$max': '$durationDays'},
-                    'total': {'$sum': 1},
-                    'compliantCount': {
-                        '$sum': {
-                            '$cond': [
-                                {'$lte': ['$durationDays', 398]},
-                                1,
-                                0
-                            ]
-                        }
-                    }
-                }
-            }
-        ]
-        
-        try:
-            result = list(cls.collection.aggregate(pipeline))
-            stats = result[0] if result else {}
-        except Exception as e:
-            print(f"Aggregation error: {e}")
-            stats = {}
-        
-        # Count expiring in next 30/60/90 days (separate queries for accuracy)
-        expiring_30 = cls.collection.count_documents({
-            'parsed.validity.end': {'$gt': now_iso, '$lte': plus_30}
-        })
-        expiring_60 = cls.collection.count_documents({
-            'parsed.validity.end': {'$gt': now_iso, '$lte': plus_60}
-        })
-        expiring_90 = cls.collection.count_documents({
-            'parsed.validity.end': {'$gt': now_iso, '$lte': plus_90}
-        })
-        
-        total = stats.get('total', 0) or cls.collection.count_documents({})
-        compliant = stats.get('compliantCount', 0)
-        
-        return {
-            'averageValidityDays': round(stats.get('avgDuration', 0) or 0),
-            'shortestValidityDays': round(stats.get('minDuration', 0) or 0),
-            'longestValidityDays': round(stats.get('maxDuration', 0) or 0),
-            'expiring30Days': expiring_30,
-            'expiring60Days': expiring_60,
-            'expiring90Days': expiring_90,
-            'complianceRate': round((compliant / total * 100), 1) if total > 0 else 0,
-            'totalCertificates': total
-        }
-    
-    @classmethod
-    def get_validity_distribution(cls) -> List[Dict]:
-        """Get distribution of certificate validity periods by bucket
-        
-        Buckets:
-        - <90 days
-        - 90 days - 1 year
-        - 1-2 years  
-        - >2 years
-        """
-        pipeline = [
-            {
-                '$project': {
-                    'validFrom': '$parsed.validity.start',
-                    'validTo': '$parsed.validity.end',
-                }
-            },
-            {
-                '$addFields': {
-                    'validFromDate': {
-                        '$dateFromString': {'dateString': '$validFrom', 'onError': None}
-                    },
-                    'validToDate': {
-                        '$dateFromString': {'dateString': '$validTo', 'onError': None}
-                    }
-                }
-            },
-            {
-                '$addFields': {
-                    'durationDays': {
-                        '$divide': [
-                            {'$subtract': ['$validToDate', '$validFromDate']},
-                            86400000
-                        ]
-                    }
-                }
-            },
-            {
-                '$match': {'durationDays': {'$ne': None, '$gt': 0}}
-            },
-            {
-                '$bucket': {
-                    'groupBy': '$durationDays',
-                    'boundaries': [0, 90, 365, 730, 100000],  # 0-90, 90-365, 365-730, 730+
-                    'default': 'Other',
-                    'output': {
-                        'count': {'$sum': 1}
-                    }
-                }
-            }
-        ]
-        
-        try:
-            results = list(cls.collection.aggregate(pipeline))
-        except Exception as e:
-            print(f"Validity distribution error: {e}")
-            results = []
-        
-        # Map bucket boundaries to labels
-        bucket_labels = {
-            0: '< 90 Days',
-            90: '90 Days - 1 Year',
-            365: '1 - 2 Years',
-            730: '> 2 Years'
-        }
-        
-        bucket_colors = {
-            0: '#3b82f6',    # Blue
-            90: '#10b981',   # Green
-            365: '#8b5cf6',  # Purple
-            730: '#f59e0b'   # Orange
-        }
-        
-        total = sum(r.get('count', 0) for r in results)
-        
-        distribution = []
-        for r in results:
-            bucket_id = r.get('_id')
-            if bucket_id in bucket_labels:
-                distribution.append({
-                    'range': bucket_labels[bucket_id],
-                    'count': r.get('count', 0),
-                    'percentage': round((r.get('count', 0) / total * 100), 1) if total > 0 else 0,
-                    'color': bucket_colors.get(bucket_id, '#6b7280')
-                })
-        
-        return distribution
-    
-    @classmethod
-    def get_issuance_timeline(cls, months: int = 12) -> List[Dict]:
-        """Get certificate issuance and expiration timeline by month
-        
-        Shows the last N months from current month (past data only).
-        
-        Returns monthly counts for:
-        - issued: certificates issued (validFrom) in that month
-        - expired: certificates expired (validTo) in that month (past only)
-        """
-        from dateutil.relativedelta import relativedelta
-        
-        now = datetime.now(timezone.utc)
-        
-        # Calculate date range: last N months from the start of current month
-        # Start from (months-1) months ago to include current month
-        end_date = now.replace(day=1) + relativedelta(months=1) - timedelta(seconds=1)  # End of current month
-        start_date = now.replace(day=1) - relativedelta(months=months-1)  # Start of N months ago
-        
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        # Issued certificates by month (using validFrom)
-        issued_pipeline = [
-            {
-                '$match': {
-                    'parsed.validity.start': {
-                        '$gte': start_str,
-                        '$lte': end_str
-                    }
-                }
-            },
-            {
-                '$project': {
-                    'validFrom': '$parsed.validity.start'
-                }
-            },
-            {
-                '$addFields': {
-                    'validFromDate': {
-                        '$dateFromString': {'dateString': '$validFrom', 'onError': None}
-                    }
-                }
-            },
-            {
-                '$group': {
-                    '_id': {
-                        'year': {'$year': '$validFromDate'},
-                        'month': {'$month': '$validFromDate'}
-                    },
-                    'count': {'$sum': 1}
-                }
-            },
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        # Expiring certificates by month (using validTo)
-        expiring_pipeline = [
-            {
-                '$match': {
-                    'parsed.validity.end': {
-                        '$gte': start_str,
-                        '$lte': end_str
-                    }
-                }
-            },
-            {
-                '$project': {
-                    'validTo': '$parsed.validity.end'
-                }
-            },
-            {
-                '$addFields': {
-                    'validToDate': {
-                        '$dateFromString': {'dateString': '$validTo', 'onError': None}
-                    }
-                }
-            },
-            {
-                '$group': {
-                    '_id': {
-                        'year': {'$year': '$validToDate'},
-                        'month': {'$month': '$validToDate'}
-                    },
-                    'count': {'$sum': 1}
-                }
-            },
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        try:
-            issued_results = list(cls.collection.aggregate(issued_pipeline))
-            expiring_results = list(cls.collection.aggregate(expiring_pipeline))
-        except Exception as e:
-            print(f"Issuance timeline error: {e}")
-            issued_results = []
-            expiring_results = []
-        
-        # Build month list
-        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        # Create lookup dicts
-        issued_lookup = {
-            f"{r['_id']['year']}-{r['_id']['month']}": r['count']
-            for r in issued_results
-        }
-        expiring_lookup = {
-            f"{r['_id']['year']}-{r['_id']['month']}": r['count']
-            for r in expiring_results
-        }
-        
-        # Generate timeline data
-        timeline = []
-        current = start_date.replace(day=1)
-        end_month = end_date.replace(day=1)
-        
-        while current <= end_month:
-            key = f"{current.year}-{current.month}"
-            month_label = f"{month_names[current.month - 1]} '{str(current.year)[2:]}"
-            
-            timeline.append({
-                'month': month_label,
-                'year': current.year,
-                'monthNum': current.month,
-                'issued': issued_lookup.get(key, 0),
-                'expiring': expiring_lookup.get(key, 0)
-            })
-            
-            # Move to next month
-            if current.month == 12:
-                current = current.replace(year=current.year + 1, month=1)
-            else:
-                current = current.replace(month=current.month + 1)
-        
-        return timeline
-
     # ============================================================
     # COMMENT FOR NOTIFICATION ICON - Backend Method
     # ============================================================
@@ -2734,730 +1188,7 @@ class CertificateModel:
     pass
     
     # ----- New implementation for Signature and Hashes starts here -----
-    
-    @classmethod
-    def get_signature_stats_fast(cls) -> Dict:
-        """
-        Get comprehensive signature and hash statistics (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.signature-stats (1 document)
-        - Response time: ~0.005 seconds (3,000x faster than original)
-        - Original time: ~180 seconds (full aggregation on 878K docs)
-        
-        Returns pre-computed:
-            - algorithmDistribution: signature algorithm counts/percentages
-            - hashDistribution: hash algorithm counts/percentages
-            - keySizeDistribution: key size counts/percentages
-            - weakHashCount: count of MD5/SHA-1 certs
-            - hashComplianceRate: % using SHA-256+
-            - strengthScore: composite security score 0-100
-            - selfSignedCount: count of self-signed certs
-            - totalCertificates: total count
-        """
-        from .db import MongoDBClient
-        from datetime import datetime, timezone, timedelta
-        collection = MongoDBClient.get_results_db()['signature-stats']
-        
-        # Get the pre-computed document
-        result = collection.find_one({})
-        
-        if not result:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning("No pre-computed signature stats found. Run compute_signature_stats.py")
-            return cls.get_signature_stats()
-        
-        # Check data freshness (warn if > 24 hours old)
-        computed_at_str = result.get('computedAt')
-        if computed_at_str:
-            computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-            age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-            if age_hours > 24:
-                import logging
-                logging.warning(f"Pre-computed signature stats is {age_hours:.1f} hours old. Consider running compute_signature_stats.py")
-        
-        # Remove MongoDB _id field
-        result.pop('_id', None)
-        result.pop('sourceCollection', None)
-        result.pop('documentCount', None)
-        
-        return result
-    
-    @classmethod
-    def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
-        """
-        Get hash algorithm adoption trends over time (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.hash-trends (~36-48 documents)
-        - Response time: ~0.003 seconds (3,000x faster than original)
-        - Original time: ~200 seconds (full aggregation on 878K docs)
-        
-        Args:
-            months: Number of months to look back (default 36 = 3 years)
-            granularity: 'quarterly' or 'yearly'
-        
-        Returns:
-            List of dicts with period and hash percentages
-        """
-        from .db import MongoDBClient
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['hash-trends']
-        
-        # Query pre-computed trends for this granularity
-        query = {'granularity': granularity, 'months': months}
-        trends = list(collection.find(query).sort([('year', 1), ('quarter', 1)]))
-        
-        if not trends:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning(f"No pre-computed hash trends found for {granularity}/{months}. Run compute_hash_trends.py")
-            return cls.get_hash_trends(months=months, granularity=granularity)
-        
-        # Check data freshness
-        if trends:
-            computed_at_str = trends[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 24:
-                    import logging
-                    logging.warning(f"Pre-computed hash trends is {age_hours:.1f} hours old. Consider running compute_hash_trends.py")
-        
-        # Remove MongoDB _id and metadata fields
-        for trend in trends:
-            trend.pop('_id', None)
-            trend.pop('computedAt', None)
-            trend.pop('sourceCollection', None)
-            trend.pop('granularity', None)
-            trend.pop('months', None)
-        
-        return trends
-    
-    @classmethod
-    def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
-        """
-        Get matrix of issuer × algorithm combinations (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.issuer-algorithm-matrix (~50 documents)
-        - Response time: ~0.002 seconds (3,000x faster than original)
-        - Original time: ~180 seconds (full aggregation on 878K docs)
-        
-        Args:
-            limit: Maximum number of combinations to return (default 10)
-        
-        Returns:
-            List of dicts with issuer, algorithm, keySize, and count
-        """
-        from .db import MongoDBClient
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['issuer-algorithm-matrix']
-        
-        # Get pre-computed matrix, sorted by count descending, limited
-        matrix = list(collection.find({}).sort('count', -1).limit(limit))
-        
-        if not matrix:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning("No pre-computed issuer algorithm matrix found. Run compute_issuer_algorithm_matrix.py")
-            return cls.get_issuer_algorithm_matrix(limit=limit)
-        
-        # Check data freshness
-        if matrix:
-            computed_at_str = matrix[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 24:
-                    import logging
-                    logging.warning(f"Pre-computed issuer algorithm matrix is {age_hours:.1f} hours old. Consider running compute_issuer_algorithm_matrix.py")
-        
-        # Remove MongoDB _id and metadata fields
-        for item in matrix:
-            item.pop('_id', None)
-            item.pop('computedAt', None)
-            item.pop('sourceCollection', None)
-            item.pop('percentage', None)  # Not needed for frontend
-        
-        return matrix
-    
-    @classmethod
-    def get_signature_stats(cls) -> Dict:
-        """
-        Get comprehensive signature and hash statistics for the Signature & Hashes page.
-        
-        OPTIMIZED for millions of documents:
-        - Uses efficient $group aggregations (single pass)
-        - No $unwind or expensive operations
-        - Minimal projections
-        - Parallel counting for simple metrics
-        
-        Returns:
-            - algorithmDistribution: signature algorithm counts/percentages
-            - hashDistribution: hash algorithm counts/percentages
-            - keySizeDistribution: key size counts/percentages
-            - weakHashCount: count of MD5/SHA-1 certs
-            - hashComplianceRate: % using SHA-256+
-            - strengthScore: composite security score 0-100
-            - selfSignedCount: count of self-signed certs
-            - totalCertificates: total count
-        """
-        
-        # Get total count (fast indexed query)
-        total = cls.collection.count_documents({})
-        
-        if total == 0:
-            return {
-                'algorithmDistribution': [],
-                'hashDistribution': [],
-                'keySizeDistribution': [],
-                'weakHashCount': 0,
-                'hashComplianceRate': 0,
-                'strengthScore': 0,
-                'selfSignedCount': 0,
-                'totalCertificates': 0
-            }
-        
-        # PIPELINE 1: Signature Algorithm Distribution (e.g., "SHA256-RSA", "SHA256-ECDSA")
-        # Uses direct $group on indexed field - very efficient
-        algo_pipeline = [
-            {'$group': {
-                '_id': '$parsed.signature_algorithm.name',
-                'count': {'$sum': 1}
-            }},
-            {'$match': {'_id': {'$ne': None}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 10}
-        ]
-        
-        # ✅ OPTIMIZED: Add hint to use idx_signature_algo
-        algo_results = list(cls.collection.aggregate(
-            algo_pipeline,
-            hint='idx_signature_algo',
-            allowDiskUse=True
-        ))
-        
-
-
-        # Calculate percentages and format
-        algorithm_distribution = []
-        algo_colors = {
-            'SHA256-RSA': '#3b82f6',
-            'SHA384-RSA': '#60a5fa', 
-            'SHA512-RSA': '#1d4ed8',
-            'SHA256-ECDSA': '#10b981',
-            'SHA384-ECDSA': '#34d399',
-            'SHA512-ECDSA': '#059669',
-            'SHA1-RSA': '#f59e0b',  # Warning color
-            'MD5-RSA': '#ef4444',   # Critical color
-        }
-        
-        for item in algo_results:
-            name = item['_id'] or 'Unknown'
-            count = item['count']
-            algorithm_distribution.append({
-                'name': name,
-                'count': count,
-                'percentage': round((count / total) * 100, 2),
-                'color': algo_colors.get(name, '#6b7280')
-            })
-        
-        # PIPELINE 2: Hash Algorithm Distribution (extract hash from signature_algorithm.name)
-        # Handles both formats: "SHA256-RSA", "ECDSA-SHA256", etc.
-        hash_pipeline = [
-            {'$project': {
-                'sigAlgo': '$parsed.signature_algorithm.name'
-            }},
-            {'$addFields': {
-                'hash': {
-                    '$switch': {
-                        'branches': [
-                            # Match SHA512 at start or after hyphen (e.g., SHA512-RSA, ECDSA-SHA512)
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'SHA512|SHA-512', 'options': 'i'}}, 'then': 'SHA-512'},
-                            # Match SHA384 at start or after hyphen
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'SHA384|SHA-384', 'options': 'i'}}, 'then': 'SHA-384'},
-                            # Match SHA256 at start or after hyphen
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'SHA256|SHA-256', 'options': 'i'}}, 'then': 'SHA-256'},
-                            # Match SHA224
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'SHA224|SHA-224', 'options': 'i'}}, 'then': 'SHA-224'},
-                            # Match SHA1 (weak)
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'SHA1|SHA-1|withSHA1', 'options': 'i'}}, 'then': 'SHA-1'},
-                            # Match MD5 (critical)
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'MD5', 'options': 'i'}}, 'then': 'MD5'},
-                            # Match MD2 (critical)
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': 'MD2', 'options': 'i'}}, 'then': 'MD2'},
-                        ],
-                        # If no match, use the original signature algorithm name
-                        'default': '$sigAlgo'
-                    }
-                }
-            }},
-            # Filter out null/empty hashes
-            {'$match': {'hash': {'$ne': None, '$ne': ''}}},
-            {'$group': {
-                '_id': '$hash',
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'count': -1}}
-        ]
-        hash_results = list(cls.collection.aggregate(hash_pipeline, allowDiskUse=True))
-        
-        hash_colors = {
-            'SHA-512': '#1d4ed8',  # Secure - dark blue
-            'SHA-384': '#3b82f6',  # Secure - blue
-            'SHA-256': '#10b981',  # Secure - green
-            'SHA-224': '#34d399',  # Secure - light green
-            'SHA-1': '#f59e0b',    # Deprecated - orange
-            'MD5': '#ef4444',      # Critical - red
-            'MD2': '#dc2626',      # Critical - dark red
-        }
-        
-        hash_security = {
-            'SHA-512': 'secure',
-            'SHA-384': 'secure', 
-            'SHA-256': 'secure',
-            'SHA-224': 'secure',
-            'SHA-1': 'deprecated',
-            'MD5': 'critical',
-            'MD2': 'critical',
-        }
-        
-        hash_distribution = []
-        weak_hash_count = 0
-        compliant_count = 0
-        
-        for item in hash_results:
-            name = item['_id']
-            count = item['count']
-            hash_distribution.append({
-                'name': name,
-                'count': count,
-                'percentage': round((count / total) * 100, 2),
-                'color': hash_colors.get(name, '#6b7280'),
-                'security': hash_security.get(name, 'unknown')
-            })
-            
-            # Count weak hashes (SHA-1, MD5)
-            if name in ['SHA-1', 'MD5']:
-                weak_hash_count += count
-            
-            # Count compliant (SHA-256, SHA-384, SHA-512)
-            if name in ['SHA-256', 'SHA-384', 'SHA-512']:
-                compliant_count += count
-        
-        # PIPELINE 3: Key Size Distribution
-        # Efficient direct grouping on key length field
-        keysize_pipeline = [
-            {'$project': {
-                'algo': '$parsed.subject_key_info.key_algorithm.name',
-                'rsaLen': '$parsed.subject_key_info.rsa_public_key.length',
-                'ecLen': '$parsed.subject_key_info.ecdsa_public_key.length'
-            }},
-            {'$addFields': {
-                'keySize': {'$ifNull': ['$rsaLen', '$ecLen']}
-            }},
-            {'$group': {
-                '_id': {'algo': '$algo', 'size': '$keySize'},
-                'count': {'$sum': 1}
-            }},
-            {'$match': {'_id.size': {'$ne': None}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 10}
-        ]
-        
-        # ✅ OPTIMIZED: No single index covers both RSA and ECDSA lengths, use allowDiskUse
-        keysize_results = list(cls.collection.aggregate(
-            keysize_pipeline,
-            allowDiskUse=True
-        ))
-
-        
-        keysize_distribution = []
-        for item in keysize_results:
-            algo = item['_id'].get('algo', 'Unknown')
-            size = item['_id'].get('size', 0)
-            count = item['count']
-            
-            # Format name like "RSA 2048" or "ECDSA 256"
-            name = f"{algo} {size}" if size else algo
-            
-            keysize_distribution.append({
-                'name': name,
-                'algorithm': algo,
-                'size': size,
-                'count': count,
-                'percentage': round((count / total) * 100, 2),
-                'color': '#3b82f6' if algo == 'RSA' else '#10b981'
-            })
-        
-
-        # ✅ OPTIMIZED: Count self-signed certificates with index hint
-        self_signed_count = cls.collection.count_documents(
-            {'parsed.signature.self_signed': True},
-            hint='idx_self_signed'  # NEW index!
-        )
-        
-        # Calculate hash compliance rate
-        hash_compliance_rate = round((compliant_count / total) * 100, 1) if total > 0 else 0
-        
-        # Calculate Signature Strength Score (0-100)
-        # Formula: (KeySizeScore * 0.4) + (HashScore * 0.4) + (AlgoScore * 0.2)
-        
-        # Key Size Score: Weighted by distribution
-        key_score = 0
-        for item in keysize_distribution:
-            size = item.get('size', 0)
-            pct = item.get('percentage', 0) / 100
-            if size >= 4096:
-                key_score += 100 * pct
-            elif size >= 2048:
-                key_score += 80 * pct
-            elif size >= 1024:
-                key_score += 40 * pct
-            elif size >= 256:  # ECDSA
-                key_score += 90 * pct
-        
-        # Hash Score: Based on compliance rate
-        hash_score = hash_compliance_rate
-        
-        # Algorithm Score: Based on ECDSA vs RSA distribution
-        algo_score = 85  # Default RSA score
-        for item in algorithm_distribution:
-            if 'ECDSA' in item.get('name', ''):
-                algo_score += item.get('percentage', 0) * 0.15  # ECDSA bonus
-        algo_score = min(100, algo_score)
-        
-        strength_score = int((key_score * 0.4) + (hash_score * 0.4) + (algo_score * 0.2))
-        strength_score = max(0, min(100, strength_score))  # Clamp to 0-100
-        
-        # PIPELINE 4: Max Encryption Type (RSA vs ECDSA with highest count)
-        enc_type_pipeline = [
-            {'$group': {
-                '_id': '$parsed.subject_key_info.key_algorithm.name',
-                'count': {'$sum': 1}
-            }},
-            {'$match': {'_id': {'$ne': None}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 1}
-        ]
-        
-        # ✅ OPTIMIZED: Add hint to use idx_key_algo
-        enc_type_result = list(cls.collection.aggregate(
-            enc_type_pipeline,
-            hint='idx_key_algo',
-            allowDiskUse=True
-        ))
-        
-
-
-        max_encryption_type = None
-        if enc_type_result:
-            enc_name = enc_type_result[0]['_id']
-            enc_count = enc_type_result[0]['count']
-            max_encryption_type = {
-                'name': enc_name,
-                'count': enc_count,
-                'percentage': round((enc_count / total) * 100, 2) if total > 0 else 0
-            }
-        
-        return {
-            'algorithmDistribution': algorithm_distribution,
-            'hashDistribution': hash_distribution,
-            'keySizeDistribution': keysize_distribution,
-            'weakHashCount': weak_hash_count,
-            'hashComplianceRate': hash_compliance_rate,
-            'strengthScore': strength_score,
-            'selfSignedCount': self_signed_count,
-            'totalCertificates': total,
-            'maxEncryptionType': max_encryption_type
-        }
-    
-    @classmethod
-    def get_hash_trends(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
-        """
-        Get hash algorithm adoption trends over time based on issuance dates.
-        
-        OPTIMIZED for millions of documents:
-        - Uses $match with date range first (uses index)
-        - Single aggregation pass
-        - Groups by period + hash in one operation
-        
-        Args:
-            months: Number of months to look back (default 36 = 3 years)
-            granularity: 'quarterly' or 'yearly'
-        
-        Returns:
-            List of dicts with period and hash percentages
-        """
-        from dateutil.relativedelta import relativedelta
-        
-        now = datetime.now(timezone.utc)
-        start_date = now - relativedelta(months=months)
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        # Build period grouping based on granularity
-        if granularity == 'yearly':
-            period_expr = {
-                'year': {'$year': '$issuedDate'}
-            }
-        else:  # quarterly
-            period_expr = {
-                'year': {'$year': '$issuedDate'},
-                'quarter': {'$ceil': {'$divide': [{'$month': '$issuedDate'}, 3]}}
-            }
-        
-        pipeline = [
-            # Stage 1: Match documents in date range (uses index on validity.start)
-            {'$match': {
-                'parsed.validity.start': {'$gte': start_str}
-            }},
-            # Stage 2: Project only needed fields
-            {'$project': {
-                'sigAlgo': '$parsed.signature_algorithm.name',
-                'issuedDate': {'$dateFromString': {
-                    'dateString': '$parsed.validity.start',
-                    'onError': None
-                }}
-            }},
-            # Stage 3: Filter out null dates
-            {'$match': {'issuedDate': {'$ne': None}}},
-            # Stage 4: Extract hash algorithm
-            {'$addFields': {
-                'hash': {
-                    '$switch': {
-                        'branches': [
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': '^SHA512'}}, 'then': 'SHA-512'},
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': '^SHA384'}}, 'then': 'SHA-384'},
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': '^SHA256'}}, 'then': 'SHA-256'},
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': '^SHA1|^SHA-1'}}, 'then': 'SHA-1'},
-                            {'case': {'$regexMatch': {'input': {'$ifNull': ['$sigAlgo', '']}, 'regex': '^MD5'}}, 'then': 'MD5'},
-                        ],
-                        'default': 'Other'
-                    }
-                },
-                'period': period_expr
-            }},
-            # Stage 5: Group by period and hash
-            {'$group': {
-                '_id': {'period': '$period', 'hash': '$hash'},
-                'count': {'$sum': 1}
-            }},
-            # Stage 6: Reshape for easier processing
-            {'$group': {
-                '_id': '$_id.period',
-                'hashes': {'$push': {'hash': '$_id.hash', 'count': '$count'}},
-                'total': {'$sum': '$count'}
-            }},
-            {'$sort': {'_id.year': 1, '_id.quarter': 1}}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        trends = []
-        for item in results:
-            period = item['_id']
-            total = item['total']
-            
-            if granularity == 'yearly':
-                period_label = str(period.get('year', 'Unknown'))
-            else:
-                year = period.get('year', 0)
-                quarter = period.get('quarter', 0)
-                period_label = f"Q{quarter} {year}"
-            
-            # Convert hash counts to percentages
-            hash_pcts = {}
-            for h in item.get('hashes', []):
-                hash_name = h['hash']
-                hash_pcts[hash_name] = round((h['count'] / total) * 100, 1) if total > 0 else 0
-            
-            trends.append({
-                'period': period_label,
-                'year': period.get('year', 0),
-                'quarter': period.get('quarter', 0) if granularity == 'quarterly' else None,
-                'total': total,
-                'SHA-256': hash_pcts.get('SHA-256', 0),
-                'SHA-384': hash_pcts.get('SHA-384', 0),
-                'SHA-512': hash_pcts.get('SHA-512', 0),
-                'SHA-1': hash_pcts.get('SHA-1', 0),
-                'MD5': hash_pcts.get('MD5', 0),
-                'Other': hash_pcts.get('Other', 0)
-            })
-        
-        return trends
-    
-    @classmethod
-    def get_issuer_algorithm_matrix(cls, limit: int = 10) -> List[Dict]:
-        """
-        Get matrix of issuer × algorithm combinations with counts.
-        
-        OPTIMIZED for millions of documents:
-        - Single pass aggregation
-        - $group on compound key
-        - Limited to top issuers
-        
-        Returns:
-            List of dicts with issuer, algorithm, keySize, and count
-        """
-        
-        pipeline = [
-            # Stage 1: Project needed fields only
-            {'$project': {
-                'issuer': {'$arrayElemAt': ['$parsed.issuer.organization', 0]},
-                'algo': '$parsed.subject_key_info.key_algorithm.name',
-                'rsaLen': '$parsed.subject_key_info.rsa_public_key.length',
-                'ecLen': '$parsed.subject_key_info.ecdsa_public_key.length'
-            }},
-            # Stage 2: Compute key size
-            {'$addFields': {
-                'keySize': {'$ifNull': ['$rsaLen', '$ecLen']}
-            }},
-            # Stage 3: Filter out nulls
-            {'$match': {
-                'issuer': {'$ne': None},
-                'algo': {'$ne': None}
-            }},
-            # Stage 4: Group by issuer + algo + keySize
-            {'$group': {
-                '_id': {
-                    'issuer': '$issuer',
-                    'algo': '$algo',
-                    'keySize': '$keySize'
-                },
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'count': -1}},
-            {'$limit': 50}  # Limit total combinations
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        matrix = []
-        for item in results:
-            issuer = item['_id'].get('issuer', 'Unknown')
-            algo = item['_id'].get('algo', 'Unknown')
-            key_size = item['_id'].get('keySize', 0)
-            count = item['count']
-            
-            # Format algorithm string like "RSA-2048"
-            algo_str = f"{algo}-{key_size}" if key_size else algo
-            
-            matrix.append({
-                'issuer': issuer,
-                'algorithm': algo_str,
-                'algorithmType': algo,
-                'keySize': key_size,
-                'count': count
-            })
-        
-        return matrix
-    
-    @classmethod
-    def get_ca_stats_fast(cls) -> Dict:
-        """
-        FAST VERSION: Get CA Analytics stats from pre-computed materialized view.
-        
-        Returns:
-            Dict with total_cas, total_certs, top_ca, self_signed_count, unique_countries
-        
-        Performance:
-            - Before: ~6 minutes (multiple aggregations)
-            - After: ~0.005s (single document read)
-            - Speedup: ~72,000x
-        
-        Materialized View:
-            - Database: tranco-latest-8-lakh-results
-            - Collection: ca-stats
-            - Document: Single doc with _id='ca_stats'
-        
-        To update pre-computed data:
-            python compute_ca_stats.py
-        """
-        stats_collection = MongoDBClient.get_results_db()['ca-stats']
-        
-        # Read the single pre-computed document
-        stats_doc = stats_collection.find_one({'_id': 'ca_stats'})
-        
-        if not stats_doc:
-            # Fallback to slow method if no pre-computed data
-            return cls.get_ca_stats()
-        
-        return {
-            'total_cas': stats_doc['total_cas'],
-            'total_certs': stats_doc['total_certs'],
-            'top_ca': stats_doc['top_ca'],
-            'self_signed_count': stats_doc['self_signed_count'],
-            'unique_countries': stats_doc['unique_countries']
-        }
-    
-    @classmethod
-    def get_ca_stats(cls) -> Dict:
-        """
-        Get CA Analytics stats for metric cards.
-        Returns: total CAs, top CA, self-signed count, unique CA countries
-        """
-        # Get total unique CAs
-        ca_pipeline = [
-            {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
-            {'$group': {'_id': '$parsed.issuer.organization'}},
-            {'$count': 'total'}
-        ]
-        ca_result = list(cls.collection.aggregate(ca_pipeline))
-        total_cas = ca_result[0]['total'] if ca_result else 0
-        
-        # Get top CA
-        top_ca_pipeline = [
-            {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
-            {'$group': {'_id': '$parsed.issuer.organization', 'count': {'$sum': 1}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 1}
-        ]
-        top_ca_result = list(cls.collection.aggregate(top_ca_pipeline))
-        total_certs = cls.collection.count_documents({})
-        
-        top_ca = None
-        top_ca_count = 0
-        top_ca_percentage = 0
-        if top_ca_result:
-            top_ca = top_ca_result[0]['_id'] or 'Unknown'
-            top_ca_count = top_ca_result[0]['count']
-            top_ca_percentage = round((top_ca_count / total_certs) * 100, 1) if total_certs > 0 else 0
-        
-        # Get self-signed count
-        self_signed_count = cls.collection.count_documents(
-            {'parsed.signature.self_signed': True},
-            hint='idx_self_signed'
-        )
-        
-        # Get unique CA countries
-        country_pipeline = [
-            {'$unwind': {'path': '$parsed.issuer.country', 'preserveNullAndEmptyArrays': True}},
-            {'$group': {'_id': '$parsed.issuer.country'}},
-            {'$match': {'_id': {'$ne': None}}},
-            {'$count': 'total'}
-        ]
-
-        country_result = list(cls.collection.aggregate(
-            country_pipeline,
-            hint='idx_issuer_country',  # NEW index!
-            allowDiskUse=True
-        ))
-        unique_countries = country_result[0]['total'] if country_result else 0
-        
-        return {
-            'total_cas': total_cas,
-            'total_certs': total_certs,
-            'top_ca': {
-                'name': top_ca,
-                'count': top_ca_count,
-                'percentage': top_ca_percentage
-            },
-            'self_signed_count': self_signed_count,
-            'unique_countries': unique_countries
-        }
-    
+       
     @classmethod
     def get_validation_distribution(cls) -> List[Dict]:
         """
@@ -3484,953 +1215,310 @@ class CertificateModel:
             })
         
         return distribution
+
+    # ==================== Shared METHODS ====================
+
+
+    # ===========================
+    # Slow and fast Shared METHODS  (using on-the-fly aggregation)  
+    # ===========================
+    @staticmethod
+    def get_current_time_iso() -> str:
+        """Get current time in ISO format for MongoDB queries"""
+        return SharedModels.get_current_time_iso()
+    
+    @staticmethod
+    def get_tld_country(domain: str) -> str:
+        return SharedModels.get_tld_country(domain=domain)
     
     @classmethod
-    def get_issuer_validation_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+    def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+        return SharedModels.get_ca_distribution(limit=limit, base_filter=base_filter)
+
+    @classmethod
+    def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+        return SharedModels.get_ca_distribution_fast(limit=limit, base_filter=base_filter)
+
+    @classmethod
+    def get_validity_trends(cls, months_before: int = 4, months_after: int = 4, granularity: str = 'monthly') -> List[Dict]:
+        return SharedModels.get_validity_trends(months_before, months_after, granularity)
+   
+    @classmethod
+    def get_dashboard_metrics(cls) -> Dict:
+        return SharedModels.get_dashboard_metrics()
+       
+    @classmethod
+    def get_geographic_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+        return SharedModels.get_geographic_distribution_fast(limit=limit, base_filter=base_filter)
+        
+    @classmethod
+    def get_geographic_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+        return SharedModels.get_geographic_distribution(limit=limit, base_filter=base_filter)
+    
+
+    # ==================== Validity analysis METHODS ====================
+
+    # ===========================
+    # Fast Validity analysis METHODS  (using pre-computed statistics) 
+    # ===========================
+    
+    @classmethod
+    def get_validity_stats_fast(cls) -> Dict:
+        return ValidityModels.get_validity_stats_fast()
+    
+    @classmethod
+    def get_validity_distribution_fast(cls) -> list:
+        return ValidityModels.get_validity_distribution_fast()
+    
+    @classmethod
+    def get_issuance_timeline_fast(cls, months: int = 12) -> list:
+        return ValidityModels.get_issuance_timeline_fast(months=months)
+    
+     # ===========================
+    # Slow Validity analysis METHODS  (using on-the-fly aggregation)
+    # ===========================
+
+    @classmethod
+    def get_validity_stats(cls) -> Dict:
+        return ValidityModels.get_validity_stats()
+    
+    @classmethod
+    def get_validity_distribution(cls) -> List[Dict]:
+        return ValidityModels.get_validity_distribution()
+    
+    @classmethod
+    def get_issuance_timeline(cls, months: int = 12) -> List[Dict]:
+        return ValidityModels.get_issuance_timeline(months=months)
+
+
+    # ==================== SIGNATURE AND HASH METHODS ====================
+
+    # ===========================
+    # Fast signature and hash METHODS  (using pre-computed statistics) 
+    # ===========================
+
+    @classmethod
+    def get_signature_stats_fast(cls) -> Dict:
         """
-        FAST VERSION: Get issuer × validation level matrix from pre-computed materialized view.
+        Get comprehensive signature and hash statistics (OPTIMIZED - reads from pre-computed data).
+        
+        PERFORMANCE:
+        - Source: tranco-latest-8-lakh-results.signature-stats (1 document)
+        - Response time: ~0.005 seconds (3,000x faster than original)
+        - Original time: ~180 seconds (full aggregation on 878K docs)
+        
+        Returns pre-computed:
+            - algorithmDistribution: signature algorithm counts/percentages
+            - hashDistribution: hash algorithm counts/percentages
+            - keySizeDistribution: key size counts/percentages
+            - weakHashCount: count of MD5/SHA-1 certs
+            - hashComplianceRate: % using SHA-256+
+            - strengthScore: composite security score 0-100
+            - selfSignedCount: count of self-signed certs
+            - totalCertificates: total count
+        """
+        return SignatureHashModel.get_signature_stats_fast()
+    
+    @classmethod
+    def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
+        """
+        Get hash algorithm adoption trends over time (OPTIMIZED - reads from pre-computed data).
+        
+        PERFORMANCE:
+        - Source: tranco-latest-8-lakh-results.hash-trends (~36-48 documents)
+        - Response time: ~0.003 seconds (3,000x faster than original)
+        - Original time: ~200 seconds (full aggregation on 878K docs)
         
         Args:
-            limit: Number of top issuers to return (default: 10)
+            months: Number of months to look back (default 36 = 3 years)
+            granularity: 'quarterly' or 'yearly'
         
         Returns:
-            List of dicts with issuer, validationLevel, and count
-        
-        Performance:
-            - Before: ~93 seconds (complex aggregation)
-            - After: ~0.015s (pre-filtered read)
-            - Speedup: ~6,200x
-        
-        Materialized View:
-            - Database: tranco-latest-8-lakh-results
-            - Collection: issuer-validation-matrix
-            - Documents: 114 records (top 50 issuers × validation levels)
-        
-        To update pre-computed data:
-            python compute_issuer_validation_matrix.py
+            List of dicts with period and hash percentages
         """
-        matrix_collection = MongoDBClient.get_results_db()['issuer-validation-matrix']
+        return SignatureHashModel.get_hash_trends_fast(months=months, granularity=granularity)
+    
+    @classmethod
+    def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+        """
+        Get matrix of issuer × algorithm combinations (OPTIMIZED - reads from pre-computed data).
         
-        # Get top issuers by total count
-        pipeline = [
-            {'$match': {'record_id': {'$exists': True}}},  # Exclude metadata
-            {'$sort': {'issuer_total': -1, 'count': -1}},
-            {'$group': {
-                '_id': '$issuer',
-                'combinations': {
-                    '$push': {
-                        'validationLevel': '$validationLevel',
-                        'count': '$count'
-                    }
-                },
-                'total': {'$first': '$issuer_total'}
-            }},
-            {'$sort': {'total': -1}},
-            {'$limit': limit}
-        ]
+        PERFORMANCE:
+        - Source: tranco-latest-8-lakh-results.issuer-algorithm-matrix (~50 documents)
+        - Response time: ~0.002 seconds (3,000x faster than original)
+        - Original time: ~180 seconds (full aggregation on 878K docs)
         
-        issuer_groups = list(matrix_collection.aggregate(pipeline))
+        Args:
+            limit: Maximum number of combinations to return (default 10)
         
-        # Flatten to required format
-        matrix = []
-        for group in issuer_groups:
-            issuer = group['_id']
-            for combo in group['combinations']:
-                matrix.append({
-                    'issuer': issuer,
-                    'validationLevel': combo['validationLevel'],
-                    'count': combo['count']
-                })
+        Returns:
+            List of dicts with issuer, algorithm, keySize, and count
+        """
+        return SignatureHashModel.get_issuer_algorithm_matrix_fast(limit=limit)
+    
+    # ===========================
+    # Slow Signature and hash METHODS  (using on-the-fly aggregation)  
+    # ===========================
+
+    @classmethod
+    def get_signature_stats(cls) -> Dict:
+        """
+        Get comprehensive signature and hash statistics for the Signature & Hashes page.
         
-        return matrix
+        OPTIMIZED for millions of documents:
+        - Uses efficient $group aggregations (single pass)
+        - No $unwind or expensive operations
+        - Minimal projections
+        - Parallel counting for simple metrics
+        
+        Returns:
+            - algorithmDistribution: signature algorithm counts/percentages
+            - hashDistribution: hash algorithm counts/percentages
+            - keySizeDistribution: key size counts/percentages
+            - weakHashCount: count of MD5/SHA-1 certs
+            - hashComplianceRate: % using SHA-256+
+            - strengthScore: composite security score 0-100
+            - selfSignedCount: count of self-signed certs
+            - totalCertificates: total count
+        """
+        
+        # Get total count (fast indexed query)
+        return SignatureHashModel.get_signature_stats()
+    
+    @classmethod
+    def get_hash_trends(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
+        """
+        Get hash algorithm adoption trends over time based on issuance dates.
+        
+        OPTIMIZED for millions of documents:
+        - Uses $match with date range first (uses index)
+        - Single aggregation pass
+        - Groups by period + hash in one operation
+        
+        Args:
+            months: Number of months to look back (default 36 = 3 years)
+            granularity: 'quarterly' or 'yearly'
+        
+        Returns:
+            List of dicts with period and hash percentages
+        """
+        return SignatureHashModel.get_hash_trends(months=months, granularity=granularity)
+    
+    @classmethod
+    def get_issuer_algorithm_matrix(cls, limit: int = 10) -> List[Dict]:
+        """
+        Get matrix of issuer × algorithm combinations with counts.
+        
+        OPTIMIZED for millions of documents:
+        - Single pass aggregation
+        - $group on compound key
+        - Limited to top issuers
+        
+        Returns:
+            List of dicts with issuer, algorithm, keySize, and count
+        """
+        
+        return SignatureHashModel.get_issuer_algorithm_matrix(limit=limit)
+ 
+
+    # ==================== CA ANALYTICS METHODS ====================
+
+
+    # ===========================
+    # Slow CA METHODS  (using on-the-fly aggregation)  
+    # ===========================
+
+    @classmethod
+    def get_ca_stats(cls) -> Dict:
+        return CAModel.get_ca_stats()
     
     @classmethod
     def get_issuer_validation_matrix(cls, limit: int = 10) -> List[Dict]:
-        """
-        Get matrix of issuer × validation level combinations with counts.
-        Similar to get_issuer_algorithm_matrix but for validation levels (DV, OV, EV).
-        
-        Returns:
-            List of dicts with issuer, validationLevel, and count
-        """
-        
-        pipeline = [
-            # Stage 1: Project needed fields only
-            {'$project': {
-                'issuer': {'$arrayElemAt': ['$parsed.issuer.organization', 0]},
-                'validationLevel': {'$ifNull': ['$parsed.validation_level', 'Unknown']}
-            }},
-            # Stage 2: Filter out null issuers
-            {'$match': {'issuer': {'$exists': True, '$ne': None}}},
-            # Stage 3: Group by issuer + validationLevel
-            {'$group': {
-                '_id': {
-                    'issuer': '$issuer',
-                    'validationLevel': '$validationLevel'
-                },
-                'count': {'$sum': 1}
-            }},
-            # Stage 4: Sort by count for top issuers first
-            {'$sort': {'count': -1}}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        # Extract unique issuers (top N by total count)
-        issuer_totals = {}
-        for r in results:
-            issuer = r['_id']['issuer']
-            issuer_totals[issuer] = issuer_totals.get(issuer, 0) + r['count']
-        
-        # Get top issuers
-        top_issuers = sorted(issuer_totals.items(), key=lambda x: x[1], reverse=True)[:limit]
-        top_issuer_names = {issuer for issuer, _ in top_issuers}
-        
-        # Build matrix data
-        matrix = []
-        for r in results:
-            issuer = r['_id']['issuer']
-            if issuer in top_issuer_names:
-                matrix.append({
-                    'issuer': issuer,
-                    'validationLevel': r['_id']['validationLevel'],
-                    'count': r['count']
-                })
-        
-        return matrix
+        return CAModel.get_issuer_validation_matrix(limit)
 
-    # ==================== SAN ANALYTICS METHODS ====================
+        # ===========================
+    # FAST CA METHODS (using materialized views)    
+    # ===========================
+
+    @classmethod
+    def get_ca_stats_fast(cls) -> Dict:
+        return CAModel.get_ca_stats_fast()
+    
+    @classmethod
+    def get_issuer_validation_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+        return CAModel.get_issuer_validation_matrix_fast(limit)
+
+        # ==================== SAN ANALYTICS METHODS ====================
+
+
+    # ===========================
+    # Slow SAN METHODS (using on-the-fly aggregation)
+    # ===========================
     
     @classmethod
     def get_san_stats(cls) -> Dict[str, Any]:
-        """
-        Get SAN (Subject Alternative Name) statistics for metric cards.
-        
-        Returns:
-            Dict with total_sans, avg_sans_per_cert, wildcard_certs, multi_domain_certs
-        """
-        pipeline = [
-                {
-                    '$project': {
-                        # Ensure we are looking at the specific SAN DNS array
-                        # We use $ifNull to handle missing fields and $filter to handle nulls
-                        'names': {
-                            '$filter': {
-                                'input': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]},
-                                'as': 'n',
-                                'cond': {'$ne': ['$$n', None]}
-                            }
-                        }
-                    }
-                },
-                {
-                    '$addFields': {
-                        'sanCount': {'$size': '$names'},
-                        'hasWildcard': {
-                            '$gt': [
-                                {'$size': {
-                                    '$filter': {
-                                        'input': '$names',
-                                        'as': 'name',
-                                        'cond': {
-                                            '$and': [
-                                                {'$eq': [{'$type': '$$name'}, 'string']},
-                                                {'$regexMatch': {'input': '$$name', 'regex': '^\\*\\.'}}
-                                            ]
-                                        }
-                                    }
-                                }},
-                                0
-                            ]
-                        }
-                    }
-                },
-                {
-                    '$addFields': {
-                        'isMultiDomain': {'$gte': ['$sanCount', 5]}
-                    }
-                },
-                {
-                    '$group': {
-                        '_id': None,
-                        'totalSans': {'$sum': '$sanCount'},
-                        'totalCerts': {'$sum': 1},
-                        'wildcardCerts': {'$sum': {'$cond': ['$hasWildcard', 1, 0]}},
-                        'multiDomainCerts': {'$sum': {'$cond': ['$isMultiDomain', 1, 0]}}
-                    }
-                }
-            ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        if results:
-            data = results[0]
-            total_certs = data.get('totalCerts', 1) or 1
-            return {
-                'total_sans': data.get('totalSans', 0),
-                'avg_sans_per_cert': round(data.get('totalSans', 0) / total_certs, 2),
-                'wildcard_certs': data.get('wildcardCerts', 0),
-                'multi_domain_certs': data.get('multiDomainCerts', 0),
-                'total_certs': total_certs
-            }
-        
-        return {
-            'total_sans': 0,
-            'avg_sans_per_cert': 0,
-            'wildcard_certs': 0,
-            'multi_domain_certs': 0,
-            'total_certs': 0
-        }
-    
+        return SANModel.get_san_stats()
+
     @classmethod
     def get_san_distribution(cls) -> List[Dict[str, Any]]:
-        """
-        Get SAN count distribution (histogram buckets).
-        
-        Returns:
-            List of dicts with bucket name and count
-        """
-        pipeline = [
-            {'$project': {
-                'sanCount': {'$size': {'$ifNull': ['$parsed.names', []]}}
-            }},
-            {'$bucket': {
-                'groupBy': '$sanCount',
-                'boundaries': [0, 1, 2, 4, 6, 11, 31, 51],
-                'default': '50+',
-                'output': {'count': {'$sum': 1}}
-            }}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        # Map bucket IDs to readable labels
-        bucket_labels = {
-            0: '0',
-            1: '1',
-            2: '2-3',
-            4: '4-5',
-            6: '6-10',
-            11: '11-30',
-            31: '31-50',
-            '50+': '50+'
-        }
-        
-        distribution = []
-        for r in results:
-            bucket_id = r['_id']
-            label = bucket_labels.get(bucket_id, str(bucket_id))
-            distribution.append({
-                'bucket': label,
-                'count': r['count']
-            })
-        
-        return distribution
-    
+        return SANModel.get_san_distribution()
+
     @classmethod
     def get_san_tld_breakdown(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get top TLDs from SAN entries (using dns_names from subject_alt_name).
-        
-        Args:
-            limit: Number of top TLDs to return
-            
-        Returns:
-            List of dicts with tld and count
-        """
-        pipeline = [
-            # Filter documents that have dns_names
-            {'$match': {
-                'parsed.extensions.subject_alt_name.dns_names': {'$exists': True, '$ne': []}
-            }},
-            # Unwind the dns_names array
-            {'$unwind': '$parsed.extensions.subject_alt_name.dns_names'},
-            # Project and extract TLD from each dns name
-            {'$project': {
-                'dnsName': '$parsed.extensions.subject_alt_name.dns_names',
-                # Extract TLD - get last part after last dot
-                'tld': {
-                    '$let': {
-                        'vars': {
-                            'parts': {'$split': ['$parsed.extensions.subject_alt_name.dns_names', '.']}
-                        },
-                        'in': {'$arrayElemAt': ['$$parts', -1]}
-                    }
-                }
-            }},
-            # Filter out wildcards and empty TLDs
-            {'$match': {
-                'tld': {'$exists': True, '$ne': None, '$ne': ''},
-                'dnsName': {'$not': {'$regex': '^\\*'}}
-            }},
-            # Group by TLD
-            {'$group': {
-                '_id': {'$toLower': '$tld'},
-                'count': {'$sum': 1}
-            }},
-            # Sort by count
-            {'$sort': {'count': -1}},
-            # Limit to top N
-            {'$limit': limit}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        return [{'tld': f".{r['_id']}", 'count': r['count']} for r in results]
-    
+        return SANModel.get_san_tld_breakdown(limit)
+
     @classmethod
     def get_san_wildcard_breakdown(cls) -> Dict[str, int]:
-        """
-        Get breakdown of wildcard vs standard SAN entries (using dns_names).
-        
-        Returns:
-            Dict with wildcard and standard counts
-        """
-        pipeline = [
-            # Filter documents that have dns_names
-            {'$match': {
-                'parsed.extensions.subject_alt_name.dns_names': {'$exists': True, '$ne': []}
-            }},
-            # Unwind the dns_names array
-            {'$unwind': '$parsed.extensions.subject_alt_name.dns_names'},
-            # Project to check if wildcard
-            {'$project': {
-                'isWildcard': {'$regexMatch': {'input': '$parsed.extensions.subject_alt_name.dns_names', 'regex': '^\\*\\.'}}
-            }},
-            # Group by wildcard status
-            {'$group': {
-                '_id': '$isWildcard',
-                'count': {'$sum': 1}
-            }}
-        ]
-        
-        # ✅ OPTIMIZED: Add hint to use idx_san_dns_names
-        results = list(cls.collection.aggregate(
-            pipeline,
-            hint='idx_san_dns_names',  # NEW sparse index!
-            allowDiskUse=True
-        ))
-        
-        breakdown = {'wildcard': 0, 'standard': 0}
-        for r in results:
-            if r['_id'] is True:
-                breakdown['wildcard'] = r['count']
-            else:
-                breakdown['standard'] = r['count']
-        
-        return breakdown
+        return SANModel.get_san_wildcard_breakdown()
 
     # ===========================
     # FAST SAN METHODS (using materialized views)
     # ===========================
     
     @classmethod
-    #san stats function 1
     def get_san_stats_fast(cls) -> Dict[str, Any]:
-        """
-        ⚡ OPTIMIZED: Get SAN statistics from pre-computed materialized view.
-        
-        Returns:
-            Dict containing:
-                - total_sans: Total number of SAN entries across all certs
-                - avg_sans_per_cert: Average SANs per certificate
-                - wildcard_certs: Number of certs with wildcard SANs
-                - multi_domain_certs: Number of certs with 5+ SANs
-        
-        Performance: ~0.001s (vs 120s+ for original)
-        """
-        stats_collection = MongoDBClient.get_results_db()['san-stats']
-        print("I am in get_san_stats_fast ")
-        
-        doc = stats_collection.find_one({'_id': 'san_stats'})
-        
-        if not doc:
-            raise ValueError("SAN stats not computed. Run compute_san_stats.py first.")
-        
-        return {
-            'total_sans': doc.get('total_sans', 0),
-            'avg_sans_per_cert': doc.get('avg_sans_per_cert', 0.0),
-            'wildcard_certs': doc.get('wildcard_certs', 0),
-            'multi_domain_certs': doc.get('multi_domain_certs', 0)
-        }
-    
-    @classmethod
-    #san distribution function 2
-    def get_san_distribution_fast(cls) -> List[Dict[str, Any]]:
-        """
-        ⚡ OPTIMIZED: Get SAN distribution from pre-computed materialized view.
-        
-        Returns:
-            List of dicts with bucket and count
-            
-        Performance: ~0.001s (vs 120s+ for original)
-        """
-        print("I am in get_san_distribution_fast ")
-        distribution_collection = MongoDBClient.get_results_db()['san-distribution']
+        return SANModel.get_san_stats_fast()
 
-        
-        # Exclude metadata document
-        results = list(distribution_collection.find(
-            {'_id': {'$ne': 'metadata'}},
-            {'_id': 0, 'bucket': 1, 'count': 1}
-        ).sort('bucket_id', 1))
-        
-        if not results:
-            raise ValueError("SAN distribution not computed. Run compute_san_distribution.py first.")
-        
-        return results
-    
+    @classmethod
+    def get_san_distribution_fast(cls) -> List[Dict[str, Any]]:
+        return SANModel.get_san_distribution_fast()
+
     @classmethod
     def get_san_tld_breakdown_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        ⚡ OPTIMIZED: Get TLD breakdown from pre-computed materialized view.
-        
-        Args:
-            limit: Maximum number of TLDs to return (default 10)
-            
-        Returns:
-            List of dicts with tld and count
-            
-        Performance: ~0.001s (vs 120s+ for original)
-        """
-        print("I am in get_san_tld_breakdown_fast ")
+        return SANModel.get_san_tld_breakdown_fast(limit)
 
-        tld_collection = MongoDBClient.get_results_db()['san-tld-certs']
-        
-        # Get TLDs sorted by certificate count
-        results = list(tld_collection.find(
-            {},
-            {'_id': 1, 'certificate_count': 1}
-        ).sort('certificate_count', -1).limit(limit))
-        
-        if not results:
-            raise ValueError("SAN TLD data not computed. Run compute-san-filtered-lists.py first.")
-        
-        # Transform to expected format
-        return [{
-            'tld': doc['_id'],
-            'count': doc['certificate_count']
-        } for doc in results]
-    
     @classmethod
     def get_san_wildcard_breakdown_fast(cls) -> Dict[str, int]:
-        """
-        ⚡ OPTIMIZED: Get wildcard breakdown from pre-computed stats.
-        
-        Returns:
-            Dict with wildcard and standard counts
-            
-        Performance: ~0.001s (vs 120s+ for original)
-        """
+        return SANModel.get_san_wildcard_breakdown_fast()
 
-        print("I am in get_san_wildcard_breakdown_fast ")
-
-        stats_collection = MongoDBClient.get_results_db()['san-stats']
-        
-        doc = stats_collection.find_one({'_id': 'san_stats'})
-        
-        if not doc:
-            raise ValueError("SAN stats not computed. Run compute-san-filtered-lists.py first.")
-        
-        wildcard = doc.get('wildcard_certs', 0)
-        total = doc.get('total_certs', 0)
-        standard = max(0, total - wildcard)  # Ensure non-negative
-        
-        return {
-            'wildcard': wildcard,
-            'standard': standard
-        }
-    
     @classmethod
-    def get_san_filtered_certs_fast(cls, filter_type: str, filter_value: str = None, 
+    def get_san_filtered_certs_fast(cls, filter_type: str, filter_value: str = None,
                                      page: int = 1, page_size: int = 50) -> Dict[str, Any]:
-        """
-        ⚡ OPTIMIZED: Get filtered certificates from pre-computed collections.
-        
-        Args:
-            filter_type: Type of filter - 'wildcard', 'multi-domain', 'san-count', 'tld'
-            filter_value: Value for filter (e.g., '50+' for san-count, '.com' for tld)
-            page: Page number (1-indexed)
-            page_size: Number of results per page
-            
-        Returns:
-            Dict with:
-            - certificates: List of certificate references
-            - total: Total count
-            - page: Current page
-            - page_size: Page size
-            - has_more: Whether more pages exist
-            
-        Performance: <100ms (vs 30-60s for original filtering)
-        """
-        
-        # Select collection based on filter type
-        if filter_type == 'wildcard':
-            collection = MongoDBClient.get_results_db()['san-wildcard-certs']
-            query = {}
-        elif filter_type == 'standard':
-            collection = MongoDBClient.get_results_db()['san-standard-certs']
-            query = {}
-        elif filter_type == 'multi-domain':
-            collection = MongoDBClient.get_results_db()['san-multi-domain-certs']
-            query = {}
-        elif filter_type == 'san-count':
-
-            print("I am in san-count filter of get_san_filtered_certs_fast ")
-
-            # Query san-count-groups collection
-            if not filter_value:
-                raise ValueError("filter_value required for san-count filter")
-            collection = MongoDBClient.get_results_db()['san-count-groups']
-            try:
-                doc = collection.find_one({'_id': filter_value})
-                if not doc:
-                    return {
-                        'certificates': [],
-                        'total': 0,
-                        'page': page,
-                        'page_size': page_size,
-                        'has_more': False
-                    }
-                # Return certificates from the group
-                total = doc.get('total_count', doc.get('certificate_count', 0))  # Fallback to certificate_count
-                certificates = doc.get('certificates', [])
-                skip = (page - 1) * page_size
-                paginated_certs = certificates[skip:skip + page_size]
-                
-                # Convert ObjectId to string for JSON serialization
-                from bson import ObjectId
-                for cert in paginated_certs:
-                    if 'cert_id' in cert and isinstance(cert['cert_id'], ObjectId):
-                        cert['cert_id'] = str(cert['cert_id'])
-                    if '_id' in cert and isinstance(cert['_id'], ObjectId):
-                        cert['_id'] = str(cert['_id'])
-                
-                return {
-                    'certificates': paginated_certs,
-                    'total': total,
-                    'page': page,
-                    'page_size': page_size,
-                    'has_more': skip + len(paginated_certs) < total
-                }
-            except Exception as e:
-                print(f"Error in SAN count filter: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                raise
-        elif filter_type == 'tld':
-            # Query san-tld-certs collection
-            if not filter_value:
-                raise ValueError("filter_value required for tld filter")
-            collection = MongoDBClient.get_results_db()['san-tld-certs']
-            try:
-                doc = collection.find_one({'_id': filter_value})
-                if not doc:
-                    return {
-                        'certificates': [],
-                        'total': 0,
-                        'page': page,
-                        'page_size': page_size,
-                        'has_more': False
-                    }
-                # Return certificates from the TLD group
-                total = doc.get('total_count', doc.get('certificate_count', 0))  # Fallback to certificate_count
-                certificates = doc.get('certificates', [])
-                skip = (page - 1) * page_size
-                paginated_certs = certificates[skip:skip + page_size]
-                
-                # Convert ObjectId to string for JSON serialization
-                from bson import ObjectId
-                for cert in paginated_certs:
-                    if 'cert_id' in cert and isinstance(cert['cert_id'], ObjectId):
-                        cert['cert_id'] = str(cert['cert_id'])
-                    if '_id' in cert and isinstance(cert['_id'], ObjectId):
-                        cert['_id'] = str(cert['_id'])
-                
-                return {
-                    'certificates': paginated_certs,
-                    'total': total,
-                    'page': page,
-                    'page_size': page_size,
-                    'has_more': skip + len(paginated_certs) < total
-                }
-            except Exception as e:
-                print(f"Error in TLD filter: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                raise
-        else:
-            raise ValueError(f"Invalid filter_type: {filter_type}")
-        
-        # For wildcard and multi-domain, query the collections with pagination
-        skip = (page - 1) * page_size
-        total = collection.count_documents(query)
-        
-        certificates = list(collection.find(query)
-                          .sort('san_count', -1)
-                          .skip(skip)
-                          .limit(page_size))
-        
-        # Convert ObjectId to string for JSON serialization
-        for cert in certificates:
-            if '_id' in cert:
-                cert['_id'] = str(cert['_id'])
-            if 'cert_id' in cert:
-                cert['cert_id'] = str(cert['cert_id'])
-        
-        return {
-            'certificates': certificates,
-            'total': total,
-            'page': page,
-            'page_size': page_size,
-            'has_more': skip + len(certificates) < total
-        }
+        return SANModel.get_san_filtered_certs_fast(filter_type, filter_value, page, page_size)
 
 
 
 # ========== TRENDS ANALYTICS METHODS ==========
-    
+
     @classmethod
     def get_trends_stats(cls) -> Dict[str, Any]:
-        """
-        Get trend statistics for metric cards.
-        
-        Returns:
-            Dict with:
-            - velocity_30d: Certificates issued in last 30 days
-            - velocity_change: % change vs previous 30 days
-            - expiring_30d: Certificates expiring in next 30 days
-            - expiring_change: % change vs previous month
-            - modern_algo_percent: % using SHA256 or newer
-            - strong_key_percent: % with strong keys
-        """
-        # Use same approach as get_dashboard_metrics for consistency
-        now = cls.get_current_time_iso()
-        now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        sixty_days_ago = (datetime.now(timezone.utc) - timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        # Velocity: Certificates issued in last 30 days (using same logic as filters)
-        velocity_30d = cls.collection.count_documents({
-            'parsed.validity.start': {'$gte': thirty_days_ago, '$lte': now}
-        })
-        
-        # Previous 30 days for change calculation
-        velocity_prev_30d = cls.collection.count_documents({
-            'parsed.validity.start': {'$gte': sixty_days_ago, '$lt': thirty_days_ago}
-        })
-        
-        velocity_change = 0
-        if velocity_prev_30d > 0:
-            velocity_change = round(((velocity_30d - velocity_prev_30d) / velocity_prev_30d) * 100, 1)
-        
-        # Expiring in next 30 days - SAME logic as get_dashboard_metrics
-        expiring_30d = cls.collection.count_documents({
-            'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}
-        })
-        
-        # Modern algorithm % (exclude legacy: SHA1, MD5, MD2)
-        total_certs = cls.collection.count_documents({})
-        legacy_algos = ['SHA1-RSA', 'SHA1WithRSAEncryption', 'MD5-RSA', 'MD5WithRSAEncryption', 'MD2-RSA', 'SHA1-ECDSA']
-        legacy_count = cls.collection.count_documents({
-            'parsed.signature_algorithm.name': {'$in': legacy_algos}
-        })
-        modern_algo_count = total_certs - legacy_count
-        modern_algo_percent = round((modern_algo_count / max(total_certs, 1)) * 100, 1)
-        
-        # Strong key % (RSA >= 2048 bits or ECDSA >= 256 bits)
-        strong_key_count = cls.collection.count_documents({
-            '$or': [
-                # RSA keys >= 2048 bits
-                {
-                    'parsed.subject_key_info.key_algorithm.name': 'RSA',
-                    'parsed.subject_key_info.rsa_public_key.length': {'$gte': 2048}
-                },
-                # ECDSA keys >= 256 bits (P-256, P-384, P-521)
-                {
-                    'parsed.subject_key_info.key_algorithm.name': {'$in': ['ECDSA', 'EC']},
-                    'parsed.subject_key_info.ecdsa_public_key.length': {'$gte': 256}
-                },
-                # Ed25519/Ed448 always strong
-                {
-                    'parsed.subject_key_info.key_algorithm.name': {'$in': ['Ed25519', 'Ed448']}
-                }
-            ]
-        })
-        strong_key_percent = round((strong_key_count / max(total_certs, 1)) * 100, 1)
-        
-        return {
-            'velocity_30d': velocity_30d,
-            'velocity_change': velocity_change,
-            'expiring_30d': expiring_30d,
-            'modern_algo_percent': modern_algo_percent,
-            'strong_key_percent': strong_key_percent,
-            'total_certs': total_certs
-        }
-    
+        return TrendsModel.get_trends_stats()
+
     @classmethod
     def get_key_size_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
-        """
-        Get key size distribution over time for animation.
-        
-        Returns monthly breakdown of key sizes for RSA and ECDSA certificates.
-        Used for animated visualization of key strength evolution.
-        """
-        from dateutil.relativedelta import relativedelta
-        
-        now = datetime.now(timezone.utc)
-        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        timeline = []
-        
-        # Go back 'months' months from current
-        for i in range(months - 1, -1, -1):
-            target_date = now - relativedelta(months=i)
-            start_of_month = target_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_of_month = (start_of_month + relativedelta(months=1)) - timedelta(seconds=1)
-            
-            start_str = start_of_month.strftime('%Y-%m-%dT%H:%M:%SZ')
-            end_str = end_of_month.strftime('%Y-%m-%dT%H:%M:%SZ')
-            
-            # Count certificates issued in this month by key size
-            base_match = {
-                'parsed.validity.start': {'$gte': start_str, '$lte': end_str}
-            }
-            
-            # RSA 2048
-            rsa_2048 = cls.collection.count_documents({
-                **base_match,
-                'parsed.subject_key_info.key_algorithm.name': 'RSA',
-                'parsed.subject_key_info.rsa_public_key.length': 2048
-            })
-            
-            # RSA 4096
-            rsa_4096 = cls.collection.count_documents({
-                **base_match,
-                'parsed.subject_key_info.key_algorithm.name': 'RSA',
-                'parsed.subject_key_info.rsa_public_key.length': 4096
-            })
-            
-            # RSA other (smaller or larger)
-            rsa_other = cls.collection.count_documents({
-                **base_match,
-                'parsed.subject_key_info.key_algorithm.name': 'RSA',
-                'parsed.subject_key_info.rsa_public_key.length': {'$nin': [2048, 4096]}
-            })
-            
-            # ECDSA 256
-            ecdsa_256 = cls.collection.count_documents({
-                **base_match,
-                'parsed.subject_key_info.key_algorithm.name': {'$in': ['ECDSA', 'EC']},
-                'parsed.subject_key_info.ecdsa_public_key.length': 256
-            })
-            
-            # ECDSA 384
-            ecdsa_384 = cls.collection.count_documents({
-                **base_match,
-                'parsed.subject_key_info.key_algorithm.name': {'$in': ['ECDSA', 'EC']},
-                'parsed.subject_key_info.ecdsa_public_key.length': 384
-            })
-            
-            month_label = f"{month_names[target_date.month - 1]} '{str(target_date.year)[2:]}"
-            
-            timeline.append({
-                'month': month_label,
-                'year': target_date.year,
-                'monthNum': target_date.month,
-                'rsa_2048': rsa_2048,
-                'rsa_4096': rsa_4096,
-                'rsa_other': rsa_other,
-                'ecdsa_256': ecdsa_256,
-                'ecdsa_384': ecdsa_384,
-                'total': rsa_2048 + rsa_4096 + rsa_other + ecdsa_256 + ecdsa_384
-            })
-        
-        return timeline
-    
+        return TrendsModel.get_key_size_timeline(months)
+
     @classmethod
     def get_expiration_forecast(cls, months: int = 12) -> List[Dict[str, Any]]:
-        """
-        Get certificate expiration count by month for upcoming months.
-        
-        Args:
-            months: Number of months to forecast
-            
-        Returns:
-            List of {month: 'Jan 2025', count: 123, year: 2025, monthNum: 1}
-        """
-        now = datetime.now(timezone.utc)
-        now_str = now.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_date = now + timedelta(days=months * 30)
-        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        pipeline = [
-            {'$match': {
-                'parsed.validity.end': {'$gte': now_str, '$lte': end_str}
-            }},
-            {'$project': {
-                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}},
-                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.end', 'onError': None}}}
-            }},
-            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
-            {'$group': {
-                '_id': {'year': '$year', 'month': '$month'},
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        forecast = []
-        for r in results:
-            year = r['_id']['year']
-            month = r['_id']['month']
-            forecast.append({
-                'month': f"{month_names[month]} {year}",
-                'monthNum': month,
-                'year': year,
-                'count': r['count']
-            })
-        
-        return forecast
-    
+        return TrendsModel.get_expiration_forecast(months)
+
     @classmethod
     def get_algorithm_adoption(cls, months: int = 12) -> List[Dict[str, Any]]:
-        """
-        Get signature algorithm distribution over time by issuance month.
-        
-        Args:
-            months: Number of months to include
-            
-        Returns:
-            List of {month: 'Jan 2025', sha256_rsa: 100, sha384_rsa: 20, ecdsa: 10, sha1_rsa: 5, other: 2}
-        """
-        now = datetime.now(timezone.utc)
-        start_date = now - timedelta(days=months * 30)
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        pipeline = [
-            {'$match': {
-                'parsed.validity.start': {'$gte': start_str}
-            }},
-            {'$project': {
-                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
-                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
-                'algo': '$parsed.signature_algorithm.name'
-            }},
-            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
-            {'$group': {
-                '_id': {'year': '$year', 'month': '$month', 'algo': '$algo'},
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        # Group by month
-        month_data = {}
-        for r in results:
-            key = (r['_id']['year'], r['_id']['month'])
-            if key not in month_data:
-                month_data[key] = {'sha256_rsa': 0, 'sha384_rsa': 0, 'ecdsa': 0, 'sha1_rsa': 0, 'other': 0}
-            
-            algo = (r['_id']['algo'] or '').upper()
-            count = r['count']
-            
-            if 'SHA256' in algo and 'RSA' in algo:
-                month_data[key]['sha256_rsa'] += count
-            elif 'SHA384' in algo and 'RSA' in algo:
-                month_data[key]['sha384_rsa'] += count
-            elif 'ECDSA' in algo or 'EC' in algo:
-                month_data[key]['ecdsa'] += count
-            elif 'SHA1' in algo or 'SHA-1' in algo:
-                month_data[key]['sha1_rsa'] += count
-            else:
-                month_data[key]['other'] += count
-        
-        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        adoption = []
-        for (year, month), data in sorted(month_data.items()):
-            adoption.append({
-                'month': f"{month_names[month]} {year}",
-                'monthNum': month,
-                'year': year,
-                **data
-            })
-        
-        return adoption
-    
+        return TrendsModel.get_algorithm_adoption(months)
+
     @classmethod
     def get_validation_level_trends(cls, months: int = 12) -> List[Dict[str, Any]]:
-        """
-        Get validation level (DV/OV/EV) distribution over time by issuance month.
-        
-        Args:
-            months: Number of months to include
-            
-        Returns:
-            List of {month: 'Jan 2025', dv: 100, ov: 20, ev: 5, unknown: 2}
-        """
-        now = datetime.now(timezone.utc)
-        start_date = now - timedelta(days=months * 30)
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        pipeline = [
-            {'$match': {
-                'parsed.validity.start': {'$gte': start_str}
-            }},
-            {'$project': {
-                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
-                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
-                'level': {'$ifNull': ['$parsed.validation_level', 'Unknown']}
-            }},
-            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
-            {'$group': {
-                '_id': {'year': '$year', 'month': '$month', 'level': '$level'},
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        # Group by month
-        month_data = {}
-        for r in results:
-            key = (r['_id']['year'], r['_id']['month'])
-            if key not in month_data:
-                month_data[key] = {'dv': 0, 'ov': 0, 'ev': 0, 'unknown': 0}
-            
-            level = (r['_id']['level'] or 'Unknown').upper()
-            count = r['count']
-            
-            if level == 'DV':
-                month_data[key]['dv'] += count
-            elif level == 'OV':
-                month_data[key]['ov'] += count
-            elif level == 'EV':
-                month_data[key]['ev'] += count
-            else:
-                month_data[key]['unknown'] += count
-        
-        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        trends = []
-        for (year, month), data in sorted(month_data.items()):
-            trends.append({
-                'month': f"{month_names[month]} {year}",
-                'monthNum': month,
-                'year': year,
-                **data
-            })
-        
-        return trends
+        return TrendsModel.get_validation_level_trends(months)
 
     # ==================== SHARED KEYS ANALYTICS ====================
     # 
@@ -4441,727 +1529,68 @@ class CertificateModel:
     # 3. Only considering it "shared" if there are 2+ distinct certificate fingerprints
     #
     # This excludes SAN certificates that are technically the same cert with different domain lists.
-
+    # ===========================
+    # Slow SHARED KEYS METHODS (using on-the-fly aggregation)
+    # ===========================
     @classmethod
     def get_shared_key_stats(cls) -> Dict[str, Any]:
-        """
-        Get statistics for shared public keys.
-        Groups certificates by public key fingerprint and finds groups with multiple distinct certs.
-        
-        Returns:
-            - unique_keys: Total distinct public key fingerprints
-            - shared_key_groups: Count of public keys shared by truly different certificates
-            - certificates_at_risk: Total certificates in shared key groups
-            - most_affected_domain: Domain with most certs sharing a single key
-        """
-        pipeline_groups = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-            }},
-            # Group by public key fingerprint, collect unique cert fingerprints
-            {'$group': {
-                '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'},
-                'cert_count': {'$sum': 1},
-                'domains': {'$addToSet': {'$arrayElemAt': ['$parsed.names', 0]}}
-            }},
-            # Add field for count of distinct certs
-            {'$addFields': {
-                'distinct_certs': {'$size': '$cert_fingerprints'}
-            }},
-            {'$facet': {
-                'all_keys': [{'$count': 'total'}],
-                'shared_keys': [
-                    # Only keys with 2+ distinct certificates
-                    {'$match': {'distinct_certs': {'$gt': 1}}},
-                    {'$group': {
-                        '_id': None,
-                        'group_count': {'$sum': 1},
-                        'cert_count': {'$sum': '$cert_count'}
-                    }}
-                ],
-                'top_domain': [
-                    {'$match': {'distinct_certs': {'$gt': 1}}},
-                    {'$unwind': '$domains'},
-                    {'$group': {
-                        '_id': '$domains',
-                        'key_fingerprint': {'$first': '$_id'},
-                        'count': {'$max': '$distinct_certs'}
-                    }},
-                    {'$sort': {'count': -1}},
-                    {'$limit': 1}
-                ]
-            }}
-        ]
-        
-        result = list(cls.collection.aggregate(pipeline_groups, allowDiskUse=True))
-        
-        if not result:
-            return {
-                'unique_keys': 0,
-                'shared_key_groups': 0,
-                'certificates_at_risk': 0,
-                'most_affected_domain': {'name': 'N/A', 'count': 0}
-            }
-        
-        data = result[0]
-        unique_keys = data['all_keys'][0]['total'] if data['all_keys'] else 0
-        shared_info = data['shared_keys'][0] if data['shared_keys'] else {'group_count': 0, 'cert_count': 0}
-        top_domain = data['top_domain'][0] if data['top_domain'] else {'_id': 'N/A', 'count': 0}
-        
-        return {
-            'unique_keys': unique_keys,
-            'shared_key_groups': shared_info.get('group_count', 0),
-            'certificates_at_risk': shared_info.get('cert_count', 0),
-            'most_affected_domain': {
-                'name': top_domain.get('_id', 'N/A'),
-                'count': top_domain.get('count', 0)
-            }
-        }
+        return SharedKeyModel.get_shared_key_stats()
 
     @classmethod
     def get_shared_key_distribution(cls) -> List[Dict[str, Any]]:
-        """
-        Get distribution of shared key group sizes for histogram.
-        Only counts groups where multiple distinct certificates share a key.
-        
-        Returns list of buckets: "2", "3-5", "6-10", "10+"
-        """
-        pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-            }},
-            {'$group': {
-                '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-            }},
-            {'$addFields': {
-                'distinct_certs': {'$size': '$cert_fingerprints'}
-            }},
-            {'$match': {'distinct_certs': {'$gt': 1}}},  # Only truly shared keys
-            {'$bucket': {
-                'groupBy': '$distinct_certs',
-                'boundaries': [2, 3, 6, 11, 1000000],
-                'default': 'overflow',
-                'output': {'groups': {'$sum': 1}}
-            }}
-        ]
-        
-        results = list(cls.collection.aggregate(pipeline, allowDiskUse=True))
-        
-        # Map to readable labels
-        bucket_labels = {2: '2', 3: '3-5', 6: '6-10', 11: '10+'}
-        distribution = []
-        
-        for r in results:
-            bucket_id = r['_id']
-            label = bucket_labels.get(bucket_id, str(bucket_id))
-            distribution.append({
-                'bucket': label,
-                'count': r['groups']
-            })
-        
-        # Ensure all buckets exist
-        all_labels = ['2', '3-5', '6-10', '10+']
-        existing = {d['bucket'] for d in distribution}
-        for label in all_labels:
-            if label not in existing:
-                distribution.append({'bucket': label, 'count': 0})
-        
-        # Sort by bucket order
-        order = {'2': 0, '3-5': 1, '6-10': 2, '10+': 3}
-        distribution.sort(key=lambda x: order.get(x['bucket'], 99))
-        
-        return distribution
-
+        return SharedKeyModel.get_shared_key_distribution()
+    
     @classmethod
     def get_shared_keys_by_issuer(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get count of shared-key certificates by issuer.
-        Only counts certificates that share a public key with truly different certificates.
-        
-        Returns list of issuers with their count of certificates involved in key reuse.
-        """
-        # First find all public key fingerprints that have 2+ distinct cert fingerprints
-        shared_keys_pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-            }},
-            {'$group': {
-                '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-            }},
-            {'$addFields': {
-                'distinct_certs': {'$size': '$cert_fingerprints'}
-            }},
-            {'$match': {'distinct_certs': {'$gt': 1}}},
-            {'$project': {'_id': 1}}
-        ]
-        
-        shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
-        
-        if not shared_fingerprints:
-            return []
-        
-        # Now count by issuer for certs with these fingerprints
-        issuer_pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-            }},
-            {'$group': {
-                '_id': {'$ifNull': [{'$arrayElemAt': ['$parsed.issuer.organization', 0]}, 'Unknown']},
-                'shared_certs': {'$sum': 1}
-            }},
-            {'$sort': {'shared_certs': -1}},
-            {'$limit': limit}
-        ]
-        
-        results = list(cls.collection.aggregate(issuer_pipeline, allowDiskUse=True))
-        
-        return [{'issuer': r['_id'], 'shared_certs': r['shared_certs']} for r in results]
-
-    @classmethod
+        return SharedKeyModel.get_shared_keys_by_issuer(limit)  
+    
+    @classmethod  
     def get_shared_key_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
-        """
-        Get timeline of certificates joining shared key groups by issuance month.
-        Only includes certificates that share keys with truly different certificates.
-        
-        Shows new certs issued per month that are part of a shared key group.
-        """
-        now = datetime.now(timezone.utc)
-        start_date = now - timedelta(days=months * 30)
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        # First find truly shared key fingerprints
-        shared_keys_pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-            }},
-            {'$group': {
-                '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-            }},
-            {'$addFields': {
-                'distinct_certs': {'$size': '$cert_fingerprints'}
-            }},
-            {'$match': {'distinct_certs': {'$gt': 1}}},
-            {'$project': {'_id': 1}}
-        ]
-        
-        shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
-        
-        if not shared_fingerprints:
-            return []
-        
-        # Get timeline of shared-key certs by issuance month
-        timeline_pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints},
-                'parsed.validity.start': {'$gte': start_str}
-            }},
-            {'$project': {
-                'year': {'$year': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}},
-                'month': {'$month': {'$dateFromString': {'dateString': '$parsed.validity.start', 'onError': None}}}
-            }},
-            {'$match': {'year': {'$ne': None}, 'month': {'$ne': None}}},
-            {'$group': {
-                '_id': {'year': '$year', 'month': '$month'},
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        results = list(cls.collection.aggregate(timeline_pipeline, allowDiskUse=True))
-        
-        month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        timeline = []
-        for r in results:
-            year = r['_id']['year']
-            month = r['_id']['month']
-            timeline.append({
-                'month': f"{month_names[month]} {year}",
-                'monthNum': month,
-                'year': year,
-                'count': r['count']
-            })
-        
-        return timeline
-
+        return SharedKeyModel.get_shared_key_timeline(months)
+    
     @classmethod
     def get_shared_key_heatmap(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get issuer x key-type matrix for heatmap.
-        Only includes certificates with truly shared keys.
-        
-        Returns list of {issuer, key_type, count} for certificates in shared key groups.
-        """
-        # First find truly shared key fingerprints
-        shared_keys_pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-            }},
-            {'$group': {
-                '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-            }},
-            {'$addFields': {
-                'distinct_certs': {'$size': '$cert_fingerprints'}
-            }},
-            {'$match': {'distinct_certs': {'$gt': 1}}},
-            {'$project': {'_id': 1}}
-        ]
-        
-        shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
-        
-        if not shared_fingerprints:
-            return []
-        
-        # Get heatmap data
-        heatmap_pipeline = [
-            {'$match': {
-                'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-            }},
-            {'$project': {
-                'issuer': {'$ifNull': [{'$arrayElemAt': ['$parsed.issuer.organization', 0]}, 'Unknown']},
-                'key_algo': {'$ifNull': ['$parsed.subject_key_info.key_algorithm.name', 'Unknown']},
-                'key_length': {'$ifNull': ['$parsed.subject_key_info.rsa_public_key.length', 0]}
-            }},
-            {'$addFields': {
-                'key_type': {
-                    '$concat': [
-                        '$key_algo',
-                        '-',
-                        {'$toString': '$key_length'}
-                    ]
-                }
-            }},
-            {'$group': {
-                '_id': {'issuer': '$issuer', 'key_type': '$key_type'},
-                'count': {'$sum': 1}
-            }},
-            {'$sort': {'count': -1}}
-        ]
-        
-        results = list(cls.collection.aggregate(heatmap_pipeline, allowDiskUse=True))
-        
-        # Get top issuers
-        issuer_totals = {}
-        for r in results:
-            issuer = r['_id']['issuer']
-            issuer_totals[issuer] = issuer_totals.get(issuer, 0) + r['count']
-        
-        top_issuers = sorted(issuer_totals.keys(), key=lambda x: issuer_totals[x], reverse=True)[:limit]
-        
-        # Filter results to top issuers
-        heatmap = []
-        for r in results:
-            if r['_id']['issuer'] in top_issuers:
-                heatmap.append({
-                    'issuer': r['_id']['issuer'],
-                    'key_type': r['_id']['key_type'],
-                    'count': r['count']
-                })
-        
-        return heatmap
-
+       return SharedKeyModel.get_shared_key_heatmap(limit)
+    
     # ===========================
     # FAST SHARED KEYS METHODS (using materialized views)
     # ===========================
-    
     @classmethod
     def get_shared_key_stats_fast(cls) -> Dict[str, Any]:
-        """
-        ⚡ OPTIMIZED: Get shared key statistics from shared-keys-detailed collection.
-        
-        Returns:
-            Dict containing:
-                - total_public_keys: Total distinct public keys (including shared ones)
-                - unique_public_keys: Keys used by only one certificate (non-shared)
-                - shared_key_groups: Count of public keys shared by different certificates
-                - certificates_at_risk: Total certificates in shared key groups
-                - most_affected_domain: Domain with most certs sharing a key
-        
-        Performance: ~0.01s
-        """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        certs_collection = MongoDBClient.get_results_db()['certificates']
-        
-        # Check if metadata exists
-        metadata = shared_keys_collection.find_one({'_id': 'metadata'})
-        if not metadata:
-            raise ValueError("Shared keys data not computed. Run compute_shared_keys.py first.")
-        
-        # Get key statistics from metadata (pre-computed)
-        total_public_keys = metadata.get('total_public_keys', 0)
-        unique_public_keys = metadata.get('unique_public_keys', 0)
-        
-        # Count shared key groups (excluding metadata)
-        shared_key_groups = shared_keys_collection.count_documents({'_id': {'$ne': 'metadata'}})
-        
-        # Sum all certificates at risk
-        pipeline = [
-            {'$match': {'_id': {'$ne': 'metadata'}}},
-            {'$group': {'_id': None, 'total': {'$sum': '$certificate_count'}}}
-        ]
-        result = list(shared_keys_collection.aggregate(pipeline))
-        certificates_at_risk = result[0]['total'] if result else 0
-        
-        # Find most affected domain
-        most_affected = shared_keys_collection.find_one(
-            {'_id': {'$ne': 'metadata'}},
-            sort=[('most_affected_domain.sans_count', -1)]
-        )
-        
-        most_affected_domain = {
-            'name': most_affected['most_affected_domain']['domain'] if most_affected and 'most_affected_domain' in most_affected else 'N/A',
-            'count': most_affected['most_affected_domain']['sans_count'] if most_affected and 'most_affected_domain' in most_affected else 0
-        }
-        
-        return {
-            'total_public_keys': total_public_keys,
-            'unique_public_keys': unique_public_keys,
-            'shared_key_groups': shared_key_groups,
-            'certificates_at_risk': certificates_at_risk,
-            'most_affected_domain': most_affected_domain
-        }
-    
+        return SharedKeyModel.get_shared_key_stats_fast()
+
     @classmethod
     def get_shared_key_distribution_fast(cls) -> List[Dict[str, Any]]:
-        """
-        ⚡ OPTIMIZED: Get shared key distribution from shared-keys-detailed collection.
-        
-        Returns:
-            List of distribution buckets (e.g., "2 certs", "3-5 certs", etc.)
-            
-        Performance: ~0.02s
-        """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        
-        # Define buckets
-        buckets = [
-            {'id': 1, 'label': '2 certs', 'min': 2, 'max': 2},
-            {'id': 2, 'label': '3-5 certs', 'min': 3, 'max': 5},
-            {'id': 3, 'label': '6-10 certs', 'min': 6, 'max': 10},
-            {'id': 4, 'label': '11-20 certs', 'min': 11, 'max': 20},
-            {'id': 5, 'label': '21-50 certs', 'min': 21, 'max': 50},
-            {'id': 6, 'label': '51-100 certs', 'min': 51, 'max': 100},
-            {'id': 7, 'label': '101+ certs', 'min': 101, 'max': 999999}
-        ]
-        
-        results = []
-        for bucket in buckets:
-            count = shared_keys_collection.count_documents({
-                '_id': {'$ne': 'metadata'},
-                'certificate_count': {'$gte': bucket['min'], '$lte': bucket['max']}
-            })
-            if count > 0:  # Only include non-empty buckets
-                results.append({
-                    'bucket': bucket['label'],
-                    'count': count
-                })
-        
-        return results
-    
+        return SharedKeyModel.get_shared_key_distribution_fast()
+
     @classmethod
     def get_shared_keys_by_issuer_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        ⚡ OPTIMIZED: Get shared keys by issuer from shared-keys-detailed collection.
-        
-        Args:
-            limit: Maximum number of issuers to return (default 10)
-            
-        Returns:
-            List of issuers with shared cert counts
-            
-        Performance: ~0.02s
-        """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        
-        # Aggregate to get total shared certs by issuer
-        pipeline = [
-            {'$match': {'_id': {'$ne': 'metadata'}}},
-            {'$unwind': '$issuers'},
-            {'$group': {
-                '_id': '$issuers.organization',
-                'shared_certs': {'$sum': '$issuers.certificate_count'}
-            }},
-            {'$sort': {'shared_certs': -1}},
-            {'$limit': limit},
-            {'$project': {
-                '_id': 0,
-                'issuer': '$_id',
-                'shared_certs': 1
-            }}
-        ]
-        
-        results = list(shared_keys_collection.aggregate(pipeline))
-        return results
-    
+        return SharedKeyModel.get_shared_keys_by_issuer_fast(limit)
+
     @classmethod
     def get_shared_key_timeline_fast(cls, months: int = 12) -> List[Dict[str, Any]]:
-        """
-        ⚡ Get shared key timeline from certificates collection.
-        
-        Args:
-            months: Number of months to return (default 12)
-            
-        Returns:
-            List of timeline entries showing new shared certs per month
-            
-        Performance: ~0.1s
-        """
-        from datetime import datetime, timedelta
-        certs_collection = MongoDBClient.get_results_db()['certificates']
-        
-        # Calculate start date (N months ago)
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=months * 30)
-        
-        # Get all shared public key hashes
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        shared_hashes = shared_keys_collection.distinct('public_key_hash', {'_id': {'$ne': 'metadata'}})
-        
-        if not shared_hashes:
-            return []
-        
-        # Aggregate certificates by month
-        pipeline = [
-            {
-                '$match': {
-                    'public_key_hash_sha256': {'$in': shared_hashes},
-                    'scanned_at': {'$gte': start_date, '$lte': end_date}
-                }
-            },
-            {
-                '$group': {
-                    '_id': {
-                        'year': {'$year': '$scanned_at'},
-                        'month': {'$month': '$scanned_at'}
-                    },
-                    'count': {'$sum': 1}
-                }
-            },
-            {'$sort': {'_id.year': 1, '_id.month': 1}}
-        ]
-        
-        results = list(certs_collection.aggregate(pipeline))
-        
-        # Format results
-        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        formatted = []
-        for r in results:
-            month_num = r['_id']['month']
-            year = r['_id']['year']
-            formatted.append({
-                'month': f"{month_names[month_num - 1]} {year}",
-                'monthNum': month_num,
-                'year': year,
-                'count': r['count']
-            })
-        
-        return formatted[-months:] if len(formatted) > months else formatted
-    
+        return SharedKeyModel.get_shared_key_timeline_fast(months)
+
     @classmethod
     def get_shared_key_heatmap_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        ⚡ Get shared key heatmap (issuer x key_type) from shared-keys-detailed collection.
-        
-        Args:
-            limit: Maximum number of issuers to include (default 10)
-            
-        Returns:
-            List of heatmap cells (issuer x key_type x count)
-            
-        Performance: ~0.03s
-        """
-        shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        
-        # Aggregate to get issuer x key_type counts
-        pipeline = [
-            {'$match': {'_id': {'$ne': 'metadata'}}},
-            {'$unwind': '$issuers'},
-            {'$group': {
-                '_id': {
-                    'issuer': '$issuers.organization',
-                    'key_type': '$key_type'
-                },
-                'count': {'$sum': '$issuers.certificate_count'}
-            }},
-            {'$project': {
-                '_id': 0,
-                'issuer': '$_id.issuer',
-                'key_type': '$_id.key_type',
-                'count': 1
-            }}
-        ]
-        
-        all_results = list(shared_keys_collection.aggregate(pipeline))
-        
-        if not all_results:
-            return []
-        
-        # Get top issuers by total count
-        issuer_totals = {}
-        for r in all_results:
-            issuer = r['issuer']
-            issuer_totals[issuer] = issuer_totals.get(issuer, 0) + r['count']
-        
-        top_issuers = sorted(issuer_totals.keys(), key=lambda x: issuer_totals[x], reverse=True)[:limit]
-        
-        # Filter to top issuers
-        filtered = [r for r in all_results if r['issuer'] in top_issuers]
-        
-        return filtered
-    
+        return SharedKeyModel.get_shared_key_heatmap_fast(limit)
+
     @classmethod
     def get_shared_keys_list(cls, page: int = 1, page_size: int = 10, 
                              sort_by: str = 'certificate_count', sort_order: str = 'desc',
                              risk_level: str = None, key_type: str = None, 
                              min_cert_count: int = None, issuer: str = None) -> Dict[str, Any]:
-        """
-        Get paginated list of shared key groups for table view.
-        
-        Args:
-            page: Page number (1-based)
-            page_size: Results per page
-            sort_by: Field to sort by (certificate_count, total_sans, risk_level, computed_at)
-            sort_order: Sort order (asc or desc)
-            risk_level: Filter by risk level (HIGH, MEDIUM, LOW)
-            key_type: Filter by key type (e.g., RSA-2048)
-            min_cert_count: Minimum certificate count
-            issuer: Filter by issuer organization
-            
-        Returns:
-            Dictionary with paginated results and metadata
-        """
-        collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        
-        # Build filter query
-        query = {'_id': {'$ne': 'metadata'}}
-        
-        if risk_level:
-            query['risk_level'] = risk_level
-        
-        if key_type:
-            query['key_type'] = key_type
-        
-        if min_cert_count:
-            query['certificate_count'] = {'$gte': min_cert_count}
-        
-        if issuer:
-            query['issuers.organization'] = issuer
-        
-        # Calculate total count
-        total = collection.count_documents(query)
-        
-        # Calculate pagination
-        skip = (page - 1) * page_size
-        total_pages = (total + page_size - 1) // page_size
-        
-        # Determine sort direction
-        sort_direction = -1 if sort_order == 'desc' else 1
-        
-        # Get results (project only fields needed for table view)
-        results = list(collection.find(
-            query,
-            {
-                '_id': 1,
-                'public_key_hash': 1,
-                'public_key_hash_short': 1,
-                'certificate_count': 1,
-                'total_domains': 1,
-                'sample_domains': 1,
-                'total_sans': 1,
-                'sample_sans': 1,
-                'key_type': 1,
-                'issuers': 1,
-                'issuer_count': 1,
-                'risk_level': 1,
-                'most_affected_domain': 1,
-                'computed_at': 1
-            }
-        ).sort(sort_by, sort_direction).skip(skip).limit(page_size))
-        
-        # Format results for API response
-        formatted_results = []
-        for doc in results:
-            formatted_results.append({
-                'public_key_hash': doc.get('public_key_hash', ''),
-                'public_key_hash_short': doc.get('public_key_hash_short', ''),
-                'certificate_count': doc.get('certificate_count', 0),
-                'total_domains': doc.get('total_domains', 0),
-                'sample_domains': doc.get('sample_domains', []),
-                'total_sans': doc.get('total_sans', 0),
-                'sample_sans': doc.get('sample_sans', []),
-                'key_type': doc.get('key_type', 'Unknown'),
-                'issuers': doc.get('issuers', []),
-                'issuer_count': doc.get('issuer_count', 0),
-                'risk_level': doc.get('risk_level', 'UNKNOWN'),
-                'most_affected_domain': doc.get('most_affected_domain', {}),
-                'computed_at': doc.get('computed_at').isoformat() if doc.get('computed_at') else None
-            })
-        
-        return {
-            'results': formatted_results,
-            'pagination': {
-                'page': page,
-                'page_size': page_size,
-                'total': total,
-                'total_pages': total_pages,
-                'has_next': page < total_pages,
-                'has_prev': page > 1
-            }
-        }
-    
+        return SharedKeyModel.get_shared_keys_list(
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            risk_level=risk_level,
+            key_type=key_type,
+            min_cert_count=min_cert_count,
+            issuer=issuer
+        )
+
     @classmethod
     def get_shared_key_detail(cls, public_key_hash: str) -> Dict[str, Any]:
-        """
-        Get full details for a specific shared key group.
-        
-        Args:
-            public_key_hash: The SHA256 fingerprint of the shared public key
-            
-        Returns:
-            Complete details including all certificates
-            
-        Raises:
-            ValueError: If shared key group not found
-        """
-        collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        
-        # Find the document
-        doc = collection.find_one({'_id': public_key_hash})
-        
-        if not doc or doc.get('_id') == 'metadata':
-            raise ValueError(f"Shared key group not found: {public_key_hash}")
-        
-        # Format response
-        result = {
-            'public_key_hash': doc.get('public_key_hash', ''),
-            'public_key_hash_short': doc.get('public_key_hash_short', ''),
-            'certificate_count': doc.get('certificate_count', 0),
-            'total_domains': doc.get('total_domains', 0),
-            'sample_domains': doc.get('sample_domains', []),
-            'total_sans': doc.get('total_sans', 0),
-            'sample_sans': doc.get('sample_sans', []),
-            'unique_sans': doc.get('unique_sans', []),
-            'key_algorithm': doc.get('key_algorithm', 'Unknown'),
-            'key_size': doc.get('key_size', 0),
-            'key_type': doc.get('key_type', 'Unknown'),
-            'issuers': doc.get('issuers', []),
-            'issuer_count': doc.get('issuer_count', 0),
-            'risk_level': doc.get('risk_level', 'UNKNOWN'),
-            'risk_factors': doc.get('risk_factors', []),
-            'most_affected_domain': doc.get('most_affected_domain', {}),
-            'certificates': doc.get('certificates', []),
-            'computed_at': doc.get('computed_at').isoformat() if doc.get('computed_at') else None,
-            'last_updated': doc.get('last_updated').isoformat() if doc.get('last_updated') else None
-        }
-        
-        return result
+        return SharedKeyModel.get_shared_key_detail(public_key_hash)

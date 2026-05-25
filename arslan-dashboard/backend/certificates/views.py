@@ -589,6 +589,7 @@ class GeographicDistributionView(View):
             data = AnalyticsController.get_geographic_distribution(limit=limit, global_filters=global_filters)
             return json_response(data)
         except Exception as e:
+            # print(f"Error in GeographicDistributionView: {e}")
             return json_response({'error': str(e)}, status=500)
 
 

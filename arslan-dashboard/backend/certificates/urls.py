@@ -69,10 +69,14 @@ urlpatterns = [
     path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
     path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
     path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
+   
+   
     path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
     path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),
-    path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
     path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
+   
+   
+    path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
     path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
     path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
     path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
@@ -105,7 +109,11 @@ urlpatterns = [
     path('shared-keys/stats/', SharedKeyStatsView.as_view(), name='shared_key_stats'),
     path('shared-keys/distribution/', SharedKeyDistributionView.as_view(), name='shared_key_distribution'),
     path('shared-keys/by-issuer/', SharedKeyByIssuerView.as_view(), name='shared_key_by_issuer'),
+   
+    # dont know why this shared-keys/timeline is present what is the role of it... but i have added it as well
+
     path('shared-keys/timeline/', SharedKeyTimelineView.as_view(), name='shared_key_timeline'),
+    
     path('shared-keys/heatmap/', SharedKeyHeatmapView.as_view(), name='shared_key_heatmap'),
     path('shared-keys/list/', SharedKeysListView.as_view(), name='shared_keys_list'),
     path('shared-keys/detail/<str:public_key_hash>/', SharedKeyDetailView.as_view(), name='shared_key_detail'),
