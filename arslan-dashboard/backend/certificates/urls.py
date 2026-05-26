@@ -56,37 +56,46 @@ urlpatterns = [
     # Legacy endpoint
     path('hello/', hello_mongo_view, name='hello_mongo'),
     
-    # Core Dashboard APIs
+    # Shared APIs in many pages...
     path('dashboard/global-health/', GlobalHealthView.as_view(), name='global_health'),
+    path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
+    path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
+    path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
     
     # Certificate CRUD APIs
     path('certificates/', CertificateListView.as_view(), name='certificate_list'),
     path('certificates/download/', CertificateDownloadView.as_view(), name='certificate_download'),
     path('certificates/export/', CertificateExportView.as_view(), name='certificate_export'),
     path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
-    
-    # Analytics APIs
+   
     path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
+    path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
+    path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
+   
+    
+    
+    # Overview page APIs.. it also use 4 more apis "api/validity-trends/","api/ca-analytics/","api/geographic-distribution","api/dashboard/global-health/" these are shared with other pages..
     path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
-    path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
+    path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
    
+    # Database Management APIs
+    path('databases/current/', get_current_database, name='current_database'),
+    path('databases/available/', get_available_databases, name='available_databases'),
+    path('databases/switch/', switch_database, name='switch_database'),
    
-    path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
+    # CA analysis page apis.. it also use one move api "api/ca-analytics" but that is shared with other pages tooo
+
     path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),
     path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
    
-   
-    path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
-    path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
-    path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
-    path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
-    
-    # Validity Analysis APIs
+    # Validity Analysis page APIs.. it also use 2 more apis "api/validity-trends/" and "api/dashboard/global-health/" they are shared with other pages too
+
     path('validity-stats/', ValidityStatsView.as_view(), name='validity_stats'),
     path('validity-distribution/', ValidityDistributionView.as_view(), name='validity_distribution'),
     path('issuance-timeline/', IssuanceTimelineView.as_view(), name='issuance_timeline'),
     
     # Signature and Hashes APIs
+
     path('signature-stats/', SignatureStatsView.as_view(), name='signature_stats'),
     path('hash-trends/', HashTrendsView.as_view(), name='hash_trends'),
     path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
@@ -96,7 +105,7 @@ urlpatterns = [
     path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
     path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
     path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
-    path('san-filtered-certs/', SANFilteredCertsView.as_view(), name='san_filtered_certs'),
+    path('san-filtered-certs/', SANFilteredCertsView.as_view(), name='san_filtered_certs'), #this is same as api/certificate/.. but with one extra thing.. san count..
     
     # Trends Analytics APIs
     path('trends/stats/', TrendsStatsView.as_view(), name='trends_stats'),
@@ -113,7 +122,6 @@ urlpatterns = [
     # dont know why this shared-keys/timeline is present what is the role of it... but i have added it as well
 
     path('shared-keys/timeline/', SharedKeyTimelineView.as_view(), name='shared_key_timeline'),
-    
     path('shared-keys/heatmap/', SharedKeyHeatmapView.as_view(), name='shared_key_heatmap'),
     path('shared-keys/list/', SharedKeysListView.as_view(), name='shared_keys_list'),
     path('shared-keys/detail/<str:public_key_hash>/', SharedKeyDetailView.as_view(), name='shared_key_detail'),
@@ -124,8 +132,4 @@ urlpatterns = [
     # Notifications API
     # path('notifications/', NotificationView.as_view(), name='notifications'),
     
-    # Database Management APIs
-    path('databases/current/', get_current_database, name='current_database'),
-    path('databases/available/', get_available_databases, name='available_databases'),
-    path('databases/switch/', switch_database, name='switch_database'),
 ]

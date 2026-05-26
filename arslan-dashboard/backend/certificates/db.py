@@ -113,7 +113,20 @@ class MongoDBClient:
         
         # Update models to use new database
         from certificates.models import CertificateModel
+        from certificates.shared_models import SharedModels
+        from certificates.validity_models import ValidityModels
+        from certificates.ca_models import CAModel
+        from certificates.signature_hash_models import SignatureHashModel
+        from certificates.trends_models import TrendsModel
+        from certificates.san_models import SANModel
+
         CertificateModel.collection = db_module.db['certificates']
+        SharedModels.collection = db_module.db['certificates']
+        ValidityModels.collection = db_module.db['certificates']
+        CAModel.collection = db_module.db['certificates']
+        SignatureHashModel.collection = db_module.db['certificates']
+        TrendsModel.collection = db_module.db['certificates']
+        SANModel.collection = db_module.db['certificates']
         
         # Clear all caches when switching databases
         try:
@@ -132,6 +145,7 @@ class MongoDBClient:
         Returns:
             dict: Current database info
         """
+        # print(cls._current_db_id)
         return {
             'id': cls._current_db_id,
             'main_db': _CURRENT_MAIN_DB,
