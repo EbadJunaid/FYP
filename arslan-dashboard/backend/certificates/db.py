@@ -119,6 +119,7 @@ class MongoDBClient:
         from certificates.signature_hash_models import SignatureHashModel
         from certificates.trends_models import TrendsModel
         from certificates.san_models import SANModel
+        from certificates.overview_models import OverviewModels
 
         CertificateModel.collection = db_module.db['certificates']
         SharedModels.collection = db_module.db['certificates']
@@ -127,6 +128,7 @@ class MongoDBClient:
         SignatureHashModel.collection = db_module.db['certificates']
         TrendsModel.collection = db_module.db['certificates']
         SANModel.collection = db_module.db['certificates']
+        OverviewModels.collection = db_module.db['certificates']
         
         # Clear all caches when switching databases
         try:

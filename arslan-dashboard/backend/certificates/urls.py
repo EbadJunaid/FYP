@@ -61,14 +61,13 @@ urlpatterns = [
     path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
     path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
     path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
+    path('certificates/', CertificateListView.as_view(), name='certificate_list'),
+    path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
     
     # Certificate CRUD APIs
-    path('certificates/', CertificateListView.as_view(), name='certificate_list'),
     path('certificates/download/', CertificateDownloadView.as_view(), name='certificate_download'),
     path('certificates/export/', CertificateExportView.as_view(), name='certificate_export'),
-    path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
    
-    path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
     path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
     path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
    
@@ -77,6 +76,7 @@ urlpatterns = [
     # Overview page APIs.. it also use 4 more apis "api/validity-trends/","api/ca-analytics/","api/geographic-distribution","api/dashboard/global-health/" these are shared with other pages..
     path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
     path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
+    path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
    
     # Database Management APIs
     path('databases/current/', get_current_database, name='current_database'),
