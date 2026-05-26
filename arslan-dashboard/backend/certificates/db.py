@@ -115,10 +115,10 @@ class MongoDBClient:
         from certificates.models import CertificateModel
         from certificates.shared_models import SharedModels
         from certificates.validity_models import ValidityModels
-        from certificates.ca_models import CAModel
+        from certificates.ca_analytics.db_queries import CAModel
         from certificates.signature_hash_models import SignatureHashModel
         from certificates.trends_models import TrendsModel
-        from certificates.san_models import SANModel
+        from certificates.san_analytics.db_queries import SANModel
         from certificates.overview_models import OverviewModels
 
         CertificateModel.collection = db_module.db['certificates']

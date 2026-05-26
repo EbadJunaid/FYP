@@ -3,7 +3,7 @@
 
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from .db import db, MongoDBClient
+from ..db import db, MongoDBClient
 
 
 class CAModel:

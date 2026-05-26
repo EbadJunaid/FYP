@@ -1,5 +1,5 @@
 # backend/certificates/urls.py
-from django.urls import path
+from django.urls import include, path
 from .views import (
     hello_mongo_view,
     GlobalHealthView,
@@ -10,9 +10,9 @@ from .views import (
     EncryptionStrengthView,
     ValidityTrendsView,
     CAAnalyticsView,
-    CAStatsView,
+    # CAStatsView,
+    # IssuerValidationMatrixView,
     ValidationDistributionView as CAValidationDistributionView,
-    IssuerValidationMatrixView,
     GeographicDistributionView,
     FutureRiskView,
     VulnerabilitiesView,
@@ -27,11 +27,11 @@ from .views import (
     IssuerAlgorithmMatrixView,
     CertificateExportView,
     # SAN Analytics page views
-    SANStatsView,
-    SANDistributionView,
-    SANTLDBreakdownView,
-    SANWildcardBreakdownView,
-    SANFilteredCertsView,
+    # SANStatsView,
+    # SANDistributionView,
+    # SANTLDBreakdownView,
+    # SANWildcardBreakdownView,
+    # SANFilteredCertsView,
     # Trends Analytics page views
     TrendsStatsView,
     ExpirationForecastView,
@@ -85,9 +85,10 @@ urlpatterns = [
    
     # CA analysis page apis.. it also use one move api "api/ca-analytics" but that is shared with other pages tooo
 
-    path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),
-    path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
-   
+    # path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),
+    # path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
+    path('ca/', include('certificates.ca_analytics.urls')),  # Include CA analytics URLs from separate file
+    path('san/', include('certificates.san_analytics.urls')),  # Include SAN analytics URLs from separate file
     # Validity Analysis page APIs.. it also use 2 more apis "api/validity-trends/" and "api/dashboard/global-health/" they are shared with other pages too
 
     path('validity-stats/', ValidityStatsView.as_view(), name='validity_stats'),
@@ -101,11 +102,11 @@ urlpatterns = [
     path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
     
     # SAN Analytics APIs
-    path('san-stats/', SANStatsView.as_view(), name='san_stats'),
-    path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
-    path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
-    path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
-    path('san-filtered-certs/', SANFilteredCertsView.as_view(), name='san_filtered_certs'), #this is same as api/certificate/.. but with one extra thing.. san count..
+    # path('san-stats/', SANStatsView.as_view(), name='san_stats'),
+    # path('san-distribution/', SANDistributionView.as_view(), name='san_distribution'),
+    # path('san-tld-breakdown/', SANTLDBreakdownView.as_view(), name='san_tld_breakdown'),
+    # path('san-wildcard-breakdown/', SANWildcardBreakdownView.as_view(), name='san_wildcard_breakdown'),
+    # path('san-filtered-certs/', SANFilteredCertsView.as_view(), name='san_filtered_certs'), #this is same as api/certificate/.. but with one extra thing.. san count..
     
     # Trends Analytics APIs
     path('trends/stats/', TrendsStatsView.as_view(), name='trends_stats'),

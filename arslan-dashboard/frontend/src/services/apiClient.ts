@@ -444,7 +444,7 @@ class ApiClient {
 
     // CA Analytics - Stats for metric cards
     async getCAStats(): Promise<CAStats> {
-        return this.fetch<CAStats>('/ca-stats/');
+        return this.fetch<CAStats>('/ca/ca-stats/');
     }
 
     // CA Analytics - Validation level distribution (DV, OV, EV)
@@ -454,7 +454,7 @@ class ApiClient {
 
     // CA Analytics - Issuer x Validation level matrix for heatmap
     async getIssuerValidationMatrix(limit: number = 10): Promise<IssuerValidationEntry[]> {
-        return this.fetch<IssuerValidationEntry[]>(`/issuer-validation-matrix/?limit=${limit}`);
+        return this.fetch<IssuerValidationEntry[]>(`/ca/issuer-validation-matrix/?limit=${limit}`);
     }
 
 
@@ -521,19 +521,19 @@ class ApiClient {
 
     // SAN Analytics APIs
     async getSANStats(): Promise<SANStats> {
-        return this.fetch<SANStats>('/san-stats/');
+        return this.fetch<SANStats>('/san/san-stats/');
     }
 
     async getSANDistribution(): Promise<SANDistributionEntry[]> {
-        return this.fetch<SANDistributionEntry[]>('/san-distribution/');
+        return this.fetch<SANDistributionEntry[]>('/san/san-distribution/');
     }
 
     async getSANTLDBreakdown(limit: number = 10): Promise<SANTLDEntry[]> {
-        return this.fetch<SANTLDEntry[]>(`/san-tld-breakdown/?limit=${limit}`);
+        return this.fetch<SANTLDEntry[]>(`/san/san-tld-breakdown/?limit=${limit}`);
     }
 
     async getSANWildcardBreakdown(): Promise<SANWildcardBreakdown> {
-        return this.fetch<SANWildcardBreakdown>('/san-wildcard-breakdown/');
+        return this.fetch<SANWildcardBreakdown>('/san/san-wildcard-breakdown/');
     }
 
     async getSANFilteredCerts(params: {
@@ -547,7 +547,7 @@ class ApiClient {
         if (params.filter_value) query.append('filter_value', params.filter_value);
         if (params.page) query.append('page', params.page.toString());
         if (params.page_size) query.append('page_size', params.page_size.toString());
-        return this.fetch<SANFilteredCertsResponse>(`/san-filtered-certs/?${query.toString()}`);
+        return this.fetch<SANFilteredCertsResponse>(`/san/san-filtered-certs/?${query.toString()}`);
     }
 
     // Trends Analytics APIs

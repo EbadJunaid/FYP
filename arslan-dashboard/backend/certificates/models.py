@@ -6,9 +6,9 @@ from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from .db import db, MongoDBClient  # Don't import results_db directly - use MongoDBClient.get_results_db() instead
 from .shared_keys_models import SharedKeyModel
-from .san_models import SANModel
+# from .san_models import SANModel
 from .trends_models import TrendsModel
-from .ca_models import CAModel
+# from .ca_models import CAModel
 from .signature_hash_models import SignatureHashModel
 from .shared_models import SharedModels
 from .validity_models import ValidityModels
@@ -218,6 +218,27 @@ class CertificateModel:
     def get_tld_country(domain: str) -> str:
         return SharedModels.get_tld_country(domain=domain)
     
+    @classmethod
+    def build_filter_query(
+        cls,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        countries: Optional[List[str]] = None,
+        issuers: Optional[List[str]] = None,
+        grades: Optional[List[str]] = None,
+        statuses: Optional[List[str]] = None,
+        validation_levels: Optional[List[str]] = None
+    ) -> Dict:
+        return SharedModels.build_filter_query(
+            start_date=start_date,
+            end_date=end_date,
+            countries=countries,
+            issuers=issuers,
+            grades=grades,
+            statuses=statuses,
+            validation_levels=validation_levels
+        )
+
     @classmethod
     def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
         return SharedModels.get_ca_distribution(limit=limit, base_filter=base_filter)
@@ -493,25 +514,25 @@ class CertificateModel:
     # Slow CA METHODS  (using on-the-fly aggregation)  
     # ===========================
 
-    @classmethod
-    def get_ca_stats(cls) -> Dict:
-        return CAModel.get_ca_stats()
+    # @classmethod
+    # def get_ca_stats(cls) -> Dict:
+    #     return CAModel.get_ca_stats()
     
-    @classmethod
-    def get_issuer_validation_matrix(cls, limit: int = 10) -> List[Dict]:
-        return CAModel.get_issuer_validation_matrix(limit)
+    # @classmethod
+    # def get_issuer_validation_matrix(cls, limit: int = 10) -> List[Dict]:
+    #     return CAModel.get_issuer_validation_matrix(limit)
 
-        # ===========================
-    # FAST CA METHODS (using materialized views)    
-    # ===========================
+    #     # ===========================
+    # # FAST CA METHODS (using materialized views)    
+    # # ===========================
 
-    @classmethod
-    def get_ca_stats_fast(cls) -> Dict:
-        return CAModel.get_ca_stats_fast()
+    # @classmethod
+    # def get_ca_stats_fast(cls) -> Dict:
+    #     return CAModel.get_ca_stats_fast()
     
-    @classmethod
-    def get_issuer_validation_matrix_fast(cls, limit: int = 10) -> List[Dict]:
-        return CAModel.get_issuer_validation_matrix_fast(limit)
+    # @classmethod
+    # def get_issuer_validation_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+    #     return CAModel.get_issuer_validation_matrix_fast(limit)
 
         # ==================== SAN ANALYTICS METHODS ====================
 
@@ -520,46 +541,46 @@ class CertificateModel:
     # Slow SAN METHODS (using on-the-fly aggregation)
     # ===========================
     
-    @classmethod
-    def get_san_stats(cls) -> Dict[str, Any]:
-        return SANModel.get_san_stats()
+    # @classmethod
+    # def get_san_stats(cls) -> Dict[str, Any]:
+    #     return SANModel.get_san_stats()
 
-    @classmethod
-    def get_san_distribution(cls) -> List[Dict[str, Any]]:
-        return SANModel.get_san_distribution()
+    # @classmethod
+    # def get_san_distribution(cls) -> List[Dict[str, Any]]:
+    #     return SANModel.get_san_distribution()
 
-    @classmethod
-    def get_san_tld_breakdown(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        return SANModel.get_san_tld_breakdown(limit)
+    # @classmethod
+    # def get_san_tld_breakdown(cls, limit: int = 10) -> List[Dict[str, Any]]:
+    #     return SANModel.get_san_tld_breakdown(limit)
 
-    @classmethod
-    def get_san_wildcard_breakdown(cls) -> Dict[str, int]:
-        return SANModel.get_san_wildcard_breakdown()
+    # @classmethod
+    # def get_san_wildcard_breakdown(cls) -> Dict[str, int]:
+    #     return SANModel.get_san_wildcard_breakdown()
 
-    # ===========================
-    # FAST SAN METHODS (using materialized views)
-    # ===========================
+    # # ===========================
+    # # FAST SAN METHODS (using materialized views)
+    # # ===========================
     
-    @classmethod
-    def get_san_stats_fast(cls) -> Dict[str, Any]:
-        return SANModel.get_san_stats_fast()
+    # @classmethod
+    # def get_san_stats_fast(cls) -> Dict[str, Any]:
+    #     return SANModel.get_san_stats_fast()
 
-    @classmethod
-    def get_san_distribution_fast(cls) -> List[Dict[str, Any]]:
-        return SANModel.get_san_distribution_fast()
+    # @classmethod
+    # def get_san_distribution_fast(cls) -> List[Dict[str, Any]]:
+    #     return SANModel.get_san_distribution_fast()
 
-    @classmethod
-    def get_san_tld_breakdown_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        return SANModel.get_san_tld_breakdown_fast(limit)
+    # @classmethod
+    # def get_san_tld_breakdown_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
+    #     return SANModel.get_san_tld_breakdown_fast(limit)
 
-    @classmethod
-    def get_san_wildcard_breakdown_fast(cls) -> Dict[str, int]:
-        return SANModel.get_san_wildcard_breakdown_fast()
+    # @classmethod
+    # def get_san_wildcard_breakdown_fast(cls) -> Dict[str, int]:
+    #     return SANModel.get_san_wildcard_breakdown_fast()
 
-    @classmethod
-    def get_san_filtered_certs_fast(cls, filter_type: str, filter_value: str = None,
-                                     page: int = 1, page_size: int = 50) -> Dict[str, Any]:
-        return SANModel.get_san_filtered_certs_fast(filter_type, filter_value, page, page_size)
+    # @classmethod
+    # def get_san_filtered_certs_fast(cls, filter_type: str, filter_value: str = None,
+    #                                  page: int = 1, page_size: int = 50) -> Dict[str, Any]:
+    #     return SANModel.get_san_filtered_certs_fast(filter_type, filter_value, page, page_size)
 
 
 

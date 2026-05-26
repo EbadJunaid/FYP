@@ -2,7 +2,7 @@
 # SAN analytics model utilities extracted from CertificateModel for better page separation.
 
 from typing import List, Dict, Any
-from .db import MongoDBClient
+from ..db import MongoDBClient
 
 
 class SANModel:
