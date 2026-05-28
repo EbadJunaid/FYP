@@ -1,5 +1,7 @@
 from django.urls import path
-from .views import CAStatsView, IssuerValidationMatrixView
+from .views import (
+    CAStatsView,
+    IssuerValidationMatrixView)
 
 urlpatterns = [
     path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),

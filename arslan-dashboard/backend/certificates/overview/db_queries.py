@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from .db import db, MongoDBClient
-from .shared_models import SharedModels
+from ..db import db, MongoDBClient
 
 
 class OverviewModels:
@@ -152,5 +151,67 @@ class OverviewModels:
         }
     
     @classmethod
-    def get_dashboard_metrics(cls) -> Dict:
-        return SharedModels.get_dashboard_metrics()
+    def get_future_risk(cls) -> List[Dict]:
+        
+        metrics = {
+            'globalHealth': {
+                'score': 82,
+                'maxScore': 100,
+                'status': 'AT_RISK',
+                'lastUpdated': datetime.now(timezone.utc).strftime('%H:%M')
+            },
+            'activeCertificates': {
+                'count': 1860,
+                'total': 2000
+            },
+            'expiringSoon': {
+                'count': 12,
+                'daysThreshold': 30,
+                'actionNeeded': True
+            },
+            'criticalVulnerabilities': {
+                'count': 4,
+                'new': 1
+            },
+            'expiredCertificates': {
+                'count': 140
+            }
+        }
+
+        expiring = metrics['expiringSoon']['count']
+        critical = metrics['criticalVulnerabilities']['count']
+        
+        # Calculate risk level
+        if critical > 5 or expiring > 20:
+            risk_level = 'High'
+            confidence = 92
+        elif critical > 2 or expiring > 10:
+            risk_level = 'Medium'
+            confidence = 78
+        else:
+            risk_level = 'Low'
+            confidence = 65
+        
+        result = {
+            'confidenceLevel': confidence,
+            'riskLevel': risk_level,
+            'projectedThreats': [
+                {
+                    'id': '1',
+                    'title': 'Weak Key Rotation',
+                    'description': f'Predicted in 3 months',
+                    'timeframe': '3 months',
+                    'icon': 'key'
+                },
+                {
+                    'id': '2',
+                    'title': 'Signature Expiry',
+                    'description': f'Watch for SHA-1 risk',
+                    'timeframe': '6 months',
+                    'icon': 'signature'
+                }
+            ]
+        }
+        return result
+
+    

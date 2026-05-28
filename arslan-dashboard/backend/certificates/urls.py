@@ -6,25 +6,25 @@ from .views import (
     CertificateListView,
     CertificateDetailView,
     CertificateDownloadView,
-    UniqueFiltersView,
-    EncryptionStrengthView,
+    # UniqueFiltersView,
+    # EncryptionStrengthView,
+    # FutureRiskView,
     ValidityTrendsView,
     CAAnalyticsView,
     # CAStatsView,
     # IssuerValidationMatrixView,
     ValidationDistributionView as CAValidationDistributionView,
     GeographicDistributionView,
-    FutureRiskView,
     VulnerabilitiesView,
     # COMMENT FOR NOTIFICATION ICON - Import
     # NotificationView,
-    ValidityStatsView,
-    ValidityDistributionView,
-    IssuanceTimelineView,
+    # ValidityStatsView,
+    # ValidityDistributionView,
+    # IssuanceTimelineView,
     # Signature and Hashes page views
-    SignatureStatsView,
-    HashTrendsView,
-    IssuerAlgorithmMatrixView,
+    # SignatureStatsView,
+    # HashTrendsView,
+    # IssuerAlgorithmMatrixView,
     CertificateExportView,
     # SAN Analytics page views
     # SANStatsView,
@@ -39,13 +39,13 @@ from .views import (
     ValidationLevelTrendsView,
     KeySizeTimelineView,
     # Shared Keys Analytics page views
-    SharedKeyStatsView,
-    SharedKeyDistributionView,
-    SharedKeyByIssuerView,
-    SharedKeyTimelineView,
-    SharedKeyHeatmapView,
-    SharedKeysListView,
-    SharedKeyDetailView,
+    # SharedKeyStatsView,
+    # SharedKeyDistributionView,
+    # SharedKeyByIssuerView,
+    # SharedKeyTimelineView,
+    # SharedKeyHeatmapView,
+    # SharedKeysListView,
+    # SharedKeyDetailView,
     # Database Management view functions
     get_current_database,
     get_available_databases,
@@ -74,9 +74,9 @@ urlpatterns = [
     
     
     # Overview page APIs.. it also use 4 more apis "api/validity-trends/","api/ca-analytics/","api/geographic-distribution","api/dashboard/global-health/" these are shared with other pages..
-    path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
-    path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
-    path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
+    # path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
+    # path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
+    # path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
    
     # Database Management APIs
     path('databases/current/', get_current_database, name='current_database'),
@@ -89,17 +89,21 @@ urlpatterns = [
     # path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
     path('ca/', include('certificates.ca_analytics.urls')),  # Include CA analytics URLs from separate file
     path('san/', include('certificates.san_analytics.urls')),  # Include SAN analytics URLs from separate file
+    path('signature-hash/', include('certificates.signature_hash.urls')),  # Include Signature & Hash analytics URLs from separate file
+    path('overview/', include('certificates.overview.urls')),  # Include Overview page URLs from separate file
+    path('validity/', include('certificates.validity_analysis.urls')),  # Include Validity Analysis URLs from separate file
+    path('shared-keys/',include('certificates.shared_keys.urls')), # Include Shared Keys Analytics URLs from separate file
     # Validity Analysis page APIs.. it also use 2 more apis "api/validity-trends/" and "api/dashboard/global-health/" they are shared with other pages too
 
-    path('validity-stats/', ValidityStatsView.as_view(), name='validity_stats'),
-    path('validity-distribution/', ValidityDistributionView.as_view(), name='validity_distribution'),
-    path('issuance-timeline/', IssuanceTimelineView.as_view(), name='issuance_timeline'),
+    # path('validity-stats/', ValidityStatsView.as_view(), name='validity_stats'),
+    # path('validity-distribution/', ValidityDistributionView.as_view(), name='validity_distribution'),
+    # path('issuance-timeline/', IssuanceTimelineView.as_view(), name='issuance_timeline'),
     
     # Signature and Hashes APIs
 
-    path('signature-stats/', SignatureStatsView.as_view(), name='signature_stats'),
-    path('hash-trends/', HashTrendsView.as_view(), name='hash_trends'),
-    path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
+    # path('signature-stats/', SignatureStatsView.as_view(), name='signature_stats'),
+    # path('hash-trends/', HashTrendsView.as_view(), name='hash_trends'),
+    # path('issuer-algorithm-matrix/', IssuerAlgorithmMatrixView.as_view(), name='issuer_algorithm_matrix'),
     
     # SAN Analytics APIs
     # path('san-stats/', SANStatsView.as_view(), name='san_stats'),
@@ -115,17 +119,17 @@ urlpatterns = [
     path('trends/validation-levels/', ValidationLevelTrendsView.as_view(), name='trends_validation_levels'),
     path('trends/key-size-timeline/', KeySizeTimelineView.as_view(), name='trends_key_size_timeline'),
     
-    # Shared Keys Analytics APIs
-    path('shared-keys/stats/', SharedKeyStatsView.as_view(), name='shared_key_stats'),
-    path('shared-keys/distribution/', SharedKeyDistributionView.as_view(), name='shared_key_distribution'),
-    path('shared-keys/by-issuer/', SharedKeyByIssuerView.as_view(), name='shared_key_by_issuer'),
+    # # Shared Keys Analytics APIs
+    # path('shared-keys/stats/', SharedKeyStatsView.as_view(), name='shared_key_stats'),
+    # path('shared-keys/distribution/', SharedKeyDistributionView.as_view(), name='shared_key_distribution'),
+    # path('shared-keys/by-issuer/', SharedKeyByIssuerView.as_view(), name='shared_key_by_issuer'),
    
-    # dont know why this shared-keys/timeline is present what is the role of it... but i have added it as well
+    # # dont know why this shared-keys/timeline is present what is the role of it... but i have added it as well
 
-    path('shared-keys/timeline/', SharedKeyTimelineView.as_view(), name='shared_key_timeline'),
-    path('shared-keys/heatmap/', SharedKeyHeatmapView.as_view(), name='shared_key_heatmap'),
-    path('shared-keys/list/', SharedKeysListView.as_view(), name='shared_keys_list'),
-    path('shared-keys/detail/<str:public_key_hash>/', SharedKeyDetailView.as_view(), name='shared_key_detail'),
+    # path('shared-keys/timeline/', SharedKeyTimelineView.as_view(), name='shared_key_timeline'),
+    # path('shared-keys/heatmap/', SharedKeyHeatmapView.as_view(), name='shared_key_heatmap'),
+    # path('shared-keys/list/', SharedKeysListView.as_view(), name='shared_keys_list'),
+    # path('shared-keys/detail/<str:public_key_hash>/', SharedKeyDetailView.as_view(), name='shared_key_detail'),
     
     # ============================================================
     # COMMENT FOR NOTIFICATION ICON - Backend URL

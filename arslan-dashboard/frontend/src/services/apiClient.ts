@@ -395,7 +395,7 @@ class ApiClient {
 
     // Filters
     async getUniqueFilters(): Promise<UniqueFilters> {
-        return this.fetch<UniqueFilters>('/unique-filters/');
+        return this.fetch<UniqueFilters>('/overview/unique-filters/');
     }
 
     // Global filter params type
@@ -416,7 +416,7 @@ class ApiClient {
         if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
         if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
         const query = queryParams.toString();
-        return this.fetch<EncryptionStrength[]>(`/encryption-strength/${query ? `?${query}` : ''}`);
+        return this.fetch<EncryptionStrength[]>(`/overview/encryption-strength/${query ? `?${query}` : ''}`);
     }
 
     async getValidityTrends(months: number = 12, granularity: 'monthly' | 'weekly' = 'monthly'): Promise<ValidityTrend[]> {
@@ -478,7 +478,7 @@ class ApiClient {
     }
 
     async getFutureRisk(): Promise<FutureRisk> {
-        return this.fetch<FutureRisk>('/future-risk/');
+        return this.fetch<FutureRisk>('/overview/future-risk/');
     }
 
     async getVulnerabilities(page: number = 1, pageSize: number = 10): Promise<{
@@ -495,28 +495,28 @@ class ApiClient {
 
     // Validity Analysis APIs
     async getValidityStats(): Promise<ValidityStats> {
-        return this.fetch<ValidityStats>('/validity-stats/');
+        return this.fetch<ValidityStats>('/validity/validity-stats/');
     }
 
     async getValidityDistribution(): Promise<ValidityDistributionEntry[]> {
-        return this.fetch<ValidityDistributionEntry[]>('/validity-distribution/');
+        return this.fetch<ValidityDistributionEntry[]>('/validity/validity-distribution/');
     }
 
     async getIssuanceTimeline(): Promise<IssuanceTimelineEntry[]> {
-        return this.fetch<IssuanceTimelineEntry[]>('/issuance-timeline/');
+        return this.fetch<IssuanceTimelineEntry[]>('/validity/issuance-timeline/');
     }
 
     // Signature and Hashes APIs
     async getSignatureStats(): Promise<SignatureStats> {
-        return this.fetch<SignatureStats>('/signature-stats/');
+        return this.fetch<SignatureStats>('/signature-hash/signature-stats/');
     }
 
     async getHashTrends(months: number = 36, granularity: 'quarterly' | 'yearly' = 'quarterly'): Promise<HashTrendEntry[]> {
-        return this.fetch<HashTrendEntry[]>(`/hash-trends/?months=${months}&granularity=${granularity}`);
+        return this.fetch<HashTrendEntry[]>(`/signature-hash/hash-trends/?months=${months}&granularity=${granularity}`);
     }
 
     async getIssuerAlgorithmMatrix(limit: number = 10): Promise<IssuerAlgorithmEntry[]> {
-        return this.fetch<IssuerAlgorithmEntry[]>(`/issuer-algorithm-matrix/?limit=${limit}`);
+        return this.fetch<IssuerAlgorithmEntry[]>(`/signature-hash/issuer-algorithm-matrix/?limit=${limit}`);
     }
 
     // SAN Analytics APIs

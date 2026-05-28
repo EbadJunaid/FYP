@@ -1,7 +1,7 @@
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 from typing import List, Dict, Any, Optional
-from .db import db, MongoDBClient
+from ..db import db, MongoDBClient
 
 class ValidityModels:
     collection = db['certificates']
@@ -26,7 +26,7 @@ class ValidityModels:
             - shortestValidityDays: min validity period
             - longestValidityDays: max validity period
         """
-        from .db import MongoDBClient
+        from ..db import MongoDBClient
         from datetime import datetime, timezone, timedelta
         collection = MongoDBClient.get_results_db()['validity-stats']
         
@@ -72,7 +72,7 @@ class ValidityModels:
         - 1-2 years
         - >2 years
         """
-        from .db import MongoDBClient
+        from ..db import MongoDBClient
         from datetime import datetime, timezone
         collection = MongoDBClient.get_results_db()['validity-distribution']
         
@@ -121,7 +121,7 @@ class ValidityModels:
             - issued: certificates issued in that month
             - expiring: certificates expiring in that month
         """
-        from .db import MongoDBClient
+        from ..db import MongoDBClient
         from datetime import datetime, timezone
         collection = MongoDBClient.get_results_db()['issuance-timeline']
         
@@ -466,3 +466,4 @@ class ValidityModels:
                 current = current.replace(month=current.month + 1)
         
         return timeline
+

@@ -117,8 +117,8 @@ class CacheService:
                 port=6379,
                 db=0,
                 decode_responses=True,
-                socket_timeout=2,
-                socket_connect_timeout=2,
+                socket_timeout=0,
+                socket_connect_timeout=0,
             )
             # Test connection
             self.redis_client.ping()

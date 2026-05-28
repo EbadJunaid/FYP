@@ -184,61 +184,76 @@ class CertificateDetailView(View):
             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class UniqueFiltersView(View):
-    """
-    GET /api/unique-filters
-    Returns unique values for filter dropdowns (issuers, countries, statuses, grades)
-    """
-    def get(self, request):
-        try:
-            filters = AnalyticsController.get_filter_options()
-            return json_response(filters)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+# overview views.
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class EncryptionStrengthView(View):
+#     """
+#     GET /api/encryption-strength
+#     Returns encryption type distribution for charts
+#     Query params: start_date, end_date, countries, issuers, statuses, validation_levels
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import GlobalFilterParams
+            
+#             # Parse global filter params - date range
+#             start_date = request.GET.get('start_date')
+#             end_date = request.GET.get('end_date')
+            
+#             # Parse multi-select arrays (comma-separated)
+#             countries_str = request.GET.get('countries', '')
+#             issuers_str = request.GET.get('issuers', '')
+#             statuses_str = request.GET.get('statuses', '')
+#             validation_levels_str = request.GET.get('validation_levels', '')
+            
+#             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+#             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+#             statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+#             validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+#             global_filters = None
+#             if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+#                 global_filters = GlobalFilterParams(
+#                     start_date=start_date,
+#                     end_date=end_date,
+#                     countries=countries,
+#                     issuers=issuers_list,
+#                     statuses=statuses_list,
+#                     validation_levels=validation_levels
+#                 )
+            
+#             data = AnalyticsController.get_encryption_distribution(global_filters=global_filters)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class EncryptionStrengthView(View):
-    """
-    GET /api/encryption-strength
-    Returns encryption type distribution for charts
-    Query params: start_date, end_date, countries, issuers, statuses, validation_levels
-    """
-    def get(self, request):
-        try:
-            from .controllers import GlobalFilterParams
-            
-            # Parse global filter params - date range
-            start_date = request.GET.get('start_date')
-            end_date = request.GET.get('end_date')
-            
-            # Parse multi-select arrays (comma-separated)
-            countries_str = request.GET.get('countries', '')
-            issuers_str = request.GET.get('issuers', '')
-            statuses_str = request.GET.get('statuses', '')
-            validation_levels_str = request.GET.get('validation_levels', '')
-            
-            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
-            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
-            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
-            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
-            
-            global_filters = None
-            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
-                global_filters = GlobalFilterParams(
-                    start_date=start_date,
-                    end_date=end_date,
-                    countries=countries,
-                    issuers=issuers_list,
-                    statuses=statuses_list,
-                    validation_levels=validation_levels
-                )
-            
-            data = AnalyticsController.get_encryption_distribution(global_filters=global_filters)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+#@method_decorator(csrf_exempt, name='dispatch')
+# class UniqueFiltersView(View):
+#     """
+#     GET /api/unique-filters
+#     Returns unique values for filter dropdowns (issuers, countries, statuses, grades)
+#     """
+#     def get(self, request):
+#         try:
+#             filters = AnalyticsController.get_filter_options()
+#             return json_response(filters)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class FutureRiskView(View):
+#     """
+#     GET /api/future-risk
+#     Returns predicted risk data
+#     """
+#     def get(self, request):
+#         try:
+#             data = AnalyticsController.get_future_risk()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -464,21 +479,21 @@ class TrendsStatsView(View):
             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class IssuanceTimelineView(View):
-    """
-    GET /api/trends/issuance-timeline
-    Returns certificate issuance count by month
-    Query params: months (default 12)
-    """
-    def get(self, request):
-        try:
-            from .controllers import TrendsController
-            months = int(request.GET.get('months', 12))
-            data = TrendsController.get_issuance_timeline(months=months)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuanceTimelineView(View):
+#     """
+#     GET /api/trends/issuance-timeline
+#     Returns certificate issuance count by month
+#     Query params: months (default 12)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             months = int(request.GET.get('months', 12))
+#             data = TrendsController.get_issuance_timeline(months=months)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -593,18 +608,6 @@ class GeographicDistributionView(View):
             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class FutureRiskView(View):
-    """
-    GET /api/future-risk
-    Returns predicted risk data
-    """
-    def get(self, request):
-        try:
-            data = AnalyticsController.get_future_risk()
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1070,34 +1073,34 @@ class CertificateDownloadView(View):
         return output.getvalue()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class ValidityStatsView(View):
-    """
-    GET /api/validity-stats
-    Returns validity statistics: avg duration, expiring counts, compliance rate
-    """
-    def get(self, request):
-        try:
-            from .controllers import ValidityAnalysisController
-            result = ValidityAnalysisController.get_validity_stats()
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ValidityStatsView(View):
+#     """
+#     GET /api/validity-stats
+#     Returns validity statistics: avg duration, expiring counts, compliance rate
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import ValidityAnalysisController
+#             result = ValidityAnalysisController.get_validity_stats()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class ValidityDistributionView(View):
-    """
-    GET /api/validity-distribution
-    Returns validity period distribution by buckets
-    """
-    def get(self, request):
-        try:
-            from .controllers import ValidityAnalysisController
-            result = ValidityAnalysisController.get_validity_distribution()
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ValidityDistributionView(View):
+#     """
+#     GET /api/validity-distribution
+#     Returns validity period distribution by buckets
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import ValidityAnalysisController
+#             result = ValidityAnalysisController.get_validity_distribution()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
 # @method_decorator(csrf_exempt, name='dispatch')
@@ -1208,102 +1211,102 @@ def hello_mongo_view(request):
 
 # ----- New views for Signature and Hashes page -----
 
-@method_decorator(csrf_exempt, name='dispatch')
-class SignatureStatsView(View):
-    """
-    GET /api/signature-stats
-    Returns comprehensive signature and hash statistics.
-    Includes algorithm distribution, hash distribution, key sizes, compliance rate, strength score.
-    Cached for 5 minutes.
-    """
-    def get(self, request):
-        try:
-            from .models import CertificateModel
-            from .cache_service import cache
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SignatureStatsView(View):
+#     """
+#     GET /api/signature-stats
+#     Returns comprehensive signature and hash statistics.
+#     Includes algorithm distribution, hash distribution, key sizes, compliance rate, strength score.
+#     Cached for 5 minutes.
+#     """
+#     def get(self, request):
+#         try:
+#             from .models import CertificateModel
+#             from .cache_service import cache
             
-            # Check cache first
-            cache_key = 'signature_stats'
-            cached = cache.get(cache_key, {})
-            if cached:
-                return json_response(cached)
+#             # Check cache first
+#             cache_key = 'signature_stats'
+#             cached = cache.get(cache_key, {})
+#             if cached:
+#                 return json_response(cached)
             
-            # Get fresh data from pre-computed results (OPTIMIZED)
-            result = CertificateModel.get_signature_stats_fast()
+#             # Get fresh data from pre-computed results (OPTIMIZED)
+#             result = CertificateModel.get_signature_stats_fast()
             
-            # Cache for 5 minutes
-            cache.set(cache_key, {}, result, ttl=300)
+#             # Cache for 5 minutes
+#             cache.set(cache_key, {}, result, ttl=300)
             
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class HashTrendsView(View):
-    """
-    GET /api/hash-trends
-    Returns hash algorithm adoption trends over time.
-    Query params: months (default 36), granularity ('quarterly' or 'yearly')
-    Cached for 10 minutes.
-    """
-    def get(self, request):
-        try:
-            from .models import CertificateModel
-            from .cache_service import cache
+# @method_decorator(csrf_exempt, name='dispatch')
+# class HashTrendsView(View):
+#     """
+#     GET /api/hash-trends
+#     Returns hash algorithm adoption trends over time.
+#     Query params: months (default 36), granularity ('quarterly' or 'yearly')
+#     Cached for 10 minutes.
+#     """
+#     def get(self, request):
+#         try:
+#             from .models import CertificateModel
+#             from .cache_service import cache
             
-            months = int(request.GET.get('months', 36))
-            granularity = request.GET.get('granularity', 'quarterly')
+#             months = int(request.GET.get('months', 36))
+#             granularity = request.GET.get('granularity', 'quarterly')
             
-            # Validate granularity
-            if granularity not in ['quarterly', 'yearly']:
-                granularity = 'quarterly'
+#             # Validate granularity
+#             if granularity not in ['quarterly', 'yearly']:
+#                 granularity = 'quarterly'
             
-            # Check cache first
-            cache_params = {'months': months, 'granularity': granularity}
-            cached = cache.get('hash_trends', cache_params)
-            if cached:
-                return json_response(cached)
+#             # Check cache first
+#             cache_params = {'months': months, 'granularity': granularity}
+#             cached = cache.get('hash_trends', cache_params)
+#             if cached:
+#                 return json_response(cached)
             
-            # Get fresh data from pre-computed results (OPTIMIZED)
-            result = CertificateModel.get_hash_trends_fast(months=months, granularity=granularity)
+#             # Get fresh data from pre-computed results (OPTIMIZED)
+#             result = CertificateModel.get_hash_trends_fast(months=months, granularity=granularity)
             
-            # Cache for 10 minutes
-            cache.set('hash_trends', cache_params, result, ttl=600)
+#             # Cache for 10 minutes
+#             cache.set('hash_trends', cache_params, result, ttl=600)
             
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class IssuerAlgorithmMatrixView(View):
-    """
-    GET /api/issuer-algorithm-matrix
-    Returns matrix of issuer x algorithm combinations with counts.
-    Cached for 10 minutes.
-    """
-    def get(self, request):
-        try:
-            from .models import CertificateModel
-            from .cache_service import cache
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuerAlgorithmMatrixView(View):
+#     """
+#     GET /api/issuer-algorithm-matrix
+#     Returns matrix of issuer x algorithm combinations with counts.
+#     Cached for 10 minutes.
+#     """
+#     def get(self, request):
+#         try:
+#             from .models import CertificateModel
+#             from .cache_service import cache
             
-            limit = int(request.GET.get('limit', 10))
+#             limit = int(request.GET.get('limit', 10))
             
-            # Check cache first
-            cache_params = {'limit': limit}
-            cached = cache.get('issuer_matrix', cache_params)
-            if cached:
-                return json_response(cached)
+#             # Check cache first
+#             cache_params = {'limit': limit}
+#             cached = cache.get('issuer_matrix', cache_params)
+#             if cached:
+#                 return json_response(cached)
             
-            # Get fresh data from pre-computed results (OPTIMIZED)
-            result = CertificateModel.get_issuer_algorithm_matrix_fast(limit=limit)
+#             # Get fresh data from pre-computed results (OPTIMIZED)
+#             result = CertificateModel.get_issuer_algorithm_matrix_fast(limit=limit)
             
-            # Cache for 10 minutes
-            cache.set('issuer_matrix', cache_params, result, ttl=600)
+#             # Cache for 10 minutes
+#             cache.set('issuer_matrix', cache_params, result, ttl=600)
             
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1423,142 +1426,142 @@ class CertificateExportView(View):
 
 # ==================== SHARED KEYS ANALYTICS VIEWS ====================
 
-class SharedKeyStatsView(View):
-    """
-    GET /api/shared-keys/stats
-    Returns shared key statistics for metric cards
-    """
-    def get(self, request):
-        from .controllers import SharedKeyController
-        stats = SharedKeyController.get_stats()
-        return json_response(stats)
+# class SharedKeyStatsView(View):
+#     """
+#     GET /api/shared-keys/stats
+#     Returns shared key statistics for metric cards
+#     """
+#     def get(self, request):
+#         from .controllers import SharedKeyController
+#         stats = SharedKeyController.get_stats()
+#         return json_response(stats)
 
 
-class SharedKeyDistributionView(View):
-    """
-    GET /api/shared-keys/distribution
-    Returns shared key group size distribution for histogram
-    """
-    def get(self, request):
-        from .controllers import SharedKeyController
-        distribution = SharedKeyController.get_distribution()
-        return json_response(distribution)
+# class SharedKeyDistributionView(View):
+#     """
+#     GET /api/shared-keys/distribution
+#     Returns shared key group size distribution for histogram
+#     """
+#     def get(self, request):
+#         from .controllers import SharedKeyController
+#         distribution = SharedKeyController.get_distribution()
+#         return json_response(distribution)
 
 
-class SharedKeyByIssuerView(View):
-    """
-    GET /api/shared-keys/by-issuer
-    Returns shared key certificates by issuer for bar chart
-    Query params: limit
-    """
-    def get(self, request):
-        from .controllers import SharedKeyController
-        limit = int(request.GET.get('limit', 10))
-        data = SharedKeyController.get_by_issuer(limit)
-        return json_response(data)
+# class SharedKeyByIssuerView(View):
+#     """
+#     GET /api/shared-keys/by-issuer
+#     Returns shared key certificates by issuer for bar chart
+#     Query params: limit
+#     """
+#     def get(self, request):
+#         from .controllers import SharedKeyController
+#         limit = int(request.GET.get('limit', 10))
+#         data = SharedKeyController.get_by_issuer(limit)
+#         return json_response(data)
 
 
-class SharedKeyTimelineView(View):
-    """
-    GET /api/shared-keys/timeline
-    Returns timeline of certificates joining shared key groups
-    Query params: months
-    """
-    def get(self, request):
-        from .controllers import SharedKeyController
-        months = int(request.GET.get('months', 12))
-        timeline = SharedKeyController.get_timeline(months)
-        return json_response(timeline)
+# class SharedKeyTimelineView(View):
+#     """
+#     GET /api/shared-keys/timeline
+#     Returns timeline of certificates joining shared key groups
+#     Query params: months
+#     """
+#     def get(self, request):
+#         from .controllers import SharedKeyController
+#         months = int(request.GET.get('months', 12))
+#         timeline = SharedKeyController.get_timeline(months)
+#         return json_response(timeline)
 
 
-class SharedKeyHeatmapView(View):
-    """
-    GET /api/shared-keys/heatmap
-    Returns issuer x key-type matrix for heatmap
-    Query params: limit
-    """
-    def get(self, request):
-        from .controllers import SharedKeyController
-        limit = int(request.GET.get('limit', 10))
-        heatmap = SharedKeyController.get_heatmap(limit)
-        return json_response(heatmap)
+# class SharedKeyHeatmapView(View):
+#     """
+#     GET /api/shared-keys/heatmap
+#     Returns issuer x key-type matrix for heatmap
+#     Query params: limit
+#     """
+#     def get(self, request):
+#         from .controllers import SharedKeyController
+#         limit = int(request.GET.get('limit', 10))
+#         heatmap = SharedKeyController.get_heatmap(limit)
+#         return json_response(heatmap)
 
-class SharedKeysListView(View):
-    """
-    GET /api/shared-keys/list
-    Returns paginated list of shared key groups for table view
-    Query params: page, page_size, sort_by, sort_order, risk_level, key_type, min_cert_count, issuer
-    """
-    def get(self, request):
-        from .controllers import SharedKeyController
+# class SharedKeysListView(View):
+#     """
+#     GET /api/shared-keys/list
+#     Returns paginated list of shared key groups for table view
+#     Query params: page, page_size, sort_by, sort_order, risk_level, key_type, min_cert_count, issuer
+#     """
+#     def get(self, request):
+#         from .controllers import SharedKeyController
         
-        try:
-            # Get query parameters
-            page = int(request.GET.get('page', 1))
-            page_size = int(request.GET.get('page_size', 10))
-            sort_by = request.GET.get('sort_by', 'certificate_count')
-            sort_order = request.GET.get('sort_order', 'desc')
-            risk_level = request.GET.get('risk_level')
-            key_type = request.GET.get('key_type')
-            min_cert_count = request.GET.get('min_cert_count')
-            issuer = request.GET.get('issuer')
+#         try:
+#             # Get query parameters
+#             page = int(request.GET.get('page', 1))
+#             page_size = int(request.GET.get('page_size', 10))
+#             sort_by = request.GET.get('sort_by', 'certificate_count')
+#             sort_order = request.GET.get('sort_order', 'desc')
+#             risk_level = request.GET.get('risk_level')
+#             key_type = request.GET.get('key_type')
+#             min_cert_count = request.GET.get('min_cert_count')
+#             issuer = request.GET.get('issuer')
             
-            # Convert min_cert_count to int if provided
-            if min_cert_count:
-                min_cert_count = int(min_cert_count)
+#             # Convert min_cert_count to int if provided
+#             if min_cert_count:
+#                 min_cert_count = int(min_cert_count)
             
-            # Get list from controller
-            result = SharedKeyController.get_list(
-                page=page,
-                page_size=page_size,
-                sort_by=sort_by,
-                sort_order=sort_order,
-                risk_level=risk_level,
-                key_type=key_type,
-                min_cert_count=min_cert_count,
-                issuer=issuer
-            )
+#             # Get list from controller
+#             result = SharedKeyController.get_list(
+#                 page=page,
+#                 page_size=page_size,
+#                 sort_by=sort_by,
+#                 sort_order=sort_order,
+#                 risk_level=risk_level,
+#                 key_type=key_type,
+#                 min_cert_count=min_cert_count,
+#                 issuer=issuer
+#             )
             
-            return json_response({
-                'success': True,
-                'data': result
-            })
+#             return json_response({
+#                 'success': True,
+#                 'data': result
+#             })
         
-        except ValueError as e:
-            return json_response({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-        except Exception as e:
-            return json_response({
-                'success': False,
-                'error': 'Failed to fetch shared keys list'
-            }, status=500)
+#         except ValueError as e:
+#             return json_response({
+#                 'success': False,
+#                 'error': str(e)
+#             }, status=400)
+#         except Exception as e:
+#             return json_response({
+#                 'success': False,
+#                 'error': 'Failed to fetch shared keys list'
+#             }, status=500)
 
 
-class SharedKeyDetailView(View):
-    """
-    GET /api/shared-keys/detail/<public_key_hash>
-    Returns full details for a specific shared key group
-    """
-    def get(self, request, public_key_hash):
-        from .controllers import SharedKeyController
+# class SharedKeyDetailView(View):
+#     """
+#     GET /api/shared-keys/detail/<public_key_hash>
+#     Returns full details for a specific shared key group
+#     """
+#     def get(self, request, public_key_hash):
+#         from .controllers import SharedKeyController
         
-        try:
-            result = SharedKeyController.get_detail(public_key_hash)
+#         try:
+#             result = SharedKeyController.get_detail(public_key_hash)
             
-            return json_response({
-                'success': True,
-                'data': result
-            })
+#             return json_response({
+#                 'success': True,
+#                 'data': result
+#             })
         
-        except ValueError as e:
-            return json_response({
-                'success': False,
-                'error': str(e)
-            }, status=404)
-        except Exception as e:
-            return json_response({
-                'success': False,
-                'error': 'Failed to fetch shared key details'
-            }, status=500)
+#         except ValueError as e:
+#             return json_response({
+#                 'success': False,
+#                 'error': str(e)
+#             }, status=404)
+#         except Exception as e:
+#             return json_response({
+#                 'success': False,
+#                 'error': 'Failed to fetch shared key details'
+#             }, status=500)

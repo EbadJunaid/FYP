@@ -5,14 +5,14 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from .db import db, MongoDBClient  # Don't import results_db directly - use MongoDBClient.get_results_db() instead
-from .shared_keys_models import SharedKeyModel
+# from .shared_keys_models import SharedKeyModel
 # from .san_models import SANModel
 from .trends_models import TrendsModel
 # from .ca_models import CAModel
-from .signature_hash_models import SignatureHashModel
+# from .signature_hash_models import SignatureHashModel
 from .shared_models import SharedModels
-from .validity_models import ValidityModels
-from .overview_models import OverviewModels
+# from .validity_models import ValidityModels
+# from .overview_models import OverviewModels
 
 
 
@@ -176,6 +176,7 @@ class CertificateModel:
     
     # ----- New implementation for Signature and Hashes starts here -----
        
+    
     @classmethod
     def get_validation_distribution(cls) -> List[Dict]:
         """
@@ -332,14 +333,18 @@ class CertificateModel:
     
     # ==================== Overview page METHODS ====================
 
-    @classmethod
-    def get_encryption_strength(cls, base_filter: Optional[Dict] = None) -> List[Dict]:
-        return OverviewModels.get_encryption_strength(base_filter=base_filter)
+    # @classmethod
+    # def get_encryption_strength(cls, base_filter: Optional[Dict] = None) -> List[Dict]:
+    #     return OverviewModels.get_encryption_strength(base_filter=base_filter)
     
-    @classmethod
-    def get_unique_filters(cls) -> Dict:
-        return OverviewModels.get_unique_filters()
+    # @classmethod
+    # def get_unique_filters(cls) -> Dict:
+    #     return OverviewModels.get_unique_filters()
     
+    # @classmethod
+    # def get_future_risk(cls) -> List[Dict]:
+    #     return OverviewModels.get_future_risk()
+
    
 
     # ==================== Validity analysis METHODS ====================
@@ -348,33 +353,33 @@ class CertificateModel:
     # Fast Validity analysis METHODS  (using pre-computed statistics) 
     # ===========================
     
-    @classmethod
-    def get_validity_stats_fast(cls) -> Dict:
-        return ValidityModels.get_validity_stats_fast()
+    # @classmethod
+    # def get_validity_stats_fast(cls) -> Dict:
+    #     return ValidityModels.get_validity_stats_fast()
     
-    @classmethod
-    def get_validity_distribution_fast(cls) -> list:
-        return ValidityModels.get_validity_distribution_fast()
+    # @classmethod
+    # def get_validity_distribution_fast(cls) -> list:
+    #     return ValidityModels.get_validity_distribution_fast()
     
-    @classmethod
-    def get_issuance_timeline_fast(cls, months: int = 12) -> list:
-        return ValidityModels.get_issuance_timeline_fast(months=months)
+    # @classmethod
+    # def get_issuance_timeline_fast(cls, months: int = 12) -> list:
+    #     return ValidityModels.get_issuance_timeline_fast(months=months)
     
-     # ===========================
-    # Slow Validity analysis METHODS  (using on-the-fly aggregation)
-    # ===========================
+    #  # ===========================
+    # # Slow Validity analysis METHODS  (using on-the-fly aggregation)
+    # # ===========================
 
-    @classmethod
-    def get_validity_stats(cls) -> Dict:
-        return ValidityModels.get_validity_stats()
+    # @classmethod
+    # def get_validity_stats(cls) -> Dict:
+    #     return ValidityModels.get_validity_stats()
     
-    @classmethod
-    def get_validity_distribution(cls) -> List[Dict]:
-        return ValidityModels.get_validity_distribution()
+    # @classmethod
+    # def get_validity_distribution(cls) -> List[Dict]:
+    #     return ValidityModels.get_validity_distribution()
     
-    @classmethod
-    def get_issuance_timeline(cls, months: int = 12) -> List[Dict]:
-        return ValidityModels.get_issuance_timeline(months=months)
+    # @classmethod
+    # def get_issuance_timeline(cls, months: int = 12) -> List[Dict]:
+    #     return ValidityModels.get_issuance_timeline(months=months)
 
 
     # ==================== SIGNATURE AND HASH METHODS ====================
@@ -383,128 +388,128 @@ class CertificateModel:
     # Fast signature and hash METHODS  (using pre-computed statistics) 
     # ===========================
 
-    @classmethod
-    def get_signature_stats_fast(cls) -> Dict:
-        """
-        Get comprehensive signature and hash statistics (OPTIMIZED - reads from pre-computed data).
+    # @classmethod
+    # def get_signature_stats_fast(cls) -> Dict:
+    #     """
+    #     Get comprehensive signature and hash statistics (OPTIMIZED - reads from pre-computed data).
         
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.signature-stats (1 document)
-        - Response time: ~0.005 seconds (3,000x faster than original)
-        - Original time: ~180 seconds (full aggregation on 878K docs)
+    #     PERFORMANCE:
+    #     - Source: tranco-latest-8-lakh-results.signature-stats (1 document)
+    #     - Response time: ~0.005 seconds (3,000x faster than original)
+    #     - Original time: ~180 seconds (full aggregation on 878K docs)
         
-        Returns pre-computed:
-            - algorithmDistribution: signature algorithm counts/percentages
-            - hashDistribution: hash algorithm counts/percentages
-            - keySizeDistribution: key size counts/percentages
-            - weakHashCount: count of MD5/SHA-1 certs
-            - hashComplianceRate: % using SHA-256+
-            - strengthScore: composite security score 0-100
-            - selfSignedCount: count of self-signed certs
-            - totalCertificates: total count
-        """
-        return SignatureHashModel.get_signature_stats_fast()
+    #     Returns pre-computed:
+    #         - algorithmDistribution: signature algorithm counts/percentages
+    #         - hashDistribution: hash algorithm counts/percentages
+    #         - keySizeDistribution: key size counts/percentages
+    #         - weakHashCount: count of MD5/SHA-1 certs
+    #         - hashComplianceRate: % using SHA-256+
+    #         - strengthScore: composite security score 0-100
+    #         - selfSignedCount: count of self-signed certs
+    #         - totalCertificates: total count
+    #     """
+    #     return SignatureHashModel.get_signature_stats_fast()
     
-    @classmethod
-    def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
-        """
-        Get hash algorithm adoption trends over time (OPTIMIZED - reads from pre-computed data).
+    # @classmethod
+    # def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
+    #     """
+    #     Get hash algorithm adoption trends over time (OPTIMIZED - reads from pre-computed data).
         
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.hash-trends (~36-48 documents)
-        - Response time: ~0.003 seconds (3,000x faster than original)
-        - Original time: ~200 seconds (full aggregation on 878K docs)
+    #     PERFORMANCE:
+    #     - Source: tranco-latest-8-lakh-results.hash-trends (~36-48 documents)
+    #     - Response time: ~0.003 seconds (3,000x faster than original)
+    #     - Original time: ~200 seconds (full aggregation on 878K docs)
         
-        Args:
-            months: Number of months to look back (default 36 = 3 years)
-            granularity: 'quarterly' or 'yearly'
+    #     Args:
+    #         months: Number of months to look back (default 36 = 3 years)
+    #         granularity: 'quarterly' or 'yearly'
         
-        Returns:
-            List of dicts with period and hash percentages
-        """
-        return SignatureHashModel.get_hash_trends_fast(months=months, granularity=granularity)
+    #     Returns:
+    #         List of dicts with period and hash percentages
+    #     """
+    #     return SignatureHashModel.get_hash_trends_fast(months=months, granularity=granularity)
     
-    @classmethod
-    def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
-        """
-        Get matrix of issuer × algorithm combinations (OPTIMIZED - reads from pre-computed data).
+    # @classmethod
+    # def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+    #     """
+    #     Get matrix of issuer × algorithm combinations (OPTIMIZED - reads from pre-computed data).
         
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.issuer-algorithm-matrix (~50 documents)
-        - Response time: ~0.002 seconds (3,000x faster than original)
-        - Original time: ~180 seconds (full aggregation on 878K docs)
+    #     PERFORMANCE:
+    #     - Source: tranco-latest-8-lakh-results.issuer-algorithm-matrix (~50 documents)
+    #     - Response time: ~0.002 seconds (3,000x faster than original)
+    #     - Original time: ~180 seconds (full aggregation on 878K docs)
         
-        Args:
-            limit: Maximum number of combinations to return (default 10)
+    #     Args:
+    #         limit: Maximum number of combinations to return (default 10)
         
-        Returns:
-            List of dicts with issuer, algorithm, keySize, and count
-        """
-        return SignatureHashModel.get_issuer_algorithm_matrix_fast(limit=limit)
+    #     Returns:
+    #         List of dicts with issuer, algorithm, keySize, and count
+    #     """
+    #     return SignatureHashModel.get_issuer_algorithm_matrix_fast(limit=limit)
     
-    # ===========================
-    # Slow Signature and hash METHODS  (using on-the-fly aggregation)  
-    # ===========================
+    # # ===========================
+    # # Slow Signature and hash METHODS  (using on-the-fly aggregation)  
+    # # ===========================
 
-    @classmethod
-    def get_signature_stats(cls) -> Dict:
-        """
-        Get comprehensive signature and hash statistics for the Signature & Hashes page.
+    # @classmethod
+    # def get_signature_stats(cls) -> Dict:
+    #     """
+    #     Get comprehensive signature and hash statistics for the Signature & Hashes page.
         
-        OPTIMIZED for millions of documents:
-        - Uses efficient $group aggregations (single pass)
-        - No $unwind or expensive operations
-        - Minimal projections
-        - Parallel counting for simple metrics
+    #     OPTIMIZED for millions of documents:
+    #     - Uses efficient $group aggregations (single pass)
+    #     - No $unwind or expensive operations
+    #     - Minimal projections
+    #     - Parallel counting for simple metrics
         
-        Returns:
-            - algorithmDistribution: signature algorithm counts/percentages
-            - hashDistribution: hash algorithm counts/percentages
-            - keySizeDistribution: key size counts/percentages
-            - weakHashCount: count of MD5/SHA-1 certs
-            - hashComplianceRate: % using SHA-256+
-            - strengthScore: composite security score 0-100
-            - selfSignedCount: count of self-signed certs
-            - totalCertificates: total count
-        """
+    #     Returns:
+    #         - algorithmDistribution: signature algorithm counts/percentages
+    #         - hashDistribution: hash algorithm counts/percentages
+    #         - keySizeDistribution: key size counts/percentages
+    #         - weakHashCount: count of MD5/SHA-1 certs
+    #         - hashComplianceRate: % using SHA-256+
+    #         - strengthScore: composite security score 0-100
+    #         - selfSignedCount: count of self-signed certs
+    #         - totalCertificates: total count
+    #     """
         
-        # Get total count (fast indexed query)
-        return SignatureHashModel.get_signature_stats()
+    #     # Get total count (fast indexed query)
+    #     return SignatureHashModel.get_signature_stats()
     
-    @classmethod
-    def get_hash_trends(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
-        """
-        Get hash algorithm adoption trends over time based on issuance dates.
+    # @classmethod
+    # def get_hash_trends(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
+    #     """
+    #     Get hash algorithm adoption trends over time based on issuance dates.
         
-        OPTIMIZED for millions of documents:
-        - Uses $match with date range first (uses index)
-        - Single aggregation pass
-        - Groups by period + hash in one operation
+    #     OPTIMIZED for millions of documents:
+    #     - Uses $match with date range first (uses index)
+    #     - Single aggregation pass
+    #     - Groups by period + hash in one operation
         
-        Args:
-            months: Number of months to look back (default 36 = 3 years)
-            granularity: 'quarterly' or 'yearly'
+    #     Args:
+    #         months: Number of months to look back (default 36 = 3 years)
+    #         granularity: 'quarterly' or 'yearly'
         
-        Returns:
-            List of dicts with period and hash percentages
-        """
-        return SignatureHashModel.get_hash_trends(months=months, granularity=granularity)
+    #     Returns:
+    #         List of dicts with period and hash percentages
+    #     """
+    #     return SignatureHashModel.get_hash_trends(months=months, granularity=granularity)
     
-    @classmethod
-    def get_issuer_algorithm_matrix(cls, limit: int = 10) -> List[Dict]:
-        """
-        Get matrix of issuer × algorithm combinations with counts.
+    # @classmethod
+    # def get_issuer_algorithm_matrix(cls, limit: int = 10) -> List[Dict]:
+    #     """
+    #     Get matrix of issuer × algorithm combinations with counts.
         
-        OPTIMIZED for millions of documents:
-        - Single pass aggregation
-        - $group on compound key
-        - Limited to top issuers
+    #     OPTIMIZED for millions of documents:
+    #     - Single pass aggregation
+    #     - $group on compound key
+    #     - Limited to top issuers
         
-        Returns:
-            List of dicts with issuer, algorithm, keySize, and count
-        """
+    #     Returns:
+    #         List of dicts with issuer, algorithm, keySize, and count
+    #     """
         
-        return SignatureHashModel.get_issuer_algorithm_matrix(limit=limit)
+    #     return SignatureHashModel.get_issuer_algorithm_matrix(limit=limit)
  
 
     # ==================== CA ANALYTICS METHODS ====================
@@ -618,65 +623,65 @@ class CertificateModel:
     # ===========================
     # Slow SHARED KEYS METHODS (using on-the-fly aggregation)
     # ===========================
-    @classmethod
-    def get_shared_key_stats(cls) -> Dict[str, Any]:
-        return SharedKeyModel.get_shared_key_stats()
+    # @classmethod
+    # def get_shared_key_stats(cls) -> Dict[str, Any]:
+    #     return SharedKeyModel.get_shared_key_stats()
 
-    @classmethod
-    def get_shared_key_distribution(cls) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_key_distribution()
+    # @classmethod
+    # def get_shared_key_distribution(cls) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_key_distribution()
     
-    @classmethod
-    def get_shared_keys_by_issuer(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_keys_by_issuer(limit)  
+    # @classmethod
+    # def get_shared_keys_by_issuer(cls, limit: int = 10) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_keys_by_issuer(limit)  
     
-    @classmethod  
-    def get_shared_key_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_key_timeline(months)
+    # @classmethod  
+    # def get_shared_key_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_key_timeline(months)
     
-    @classmethod
-    def get_shared_key_heatmap(cls, limit: int = 10) -> List[Dict[str, Any]]:
-       return SharedKeyModel.get_shared_key_heatmap(limit)
+    # @classmethod
+    # def get_shared_key_heatmap(cls, limit: int = 10) -> List[Dict[str, Any]]:
+    #    return SharedKeyModel.get_shared_key_heatmap(limit)
     
-    # ===========================
-    # FAST SHARED KEYS METHODS (using materialized views)
-    # ===========================
-    @classmethod
-    def get_shared_key_stats_fast(cls) -> Dict[str, Any]:
-        return SharedKeyModel.get_shared_key_stats_fast()
+    # # ===========================
+    # # FAST SHARED KEYS METHODS (using materialized views)
+    # # ===========================
+    # @classmethod
+    # def get_shared_key_stats_fast(cls) -> Dict[str, Any]:
+    #     return SharedKeyModel.get_shared_key_stats_fast()
 
-    @classmethod
-    def get_shared_key_distribution_fast(cls) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_key_distribution_fast()
+    # @classmethod
+    # def get_shared_key_distribution_fast(cls) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_key_distribution_fast()
 
-    @classmethod
-    def get_shared_keys_by_issuer_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_keys_by_issuer_fast(limit)
+    # @classmethod
+    # def get_shared_keys_by_issuer_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_keys_by_issuer_fast(limit)
 
-    @classmethod
-    def get_shared_key_timeline_fast(cls, months: int = 12) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_key_timeline_fast(months)
+    # @classmethod
+    # def get_shared_key_timeline_fast(cls, months: int = 12) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_key_timeline_fast(months)
 
-    @classmethod
-    def get_shared_key_heatmap_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
-        return SharedKeyModel.get_shared_key_heatmap_fast(limit)
+    # @classmethod
+    # def get_shared_key_heatmap_fast(cls, limit: int = 10) -> List[Dict[str, Any]]:
+    #     return SharedKeyModel.get_shared_key_heatmap_fast(limit)
 
-    @classmethod
-    def get_shared_keys_list(cls, page: int = 1, page_size: int = 10, 
-                             sort_by: str = 'certificate_count', sort_order: str = 'desc',
-                             risk_level: str = None, key_type: str = None, 
-                             min_cert_count: int = None, issuer: str = None) -> Dict[str, Any]:
-        return SharedKeyModel.get_shared_keys_list(
-            page=page,
-            page_size=page_size,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            risk_level=risk_level,
-            key_type=key_type,
-            min_cert_count=min_cert_count,
-            issuer=issuer
-        )
+    # @classmethod
+    # def get_shared_keys_list(cls, page: int = 1, page_size: int = 10, 
+    #                          sort_by: str = 'certificate_count', sort_order: str = 'desc',
+    #                          risk_level: str = None, key_type: str = None, 
+    #                          min_cert_count: int = None, issuer: str = None) -> Dict[str, Any]:
+    #     return SharedKeyModel.get_shared_keys_list(
+    #         page=page,
+    #         page_size=page_size,
+    #         sort_by=sort_by,
+    #         sort_order=sort_order,
+    #         risk_level=risk_level,
+    #         key_type=key_type,
+    #         min_cert_count=min_cert_count,
+    #         issuer=issuer
+    #     )
 
-    @classmethod
-    def get_shared_key_detail(cls, public_key_hash: str) -> Dict[str, Any]:
-        return SharedKeyModel.get_shared_key_detail(public_key_hash)
+    # @classmethod
+    # def get_shared_key_detail(cls, public_key_hash: str) -> Dict[str, Any]:
+    #     return SharedKeyModel.get_shared_key_detail(public_key_hash)

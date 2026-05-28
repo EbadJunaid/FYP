@@ -112,14 +112,15 @@ class MongoDBClient:
         db_module.results_db = cls.get_db(_CURRENT_RESULTS_DB)
         
         # Update models to use new database
+        from certificates.ca_analytics.db_queries import CAModel
+        from certificates.signature_hash.db_queries import SignatureHashModel
+        from certificates.san_analytics.db_queries import SANModel
+        from certificates.overview.db_queries import OverviewModels
+        from certificates.shared_keys.db_queries import SharedKeyModel
         from certificates.models import CertificateModel
         from certificates.shared_models import SharedModels
-        from certificates.validity_models import ValidityModels
-        from certificates.ca_analytics.db_queries import CAModel
-        from certificates.signature_hash_models import SignatureHashModel
+        from certificates.validity_analysis.db_queries import ValidityModels
         from certificates.trends_models import TrendsModel
-        from certificates.san_analytics.db_queries import SANModel
-        from certificates.overview_models import OverviewModels
 
         CertificateModel.collection = db_module.db['certificates']
         SharedModels.collection = db_module.db['certificates']
@@ -129,7 +130,7 @@ class MongoDBClient:
         TrendsModel.collection = db_module.db['certificates']
         SANModel.collection = db_module.db['certificates']
         OverviewModels.collection = db_module.db['certificates']
-        
+        SharedKeyModel.collection = db_module.db['certificates']
         # Clear all caches when switching databases
         try:
             from certificates.cache_service import cache

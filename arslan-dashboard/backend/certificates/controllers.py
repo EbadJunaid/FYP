@@ -218,35 +218,63 @@ class CertificateController:
         return result
 
 
-class   AnalyticsController:
-    """Controller for analytics and chart data"""
+class AnalyticsController:
+#     """Controller for analytics and chart data"""
     
-    @staticmethod
-    def get_encryption_distribution(global_filters: Optional[GlobalFilterParams] = None) -> List[Dict]:
-        """Get encryption strength distribution for chart (cached 5 min)"""
-        cache_params = global_filters.to_cache_key() if global_filters else {}
+    # @staticmethod
+    # def get_encryption_distribution(global_filters: Optional[GlobalFilterParams] = None) -> List[Dict]:
+    #     """Get encryption strength distribution for chart (cached 5 min)"""
+    #     cache_params = global_filters.to_cache_key() if global_filters else {}
         
-        cached = cache.get('encryption', cache_params)
-        if cached:
-            return cached
+    #     cached = cache.get('encryption', cache_params)
+    #     if cached:
+    #         return cached
         
-        # Build base filter from global params
-        base_filter = None
-        if global_filters and global_filters.has_filters():
-            base_filter = CertificateModel.build_filter_query(
-                start_date=global_filters.start_date,
-                end_date=global_filters.end_date,
-                countries=global_filters.countries,
-                issuers=global_filters.issuers,
-                grades=global_filters.grades,
-                statuses=global_filters.statuses,
-                validation_levels=global_filters.validation_levels
-            )
+    #     # Build base filter from global params
+    #     base_filter = None
+    #     if global_filters and global_filters.has_filters():
+    #         base_filter = CertificateModel.build_filter_query(
+    #             start_date=global_filters.start_date,
+    #             end_date=global_filters.end_date,
+    #             countries=global_filters.countries,
+    #             issuers=global_filters.issuers,
+    #             grades=global_filters.grades,
+    #             statuses=global_filters.statuses,
+    #             validation_levels=global_filters.validation_levels
+    #         )
         
-        result = CertificateModel.get_encryption_strength(base_filter=base_filter)
-        cache.set('encryption', cache_params, result)
-        return result
+    #     result = CertificateModel.get_encryption_strength(base_filter=base_filter)
+    #     cache.set('encryption', cache_params, result)
+    #     return result
     
+     # @staticmethod
+    # def get_filter_options() -> Dict:
+    #     """Get unique filter options (cached 30 min)"""
+    #     cache_params = {}
+        
+    #     cached = cache.get('unique_filters', cache_params)
+    #     if cached:
+    #         return cached
+        
+    #     result = CertificateModel.get_unique_filters()
+    #     cache.set('unique_filters', cache_params, result)
+    #     return result
+    
+    # @staticmethod
+    # def get_future_risk() -> Dict:
+    #     """Get future risk prediction data (cached 15 min)"""
+    #     cache_params = {}
+        
+    #     cached = cache.get('future_risk', cache_params)
+    #     if cached:
+    #         return cached
+        
+    #     # # Calculate risk from metrics
+    #     # metrics = CertificateModel.get_dashboard_metrics()    
+    #     result = CertificateModel.get_future_risk()        
+    #     cache.set('future_risk', cache_params, result)
+    #     return result
+
     @staticmethod
     def get_validity_trends(months_before: int = 4, months_after: int = 4, granularity: str = 'monthly') -> List[Dict]:
         """Get validity trends for line chart (cached 15 min)"""
@@ -371,99 +399,39 @@ class   AnalyticsController:
         cache.set('geographic', cache_params, result)
         return result
     
-    @staticmethod
-    def get_filter_options() -> Dict:
-        """Get unique filter options (cached 30 min)"""
-        cache_params = {}
-        
-        cached = cache.get('unique_filters', cache_params)
-        if cached:
-            return cached
-        
-        result = CertificateModel.get_unique_filters()
-        cache.set('unique_filters', cache_params, result)
-        return result
-    
-    @staticmethod
-    def get_future_risk() -> Dict:
-        """Get future risk prediction data (cached 15 min)"""
-        cache_params = {}
-        
-        cached = cache.get('future_risk', cache_params)
-        if cached:
-            return cached
-        
-        # Calculate risk from metrics
-        metrics = CertificateModel.get_dashboard_metrics()
-        expiring = metrics['expiringSoon']['count']
-        critical = metrics['criticalVulnerabilities']['count']
-        
-        # Calculate risk level
-        if critical > 5 or expiring > 20:
-            risk_level = 'High'
-            confidence = 92
-        elif critical > 2 or expiring > 10:
-            risk_level = 'Medium'
-            confidence = 78
-        else:
-            risk_level = 'Low'
-            confidence = 65
-        
-        result = {
-            'confidenceLevel': confidence,
-            'riskLevel': risk_level,
-            'projectedThreats': [
-                {
-                    'id': '1',
-                    'title': 'Weak Key Rotation',
-                    'description': f'Predicted in 3 months',
-                    'timeframe': '3 months',
-                    'icon': 'key'
-                },
-                {
-                    'id': '2',
-                    'title': 'Signature Expiry',
-                    'description': f'Watch for SHA-1 risk',
-                    'timeframe': '6 months',
-                    'icon': 'signature'
-                }
-            ]
-        }
-        
-        cache.set('future_risk', cache_params, result)
-        return result
+   
 
 
-class ValidityAnalysisController:
-    """Controller for validity analysis page data"""
+# class ValidityAnalysisController:
+#     """Controller for validity analysis page data"""
     
-    @staticmethod
-    def get_validity_stats() -> Dict:
-        """Get validity statistics (cached 5 min)"""
-        cache_params = {}
+#     @staticmethod
+#     def get_validity_stats() -> Dict:
+#         """Get validity statistics (cached 5 min)"""
+#         cache_params = {}
         
-        cached = cache.get('validity_stats', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('validity_stats', cache_params)
+#         if cached:
+#             return cached
         
-        # Use fast pre-computed method (OPTIMIZED)
-        result = CertificateModel.get_validity_stats_fast()
-        cache.set('validity_stats', cache_params, result)
-        return result
+#         # Use fast pre-computed method (OPTIMIZED)
+#         result = CertificateModel.get_validity_stats_fast()
+#         cache.set('validity_stats', cache_params, result)
+#         return result
     
-    @staticmethod
-    def get_validity_distribution() -> List[Dict]:
-        """Get validity period distribution (cached 5 min)"""
-        cache_params = {}
+#     @staticmethod
+#     def get_validity_distribution() -> List[Dict]:
+#         """Get validity period distribution (cached 5 min)"""
+#         cache_params = {}
         
-        cached = cache.get('validity_distribution', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('validity_distribution', cache_params)
+#         if cached:
+#             return cached
         
-        # Use fast pre-computed method (OPTIMIZED)
-        result = CertificateModel.get_validity_distribution_fast()
-        cache.set('validity_distribution', cache_params, result)
-        return result
+#         # Use fast pre-computed method (OPTIMIZED)
+#         result = CertificateModel.get_validity_distribution_fast()
+#         cache.set('validity_distribution', cache_params, result)
+#         return result
     
     # @staticmethod
     # def get_issuance_timeline() -> List[Dict]:
@@ -597,18 +565,18 @@ class TrendsController:
         cache.set('trends_stats', cache_params, result)
         return result
     
-    @staticmethod
-    def get_issuance_timeline(months: int = 12) -> List:
-        """Get certificate issuance timeline (cached 15 min) - USES FAST PRE-COMPUTED METHOD"""
-        cache_params = {'months': months}
+    # @staticmethod
+    # def get_issuance_timeline(months: int = 12) -> List:
+    #     """Get certificate issuance timeline (cached 15 min) - USES FAST PRE-COMPUTED METHOD"""
+    #     cache_params = {'months': months}
         
-        cached = cache.get('issuance_timeline', cache_params)
-        if cached:
-            return cached
+    #     cached = cache.get('issuance_timeline', cache_params)
+    #     if cached:
+    #         return cached
         
-        result = CertificateModel.get_issuance_timeline_fast(months)
-        cache.set('issuance_timeline', cache_params, result)
-        return result
+    #     result = CertificateModel.get_issuance_timeline_fast(months)
+    #     cache.set('issuance_timeline', cache_params, result)
+    #     return result
     
     @staticmethod
     def get_expiration_forecast(months: int = 12) -> List:
@@ -663,116 +631,116 @@ class TrendsController:
         return result
 
 
-class SharedKeyController:
-    """Controller for shared public key analytics"""
+# class SharedKeyController:
+#     """Controller for shared public key analytics"""
     
-    @staticmethod
-    def get_stats() -> Dict:
-        """⚡ OPTIMIZED: Get shared key stats from materialized view (cached 10 min)"""
-        cached = cache.get('shared_key_stats', {})
-        if cached:
-            return cached
+#     @staticmethod
+#     def get_stats() -> Dict:
+#         """⚡ OPTIMIZED: Get shared key stats from materialized view (cached 10 min)"""
+#         cached = cache.get('shared_key_stats', {})
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_key_stats_fast()  # ⚡ Changed to fast version
-        cache.set('shared_key_stats', {}, result, ttl=600)
-        return result
+#         result = CertificateModel.get_shared_key_stats_fast()  # ⚡ Changed to fast version
+#         cache.set('shared_key_stats', {}, result, ttl=600)
+#         return result
     
-    @staticmethod
-    def get_distribution() -> List:
-        """⚡ OPTIMIZED: Get shared key distribution from materialized view (cached 10 min)"""
-        cached = cache.get('shared_key_distribution', {})
-        if cached:
-            return cached
+#     @staticmethod
+#     def get_distribution() -> List:
+#         """⚡ OPTIMIZED: Get shared key distribution from materialized view (cached 10 min)"""
+#         cached = cache.get('shared_key_distribution', {})
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_key_distribution_fast()  # ⚡ Changed to fast version
-        cache.set('shared_key_distribution', {}, result, ttl=600)
-        return result
+#         result = CertificateModel.get_shared_key_distribution_fast()  # ⚡ Changed to fast version
+#         cache.set('shared_key_distribution', {}, result, ttl=600)
+#         return result
     
-    @staticmethod
-    def get_by_issuer(limit: int = 10) -> List:
-        """⚡ OPTIMIZED: Get shared key certs by issuer from materialized view (cached 10 min)"""
-        cache_params = {'limit': limit}
+#     @staticmethod
+#     def get_by_issuer(limit: int = 10) -> List:
+#         """⚡ OPTIMIZED: Get shared key certs by issuer from materialized view (cached 10 min)"""
+#         cache_params = {'limit': limit}
         
-        cached = cache.get('shared_key_issuer', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('shared_key_issuer', cache_params)
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_keys_by_issuer_fast(limit)  # ⚡ Changed to fast version
-        cache.set('shared_key_issuer', cache_params, result, ttl=600)
-        return result
+#         result = CertificateModel.get_shared_keys_by_issuer_fast(limit)  # ⚡ Changed to fast version
+#         cache.set('shared_key_issuer', cache_params, result, ttl=600)
+#         return result
     
-    @staticmethod
-    def get_timeline(months: int = 12) -> List:
-        """⚡ OPTIMIZED: Get shared key timeline from materialized view (cached 15 min)"""
-        cache_params = {'months': months}
+#     @staticmethod
+#     def get_timeline(months: int = 12) -> List:
+#         """⚡ OPTIMIZED: Get shared key timeline from materialized view (cached 15 min)"""
+#         cache_params = {'months': months}
         
-        cached = cache.get('shared_key_timeline', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('shared_key_timeline', cache_params)
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_key_timeline_fast(months)  # ⚡ Changed to fast version
-        cache.set('shared_key_timeline', cache_params, result, ttl=900)
-        return result
+#         result = CertificateModel.get_shared_key_timeline_fast(months)  # ⚡ Changed to fast version
+#         cache.set('shared_key_timeline', cache_params, result, ttl=900)
+#         return result
     
-    @staticmethod
-    def get_heatmap(limit: int = 10) -> List:
-        """⚡ OPTIMIZED: Get issuer x key-type heatmap from materialized view (cached 10 min)"""
-        cache_params = {'limit': limit}
+#     @staticmethod
+#     def get_heatmap(limit: int = 10) -> List:
+#         """⚡ OPTIMIZED: Get issuer x key-type heatmap from materialized view (cached 10 min)"""
+#         cache_params = {'limit': limit}
         
-        cached = cache.get('shared_key_heatmap', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('shared_key_heatmap', cache_params)
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_key_heatmap_fast(limit)  # ⚡ Changed to fast version
-        cache.set('shared_key_heatmap', cache_params, result, ttl=600)
-        return result
+#         result = CertificateModel.get_shared_key_heatmap_fast(limit)  # ⚡ Changed to fast version
+#         cache.set('shared_key_heatmap', cache_params, result, ttl=600)
+#         return result
     
-    @staticmethod
-    def get_list(page: int = 1, page_size: int = 10, sort_by: str = 'certificate_count', 
-                 sort_order: str = 'desc', risk_level: str = None, key_type: str = None,
-                 min_cert_count: int = None, issuer: str = None) -> Dict:
-        """Get paginated list of shared key groups for table view (cached 5 min)"""
-        cache_params = {
-            'page': page, 
-            'page_size': page_size,
-            'sort_by': sort_by,
-            'sort_order': sort_order,
-            'risk_level': risk_level,
-            'key_type': key_type,
-            'min_cert_count': min_cert_count,
-            'issuer': issuer
-        }
+#     @staticmethod
+#     def get_list(page: int = 1, page_size: int = 10, sort_by: str = 'certificate_count', 
+#                  sort_order: str = 'desc', risk_level: str = None, key_type: str = None,
+#                  min_cert_count: int = None, issuer: str = None) -> Dict:
+#         """Get paginated list of shared key groups for table view (cached 5 min)"""
+#         cache_params = {
+#             'page': page, 
+#             'page_size': page_size,
+#             'sort_by': sort_by,
+#             'sort_order': sort_order,
+#             'risk_level': risk_level,
+#             'key_type': key_type,
+#             'min_cert_count': min_cert_count,
+#             'issuer': issuer
+#         }
         
-        cached = cache.get('shared_keys_list', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('shared_keys_list', cache_params)
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_keys_list(
-            page=page,
-            page_size=page_size,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            risk_level=risk_level,
-            key_type=key_type,
-            min_cert_count=min_cert_count,
-            issuer=issuer
-        )
+#         result = CertificateModel.get_shared_keys_list(
+#             page=page,
+#             page_size=page_size,
+#             sort_by=sort_by,
+#             sort_order=sort_order,
+#             risk_level=risk_level,
+#             key_type=key_type,
+#             min_cert_count=min_cert_count,
+#             issuer=issuer
+#         )
         
-        cache.set('shared_keys_list', cache_params, result, ttl=300)  # Cache for 5 minutes
-        return result
+#         cache.set('shared_keys_list', cache_params, result, ttl=300)  # Cache for 5 minutes
+#         return result
     
-    @staticmethod
-    def get_detail(public_key_hash: str) -> Dict:
-        """Get full details for a specific shared key group (cached 10 min)"""
-        cache_params = {'public_key_hash': public_key_hash}
+#     @staticmethod
+#     def get_detail(public_key_hash: str) -> Dict:
+#         """Get full details for a specific shared key group (cached 10 min)"""
+#         cache_params = {'public_key_hash': public_key_hash}
         
-        cached = cache.get('shared_key_detail', cache_params)
-        if cached:
-            return cached
+#         cached = cache.get('shared_key_detail', cache_params)
+#         if cached:
+#             return cached
         
-        result = CertificateModel.get_shared_key_detail(public_key_hash)
-        cache.set('shared_key_detail', cache_params, result, ttl=600)
-        return result
+#         result = CertificateModel.get_shared_key_detail(public_key_hash)
+#         cache.set('shared_key_detail', cache_params, result, ttl=600)
+#         return result
 
 
 class CacheController:
