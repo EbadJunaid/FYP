@@ -2,19 +2,19 @@
 from django.urls import include, path
 from .views import (
     hello_mongo_view,
-    GlobalHealthView,
-    CertificateListView,
-    CertificateDetailView,
+    # GlobalHealthView,
+    # CertificateListView,
+    # CertificateDetailView,
     CertificateDownloadView,
     # UniqueFiltersView,
     # EncryptionStrengthView,
     # FutureRiskView,
-    ValidityTrendsView,
-    CAAnalyticsView,
+    # ValidityTrendsView,
+    # CAAnalyticsView,
     # CAStatsView,
     # IssuerValidationMatrixView,
     ValidationDistributionView as CAValidationDistributionView,
-    GeographicDistributionView,
+    # GeographicDistributionView,
     VulnerabilitiesView,
     # COMMENT FOR NOTIFICATION ICON - Import
     # NotificationView,
@@ -33,11 +33,11 @@ from .views import (
     # SANWildcardBreakdownView,
     # SANFilteredCertsView,
     # Trends Analytics page views
-    TrendsStatsView,
-    ExpirationForecastView,
-    AlgorithmAdoptionView,
-    ValidationLevelTrendsView,
-    KeySizeTimelineView,
+    # TrendsStatsView,
+    # ExpirationForecastView,
+    # AlgorithmAdoptionView,
+    # ValidationLevelTrendsView,
+    # KeySizeTimelineView,
     # Shared Keys Analytics page views
     # SharedKeyStatsView,
     # SharedKeyDistributionView,
@@ -55,22 +55,37 @@ from .views import (
 urlpatterns = [
     # Legacy endpoint
     path('hello/', hello_mongo_view, name='hello_mongo'),
-    
-    # Shared APIs in many pages...
-    path('dashboard/global-health/', GlobalHealthView.as_view(), name='global_health'),
-    path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
-    path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
-    path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
-    path('certificates/', CertificateListView.as_view(), name='certificate_list'),
-    path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
-    
-    # Certificate CRUD APIs
     path('certificates/download/', CertificateDownloadView.as_view(), name='certificate_download'),
     path('certificates/export/', CertificateExportView.as_view(), name='certificate_export'),
    
     path('validation-distribution/', CAValidationDistributionView.as_view(), name='ca_validation_distribution'),
     path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
    
+    path('databases/current/', get_current_database, name='current_database'),
+    path('databases/available/', get_available_databases, name='available_databases'),
+    path('databases/switch/', switch_database, name='switch_database'),
+   
+    
+    path('ca/', include('certificates.ca_analytics.urls')),  # Include CA analytics URLs from separate file
+    path('san/', include('certificates.san_analytics.urls')),  # Include SAN analytics URLs from separate file
+    path('signature-hash/', include('certificates.signature_hash.urls')),  # Include Signature & Hash analytics URLs from separate file
+    path('overview/', include('certificates.overview.urls')),  # Include Overview page URLs from separate file
+    path('validity/', include('certificates.validity_analysis.urls')),  # Include Validity Analysis URLs from separate file
+    path('shared-keys/',include('certificates.shared_keys.urls')), # Include Shared Keys Analytics URLs from separate file
+    path('trends/', include('certificates.trends.urls')), # Include Trends Analytics URLs from separate file    
+    path('shared/',include('certificates.shared_apis.urls')),
+  
+    # Shared APIs in many pages...
+
+
+    # path('dashboard/global-health/', GlobalHealthView.as_view(), name='global_health'),
+    # path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
+    # path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),
+    # path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
+    # path('certificates/', CertificateListView.as_view(), name='certificate_list'),
+    # path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
+    
+    # Certificate CRUD APIs
     
     
     # Overview page APIs.. it also use 4 more apis "api/validity-trends/","api/ca-analytics/","api/geographic-distribution","api/dashboard/global-health/" these are shared with other pages..
@@ -79,20 +94,10 @@ urlpatterns = [
     # path('unique-filters/', UniqueFiltersView.as_view(), name='unique_filters'),
    
     # Database Management APIs
-    path('databases/current/', get_current_database, name='current_database'),
-    path('databases/available/', get_available_databases, name='available_databases'),
-    path('databases/switch/', switch_database, name='switch_database'),
-   
     # CA analysis page apis.. it also use one move api "api/ca-analytics" but that is shared with other pages tooo
 
     # path('ca-stats/', CAStatsView.as_view(), name='ca_stats'),
     # path('issuer-validation-matrix/', IssuerValidationMatrixView.as_view(), name='issuer_validation_matrix'),
-    path('ca/', include('certificates.ca_analytics.urls')),  # Include CA analytics URLs from separate file
-    path('san/', include('certificates.san_analytics.urls')),  # Include SAN analytics URLs from separate file
-    path('signature-hash/', include('certificates.signature_hash.urls')),  # Include Signature & Hash analytics URLs from separate file
-    path('overview/', include('certificates.overview.urls')),  # Include Overview page URLs from separate file
-    path('validity/', include('certificates.validity_analysis.urls')),  # Include Validity Analysis URLs from separate file
-    path('shared-keys/',include('certificates.shared_keys.urls')), # Include Shared Keys Analytics URLs from separate file
     # Validity Analysis page APIs.. it also use 2 more apis "api/validity-trends/" and "api/dashboard/global-health/" they are shared with other pages too
 
     # path('validity-stats/', ValidityStatsView.as_view(), name='validity_stats'),
@@ -113,11 +118,11 @@ urlpatterns = [
     # path('san-filtered-certs/', SANFilteredCertsView.as_view(), name='san_filtered_certs'), #this is same as api/certificate/.. but with one extra thing.. san count..
     
     # Trends Analytics APIs
-    path('trends/stats/', TrendsStatsView.as_view(), name='trends_stats'),
-    path('trends/expiration-forecast/', ExpirationForecastView.as_view(), name='trends_expiration_forecast'),
-    path('trends/algorithm-adoption/', AlgorithmAdoptionView.as_view(), name='trends_algorithm_adoption'),
-    path('trends/validation-levels/', ValidationLevelTrendsView.as_view(), name='trends_validation_levels'),
-    path('trends/key-size-timeline/', KeySizeTimelineView.as_view(), name='trends_key_size_timeline'),
+    # path('trends/stats/', TrendsStatsView.as_view(), name='trends_stats'),
+    # path('trends/expiration-forecast/', ExpirationForecastView.as_view(), name='trends_expiration_forecast'),
+    # path('trends/algorithm-adoption/', AlgorithmAdoptionView.as_view(), name='trends_algorithm_adoption'),
+    # path('trends/validation-levels/', ValidationLevelTrendsView.as_view(), name='trends_validation_levels'),
+    # path('trends/key-size-timeline/', KeySizeTimelineView.as_view(), name='trends_key_size_timeline'),
     
     # # Shared Keys Analytics APIs
     # path('shared-keys/stats/', SharedKeyStatsView.as_view(), name='shared_key_stats'),

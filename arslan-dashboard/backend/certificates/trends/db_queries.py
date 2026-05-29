@@ -4,7 +4,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 from dateutil.relativedelta import relativedelta
-from .db import db, MongoDBClient
+from ..db import db, MongoDBClient
 
 
 class TrendsModel:

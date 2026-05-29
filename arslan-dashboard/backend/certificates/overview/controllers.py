@@ -1,8 +1,9 @@
 from typing import List, Dict, Optional
 from ..cache_service import cache
 from .db_queries import OverviewModels
-from ..controllers import GlobalFilterParams
-from ..models import CertificateModel
+#import from shared models...
+from ..shared_apis.controllers import GlobalFilterParams
+from ..shared_apis.db_queries import SharedModels
 
 
 class OverviewController:
@@ -19,7 +20,7 @@ class OverviewController:
         # Build base filter from global params
         base_filter = None
         if global_filters and global_filters.has_filters():
-            base_filter = CertificateModel.build_filter_query(
+            base_filter = SharedModels.build_filter_query(
                 start_date=global_filters.start_date,
                 end_date=global_filters.end_date,
                 countries=global_filters.countries,

@@ -301,7 +301,7 @@ class ApiClient {
 
     // Dashboard Metrics
     async getGlobalHealth(): Promise<DashboardMetrics> {
-        return this.fetch<DashboardMetrics>('/dashboard/global-health/');
+        return this.fetch<DashboardMetrics>('/shared/global-health/');
     }
 
     // Certificates
@@ -386,11 +386,11 @@ class ApiClient {
         if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
 
         const query = queryParams.toString();
-        return this.fetch<CertificateListResponse>(`/certificates/${query ? `?${query}` : ''}`);
+        return this.fetch<CertificateListResponse>(`/shared/certificates/${query ? `?${query}` : ''}`);
     }
 
     async getCertificateById(id: string): Promise<Certificate> {
-        return this.fetch<Certificate>(`/certificates/${id}/`);
+        return this.fetch<Certificate>(`/shared/certificates/${id}/`);
     }
 
     // Filters
@@ -420,7 +420,7 @@ class ApiClient {
     }
 
     async getValidityTrends(months: number = 12, granularity: 'monthly' | 'weekly' = 'monthly'): Promise<ValidityTrend[]> {
-        return this.fetch<ValidityTrend[]>(`/validity-trends/?months_before=${Math.floor(months / 2)}&months_after=${Math.floor(months / 2)}&granularity=${granularity}`);
+        return this.fetch<ValidityTrend[]>(`/shared/validity-trends/?months_before=${Math.floor(months / 2)}&months_after=${Math.floor(months / 2)}&granularity=${granularity}`);
     }
 
     async getCAAnalytics(limit: number = 10, params?: {
@@ -439,7 +439,7 @@ class ApiClient {
         if (params?.issuers?.length) queryParams.append('issuers', params.issuers.join(','));
         if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
         if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
-        return this.fetch<CALeaderboardEntry[]>(`/ca-analytics/?${queryParams.toString()}`);
+        return this.fetch<CALeaderboardEntry[]>(`/shared/ca-analytics/?${queryParams.toString()}`);
     }
 
     // CA Analytics - Stats for metric cards
@@ -474,7 +474,7 @@ class ApiClient {
         if (params?.issuers?.length) queryParams.append('issuers', params.issuers.join(','));
         if (params?.statuses?.length) queryParams.append('statuses', params.statuses.join(','));
         if (params?.validationLevels?.length) queryParams.append('validation_levels', params.validationLevels.join(','));
-        return this.fetch<GeographicEntry[]>(`/geographic-distribution/?${queryParams.toString()}`);
+        return this.fetch<GeographicEntry[]>(`/shared/geographic-distribution/?${queryParams.toString()}`);
     }
 
     async getFutureRisk(): Promise<FutureRisk> {

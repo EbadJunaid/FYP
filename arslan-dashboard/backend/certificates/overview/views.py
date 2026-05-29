@@ -4,7 +4,7 @@ from django.views import View
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
-from ..controllers import GlobalFilterParams
+from ..shared_apis.controllers import GlobalFilterParams
 
 
 def json_response(data, status=200):

@@ -42,27 +42,6 @@ TLD_TO_COUNTRY = {
 class SharedModels:
     collection = db['certificates']
 
-    @staticmethod
-    def get_current_time_iso() -> str:
-        """Get current time in ISO format for MongoDB queries"""
-        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    
-    @staticmethod
-    def get_tld_country(domain: str) -> str:
-        """Derive country from domain TLD"""
-        if not domain:
-            return 'Unknown'
-        parts = domain.lower().split('.')
-        if len(parts) >= 2:
-            # Check for two-part TLDs first (e.g., co.uk)
-            two_part_tld = '.'.join(parts[-2:])
-            if two_part_tld in TLD_TO_COUNTRY:
-                return TLD_TO_COUNTRY[two_part_tld]
-            # Check single TLD
-            tld = parts[-1]
-            return TLD_TO_COUNTRY.get(tld, 'Unknown')
-        return 'Unknown'
-
     @classmethod
     def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
         """
@@ -663,8 +642,32 @@ class SharedModels:
         ]
 
 
-    # below functions are used by get_all and get_by_id functions to compute status, grade, and vulnerabilities for each certificate record before sending to frontend.
+
     @staticmethod
+    def get_current_time_iso() -> str:
+        """Get current time in ISO format for MongoDB queries"""
+        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    
+    @staticmethod
+    def get_tld_country(domain: str) -> str:
+        """Derive country from domain TLD"""
+        if not domain:
+            return 'Unknown'
+        parts = domain.lower().split('.')
+        if len(parts) >= 2:
+            # Check for two-part TLDs first (e.g., co.uk)
+            two_part_tld = '.'.join(parts[-2:])
+            if two_part_tld in TLD_TO_COUNTRY:
+                return TLD_TO_COUNTRY[two_part_tld]
+            # Check single TLD
+            tld = parts[-1]
+            return TLD_TO_COUNTRY.get(tld, 'Unknown')
+        return 'Unknown'
+
+    # below functions are used by get_all and get_by_id functions to compute status, grade, and vulnerabilities for each certificate record before sending to frontend.
+
+    @staticmethod
+
     def get_status(validity_end: str) -> str:
         """Determine certificate status based on validity end date"""
         try:

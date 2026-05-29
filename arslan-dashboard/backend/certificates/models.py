@@ -7,10 +7,10 @@ from bson import ObjectId
 from .db import db, MongoDBClient  # Don't import results_db directly - use MongoDBClient.get_results_db() instead
 # from .shared_keys_models import SharedKeyModel
 # from .san_models import SANModel
-from .trends_models import TrendsModel
+# from .trends_models import TrendsModel
 # from .ca_models import CAModel
 # from .signature_hash_models import SignatureHashModel
-from .shared_models import SharedModels
+# from .shared_models import SharedModels
 # from .validity_models import ValidityModels
 # from .overview_models import OverviewModels
 
@@ -210,126 +210,126 @@ class CertificateModel:
     # ===========================
     # Slow and fast Shared METHODS  (using on-the-fly aggregation)  
     # ===========================
-    @staticmethod
-    def get_current_time_iso() -> str:
-        """Get current time in ISO format for MongoDB queries"""
-        return SharedModels.get_current_time_iso()
+    # @staticmethod
+    # def get_current_time_iso() -> str:
+    #     """Get current time in ISO format for MongoDB queries"""
+    #     return SharedModels.get_current_time_iso()
     
-    @staticmethod
-    def get_tld_country(domain: str) -> str:
-        return SharedModels.get_tld_country(domain=domain)
+    # @staticmethod
+    # def get_tld_country(domain: str) -> str:
+    #     return SharedModels.get_tld_country(domain=domain)
     
-    @classmethod
-    def build_filter_query(
-        cls,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        countries: Optional[List[str]] = None,
-        issuers: Optional[List[str]] = None,
-        grades: Optional[List[str]] = None,
-        statuses: Optional[List[str]] = None,
-        validation_levels: Optional[List[str]] = None
-    ) -> Dict:
-        return SharedModels.build_filter_query(
-            start_date=start_date,
-            end_date=end_date,
-            countries=countries,
-            issuers=issuers,
-            grades=grades,
-            statuses=statuses,
-            validation_levels=validation_levels
-        )
+    # @classmethod
+    # def build_filter_query(
+    #     cls,
+    #     start_date: Optional[str] = None,
+    #     end_date: Optional[str] = None,
+    #     countries: Optional[List[str]] = None,
+    #     issuers: Optional[List[str]] = None,
+    #     grades: Optional[List[str]] = None,
+    #     statuses: Optional[List[str]] = None,
+    #     validation_levels: Optional[List[str]] = None
+    # ) -> Dict:
+    #     return SharedModels.build_filter_query(
+    #         start_date=start_date,
+    #         end_date=end_date,
+    #         countries=countries,
+    #         issuers=issuers,
+    #         grades=grades,
+    #         statuses=statuses,
+    #         validation_levels=validation_levels
+    #     )
 
-    @classmethod
-    def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        return SharedModels.get_ca_distribution(limit=limit, base_filter=base_filter)
+    # @classmethod
+    # def get_ca_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+    #     return SharedModels.get_ca_distribution(limit=limit, base_filter=base_filter)
 
-    @classmethod
-    def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        return SharedModels.get_ca_distribution_fast(limit=limit, base_filter=base_filter)
+    # @classmethod
+    # def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+    #     return SharedModels.get_ca_distribution_fast(limit=limit, base_filter=base_filter)
 
-    @classmethod
-    def get_validity_trends(cls, months_before: int = 4, months_after: int = 4, granularity: str = 'monthly') -> List[Dict]:
-        return SharedModels.get_validity_trends(months_before, months_after, granularity)
+    # @classmethod
+    # def get_validity_trends(cls, months_before: int = 4, months_after: int = 4, granularity: str = 'monthly') -> List[Dict]:
+    #     return SharedModels.get_validity_trends(months_before, months_after, granularity)
    
-    @classmethod
-    def get_dashboard_metrics(cls) -> Dict:
-        return SharedModels.get_dashboard_metrics()
+    # @classmethod
+    # def get_dashboard_metrics(cls) -> Dict:
+    #     return SharedModels.get_dashboard_metrics()
        
-    @classmethod
-    def get_geographic_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        return SharedModels.get_geographic_distribution_fast(limit=limit, base_filter=base_filter)
+    # @classmethod
+    # def get_geographic_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+    #     return SharedModels.get_geographic_distribution_fast(limit=limit, base_filter=base_filter)
         
-    @classmethod
-    def get_geographic_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        return SharedModels.get_geographic_distribution(limit=limit, base_filter=base_filter)
+    # @classmethod
+    # def get_geographic_distribution(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+    #     return SharedModels.get_geographic_distribution(limit=limit, base_filter=base_filter)
     
     
-    @classmethod
-    def get_all(cls, page: int = 1, page_size: int = 10, 
-                status: Optional[str] = None, 
-                country: Optional[str] = None,
-                issuer: Optional[str] = None,
-                search: Optional[str] = None,
-                encryption_type: Optional[str] = None,
-                has_vulnerabilities: Optional[bool] = None,
-                expiring_month: Optional[int] = None,
-                expiring_year: Optional[int] = None,
-                expiring_days: Optional[int] = None,
-                validity_bucket: Optional[str] = None,
-                issued_month: Optional[int] = None,
-                issued_year: Optional[int] = None,
-                issued_within_days: Optional[int] = None,
-                # New Signature/Hash page filters
-                signature_algorithm: Optional[str] = None,
-                weak_hash: Optional[bool] = None,
-                self_signed: Optional[bool] = None,
-                key_size: Optional[int] = None,
-                hash_type: Optional[str] = None,
-                # SAN Analytics page filters
-                san_tld: Optional[str] = None,
-                san_type: Optional[str] = None,
-                san_count_min: Optional[int] = None,
-                san_count_max: Optional[int] = None,
-                expiring_start: Optional[str] = None,
-                expiring_end: Optional[str] = None,
-                # Shared Keys page filter
-                shared_key: Optional[bool] = None,
-                base_filter: Optional[Dict] = None) -> Dict:
-        return SharedModels.get_all(
-            page=page,
-            page_size=page_size,
-            status=status,
-            country=country,
-            issuer=issuer,
-            search=search,
-            encryption_type=encryption_type,
-            has_vulnerabilities=has_vulnerabilities,
-            expiring_month=expiring_month,
-            expiring_year=expiring_year,
-            expiring_days=expiring_days,
-            validity_bucket=validity_bucket,
-            issued_month=issued_month,
-            issued_year=issued_year,
-            issued_within_days=issued_within_days,
-            signature_algorithm=signature_algorithm,
-            weak_hash=weak_hash,
-            self_signed=self_signed,
-            key_size=key_size,
-            hash_type=hash_type,
-            san_tld=san_tld,
-            san_type=san_type,
-            san_count_min=san_count_min,
-            san_count_max=san_count_max,
-            expiring_start=expiring_start,
-            expiring_end=expiring_end,
-            shared_key=shared_key,
-            base_filter=base_filter
-        )
+    # @classmethod
+    # def get_all(cls, page: int = 1, page_size: int = 10, 
+    #             status: Optional[str] = None, 
+    #             country: Optional[str] = None,
+    #             issuer: Optional[str] = None,
+    #             search: Optional[str] = None,
+    #             encryption_type: Optional[str] = None,
+    #             has_vulnerabilities: Optional[bool] = None,
+    #             expiring_month: Optional[int] = None,
+    #             expiring_year: Optional[int] = None,
+    #             expiring_days: Optional[int] = None,
+    #             validity_bucket: Optional[str] = None,
+    #             issued_month: Optional[int] = None,
+    #             issued_year: Optional[int] = None,
+    #             issued_within_days: Optional[int] = None,
+    #             # New Signature/Hash page filters
+    #             signature_algorithm: Optional[str] = None,
+    #             weak_hash: Optional[bool] = None,
+    #             self_signed: Optional[bool] = None,
+    #             key_size: Optional[int] = None,
+    #             hash_type: Optional[str] = None,
+    #             # SAN Analytics page filters
+    #             san_tld: Optional[str] = None,
+    #             san_type: Optional[str] = None,
+    #             san_count_min: Optional[int] = None,
+    #             san_count_max: Optional[int] = None,
+    #             expiring_start: Optional[str] = None,
+    #             expiring_end: Optional[str] = None,
+    #             # Shared Keys page filter
+    #             shared_key: Optional[bool] = None,
+    #             base_filter: Optional[Dict] = None) -> Dict:
+    #     return SharedModels.get_all(
+    #         page=page,
+    #         page_size=page_size,
+    #         status=status,
+    #         country=country,
+    #         issuer=issuer,
+    #         search=search,
+    #         encryption_type=encryption_type,
+    #         has_vulnerabilities=has_vulnerabilities,
+    #         expiring_month=expiring_month,
+    #         expiring_year=expiring_year,
+    #         expiring_days=expiring_days,
+    #         validity_bucket=validity_bucket,
+    #         issued_month=issued_month,
+    #         issued_year=issued_year,
+    #         issued_within_days=issued_within_days,
+    #         signature_algorithm=signature_algorithm,
+    #         weak_hash=weak_hash,
+    #         self_signed=self_signed,
+    #         key_size=key_size,
+    #         hash_type=hash_type,
+    #         san_tld=san_tld,
+    #         san_type=san_type,
+    #         san_count_min=san_count_min,
+    #         san_count_max=san_count_max,
+    #         expiring_start=expiring_start,
+    #         expiring_end=expiring_end,
+    #         shared_key=shared_key,
+    #         base_filter=base_filter
+    #     )
 
-    @classmethod
-    def get_by_id(cls, cert_id: str) -> Optional[Dict]:
-        return SharedModels.get_by_id(cert_id=cert_id)
+    # @classmethod
+    # def get_by_id(cls, cert_id: str) -> Optional[Dict]:
+    #     return SharedModels.get_by_id(cert_id=cert_id)
     
     # ==================== Overview page METHODS ====================
 
@@ -591,25 +591,25 @@ class CertificateModel:
 
 # ========== TRENDS ANALYTICS METHODS ==========
 
-    @classmethod
-    def get_trends_stats(cls) -> Dict[str, Any]:
-        return TrendsModel.get_trends_stats()
+    # @classmethod
+    # def get_trends_stats(cls) -> Dict[str, Any]:
+    #     return TrendsModel.get_trends_stats()
 
-    @classmethod
-    def get_key_size_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
-        return TrendsModel.get_key_size_timeline(months)
+    # @classmethod
+    # def get_key_size_timeline(cls, months: int = 12) -> List[Dict[str, Any]]:
+    #     return TrendsModel.get_key_size_timeline(months)
 
-    @classmethod
-    def get_expiration_forecast(cls, months: int = 12) -> List[Dict[str, Any]]:
-        return TrendsModel.get_expiration_forecast(months)
+    # @classmethod
+    # def get_expiration_forecast(cls, months: int = 12) -> List[Dict[str, Any]]:
+    #     return TrendsModel.get_expiration_forecast(months)
 
-    @classmethod
-    def get_algorithm_adoption(cls, months: int = 12) -> List[Dict[str, Any]]:
-        return TrendsModel.get_algorithm_adoption(months)
+    # @classmethod
+    # def get_algorithm_adoption(cls, months: int = 12) -> List[Dict[str, Any]]:
+    #     return TrendsModel.get_algorithm_adoption(months)
 
-    @classmethod
-    def get_validation_level_trends(cls, months: int = 12) -> List[Dict[str, Any]]:
-        return TrendsModel.get_validation_level_trends(months)
+    # @classmethod
+    # def get_validation_level_trends(cls, months: int = 12) -> List[Dict[str, Any]]:
+    #     return TrendsModel.get_validation_level_trends(months)
 
     # ==================== SHARED KEYS ANALYTICS ====================
     # 

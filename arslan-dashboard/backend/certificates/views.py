@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 
 from .controllers import (
-    DashboardController,
+    # DashboardController,
     CertificateController,
     AnalyticsController,
     # COMMENT FOR NOTIFICATION ICON - Import
@@ -22,321 +22,6 @@ def json_response(data, status=200):
     response = JsonResponse(data, safe=False, status=status)
     return response
 
-
-@method_decorator(csrf_exempt, name='dispatch')
-class GlobalHealthView(View):
-    """
-    GET /api/dashboard/global-health
-    Returns overall health metrics for the dashboard
-    """
-    def get(self, request):
-        try:
-            metrics = DashboardController.get_global_health()
-            return json_response(metrics)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class CertificateListView(View):
-    """
-    GET /api/certificates
-    Returns paginated list of certificates with optional filters
-    Query params: page, page_size, status, country, issuer, search, encryption_type, 
-                  has_vulnerabilities, expiring_month, expiring_year, expiring_days, validity_bucket,
-                  start_date, end_date, countries, issuers, statuses, validation_levels
-    """
-    def get(self, request):
-        try:
-            from .controllers import GlobalFilterParams
-            
-            # Get query parameters
-            page = int(request.GET.get('page', 1))
-            page_size = int(request.GET.get('page_size', 10))
-            status = request.GET.get('status')
-            country = request.GET.get('country')
-            issuer = request.GET.get('issuer')
-            search = request.GET.get('search')
-            encryption_type = request.GET.get('encryption_type')
-            has_vulnerabilities = request.GET.get('has_vulnerabilities', '').lower() == 'true'
-            
-            # Expiring month/year filter (for validity trends clicks)
-            expiring_month_str = request.GET.get('expiring_month')
-            expiring_year_str = request.GET.get('expiring_year')
-            expiring_month = int(expiring_month_str) if expiring_month_str else None
-            expiring_year = int(expiring_year_str) if expiring_year_str else None
-            
-            # Expiring days filter (for 30/60/90 day specific filtering)
-            expiring_days_str = request.GET.get('expiring_days')
-            expiring_days = int(expiring_days_str) if expiring_days_str else None
-            
-            # Expiring date range filter (for weekly trends clicks)
-            expiring_start = request.GET.get('expiring_start')
-            expiring_end = request.GET.get('expiring_end')
-            
-            # Validity bucket filter (for distribution card clicks)
-            validity_bucket = request.GET.get('validity_bucket')  # e.g., "0-90", "90-365", "365-730", "730+"
-            
-            # Global filter params - date range
-            start_date = request.GET.get('start_date')
-            end_date = request.GET.get('end_date')
-            
-            # Global filter params - multi-select arrays (comma-separated)
-            countries_str = request.GET.get('countries', '')
-            issuers_str = request.GET.get('issuers', '')
-            statuses_str = request.GET.get('statuses', '')
-            validation_levels_str = request.GET.get('validation_levels', '')
-            
-            # Issued month/year filter (for issuance timeline clicks)
-            issued_month_str = request.GET.get('issued_month')
-            issued_year_str = request.GET.get('issued_year')
-            issued_month = int(issued_month_str) if issued_month_str else None
-            issued_year = int(issued_year_str) if issued_year_str else None
-            
-            # Issued within days filter (for "Issued (30d)" card click)
-            issued_within_days_str = request.GET.get('issued_within_days')
-            issued_within_days = int(issued_within_days_str) if issued_within_days_str else None
-            
-            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
-            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
-            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
-            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
-            
-            # Build global filters if any filter params provided
-            global_filters = None
-            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
-                global_filters = GlobalFilterParams(
-                    start_date=start_date,
-                    end_date=end_date,
-                    countries=countries,
-                    issuers=issuers_list,
-                    statuses=statuses_list,
-                    validation_levels=validation_levels
-                )
-            
-            # Signature/Hash page specific filters
-            signature_algorithm = request.GET.get('signature_algorithm')
-            weak_hash = request.GET.get('weak_hash', '').lower() == 'true'
-            self_signed_filter = request.GET.get('self_signed', '').lower() == 'true'
-            key_size_str = request.GET.get('key_size')
-            key_size = int(key_size_str) if key_size_str else None
-            hash_type = request.GET.get('hash_type')
-            
-            # SAN Analytics page specific filters
-            san_tld = request.GET.get('san_tld')  # e.g., ".com", ".pk"
-            san_type = request.GET.get('san_type')  # "wildcard" or "standard"
-            san_count_min_str = request.GET.get('san_count_min')  # For SAN Count Distribution
-            san_count_max_str = request.GET.get('san_count_max')
-            san_count_min = int(san_count_min_str) if san_count_min_str else None
-            san_count_max = int(san_count_max_str) if san_count_max_str else None
-            
-            # Shared Keys page specific filter
-            shared_key = request.GET.get('shared_key', '').lower() == 'true'
-            
-            result = CertificateController.get_certificates(
-                page=page,
-                page_size=page_size,
-                status=status,
-                country=country,
-                issuer=issuer,
-                search=search,
-                encryption_type=encryption_type,
-                has_vulnerabilities=has_vulnerabilities if has_vulnerabilities else None,
-                expiring_month=expiring_month,
-                expiring_year=expiring_year,
-                expiring_days=expiring_days,
-                validity_bucket=validity_bucket,
-                issued_month=issued_month,
-                issued_year=issued_year,
-                issued_within_days=issued_within_days,
-                signature_algorithm=signature_algorithm,
-                weak_hash=weak_hash if weak_hash else None,
-                self_signed=self_signed_filter if self_signed_filter else None,
-                key_size=key_size,
-                hash_type=hash_type,
-                san_tld=san_tld,
-                san_type=san_type,
-                san_count_min=san_count_min,
-                san_count_max=san_count_max,
-                expiring_start=expiring_start,
-                expiring_end=expiring_end,
-                shared_key=shared_key if shared_key else None,
-                global_filters=global_filters
-            )
-            return json_response(result)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class CertificateDetailView(View):
-    """
-    GET /api/certificates/{id}
-    Returns full details of a single certificate
-    """
-    def get(self, request, cert_id):
-        try:
-            certificate = CertificateController.get_certificate_by_id(cert_id)
-            if certificate:
-                return json_response(certificate)
-            return json_response({'error': 'Certificate not found'}, status=404)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-# overview views.
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class EncryptionStrengthView(View):
-#     """
-#     GET /api/encryption-strength
-#     Returns encryption type distribution for charts
-#     Query params: start_date, end_date, countries, issuers, statuses, validation_levels
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import GlobalFilterParams
-            
-#             # Parse global filter params - date range
-#             start_date = request.GET.get('start_date')
-#             end_date = request.GET.get('end_date')
-            
-#             # Parse multi-select arrays (comma-separated)
-#             countries_str = request.GET.get('countries', '')
-#             issuers_str = request.GET.get('issuers', '')
-#             statuses_str = request.GET.get('statuses', '')
-#             validation_levels_str = request.GET.get('validation_levels', '')
-            
-#             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
-#             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
-#             statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
-#             validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
-            
-#             global_filters = None
-#             if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
-#                 global_filters = GlobalFilterParams(
-#                     start_date=start_date,
-#                     end_date=end_date,
-#                     countries=countries,
-#                     issuers=issuers_list,
-#                     statuses=statuses_list,
-#                     validation_levels=validation_levels
-#                 )
-            
-#             data = AnalyticsController.get_encryption_distribution(global_filters=global_filters)
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-#@method_decorator(csrf_exempt, name='dispatch')
-# class UniqueFiltersView(View):
-#     """
-#     GET /api/unique-filters
-#     Returns unique values for filter dropdowns (issuers, countries, statuses, grades)
-#     """
-#     def get(self, request):
-#         try:
-#             filters = AnalyticsController.get_filter_options()
-#             return json_response(filters)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class FutureRiskView(View):
-#     """
-#     GET /api/future-risk
-#     Returns predicted risk data
-#     """
-#     def get(self, request):
-#         try:
-#             data = AnalyticsController.get_future_risk()
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class ValidityTrendsView(View):
-    """
-    GET /api/validity-trends
-    Returns certificate expiration trends by month or week for line chart
-    Query params: months_before (default 4), months_after (default 4), granularity ('monthly' or 'weekly')
-    """
-    def get(self, request):
-        try:
-            months_before = int(request.GET.get('months_before', 4))
-            months_after = int(request.GET.get('months_after', 4))
-            granularity = request.GET.get('granularity', 'monthly')
-            data = AnalyticsController.get_validity_trends(
-                months_before=months_before,
-                months_after=months_after,
-                granularity=granularity
-            )
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class CAAnalyticsView(View):
-    """
-    GET /api/ca-analytics
-    Returns Certificate Authority distribution for leaderboard
-    Query params: limit, start_date, end_date, countries, issuers, statuses, validation_levels
-    """
-    def get(self, request):
-        try:
-            from .controllers import GlobalFilterParams
-            
-            limit = int(request.GET.get('limit', 10))
-            
-            # Parse global filter params - date range
-            start_date = request.GET.get('start_date')
-            end_date = request.GET.get('end_date')
-            
-            # Parse multi-select arrays (comma-separated)
-            countries_str = request.GET.get('countries', '')
-            issuers_str = request.GET.get('issuers', '')
-            statuses_str = request.GET.get('statuses', '')
-            validation_levels_str = request.GET.get('validation_levels', '')
-            
-            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
-            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
-            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
-            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
-            
-            global_filters = None
-            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
-                global_filters = GlobalFilterParams(
-                    start_date=start_date,
-                    end_date=end_date,
-                    countries=countries,
-                    issuers=issuers_list,
-                    statuses=statuses_list,
-                    validation_levels=validation_levels
-                )
-            
-            data = AnalyticsController.get_ca_leaderboard(limit=limit, global_filters=global_filters)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class CAStatsView(View):
-#     """
-#     GET /api/ca-stats
-#     Returns CA statistics for metric cards (total CAs, top CA, self-signed, countries)
-#     """
-#     def get(self, request):
-#         try:
-#             data = AnalyticsController.get_ca_stats()
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class ValidationDistributionView(View):
     """
@@ -349,264 +34,6 @@ class ValidationDistributionView(View):
             return json_response(data)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class IssuerValidationMatrixView(View):
-#     """
-#     GET /api/issuer-validation-matrix
-#     Returns matrix of issuer × validation level combinations
-#     Query params: limit
-#     """
-#     def get(self, request):
-#         try:
-#             limit = int(request.GET.get('limit', 10))
-#             data = AnalyticsController.get_issuer_validation_matrix(limit=limit)
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# ==================== SAN ANALYTICS VIEWS ====================
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class SANStatsView(View):
-#     """
-#     GET /api/san-stats
-#     Returns SAN statistics for metric cards
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import SANAnalyticsController
-#             data = SANAnalyticsController.get_san_stats()
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class SANDistributionView(View):
-#     """
-#     GET /api/san-distribution
-#     Returns SAN count distribution (histogram buckets)
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import SANAnalyticsController
-#             data = SANAnalyticsController.get_san_distribution()
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class SANTLDBreakdownView(View):
-#     """
-#     GET /api/san-tld-breakdown
-#     Returns top TLDs from SAN entries
-#     Query params: limit
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import SANAnalyticsController
-#             limit = int(request.GET.get('limit', 15))
-#             data = SANAnalyticsController.get_san_tld_breakdown(limit=limit)
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class SANWildcardBreakdownView(View):
-#     """
-#     GET /api/san-wildcard-breakdown
-#     Returns wildcard vs standard SAN breakdown
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import SANAnalyticsController
-#             data = SANAnalyticsController.get_san_wildcard_breakdown()
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class SANFilteredCertsView(View):
-#     """
-#     GET /api/san-filtered-certs?filter_type=wildcard&page=1&page_size=50
-#     GET /api/san-filtered-certs?filter_type=san-count&filter_value=50+&page=1
-#     GET /api/san-filtered-certs?filter_type=tld&filter_value=.com&page=1
-    
-#     Returns filtered certificates from pre-computed collections (fast!)
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import SANAnalyticsController
-            
-#             filter_type = request.GET.get('filter_type', 'wildcard')
-#             filter_value = request.GET.get('filter_value', None)
-#             page = int(request.GET.get('page', 1))
-#             page_size = int(request.GET.get('page_size', 50))
-            
-#             data = SANAnalyticsController.get_san_filtered_certs(
-#                 filter_type=filter_type,
-#                 filter_value=filter_value,
-#                 page=page,
-#                 page_size=page_size
-#             )
-#             return json_response(data)
-#         except ValueError as e:
-#             return json_response({'error': str(e)}, status=400)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# ========== TRENDS ANALYTICS VIEWS ==========
-
-@method_decorator(csrf_exempt, name='dispatch')
-class TrendsStatsView(View):
-    """
-    GET /api/trends/stats
-    Returns trend statistics for metric cards
-    """
-    def get(self, request):
-        try:
-            from .controllers import TrendsController
-            data = TrendsController.get_trends_stats()
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class IssuanceTimelineView(View):
-#     """
-#     GET /api/trends/issuance-timeline
-#     Returns certificate issuance count by month
-#     Query params: months (default 12)
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import TrendsController
-#             months = int(request.GET.get('months', 12))
-#             data = TrendsController.get_issuance_timeline(months=months)
-#             return json_response(data)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class ExpirationForecastView(View):
-    """
-    GET /api/trends/expiration-forecast
-    Returns certificate expiration count by month
-    Query params: months (default 12)
-    """
-    def get(self, request):
-        try:
-            from .controllers import TrendsController
-            months = int(request.GET.get('months', 12))
-            data = TrendsController.get_expiration_forecast(months=months)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class AlgorithmAdoptionView(View):
-    """
-    GET /api/trends/algorithm-adoption
-    Returns algorithm distribution over time
-    Query params: months (default 12)
-    """
-    def get(self, request):
-        try:
-            from .controllers import TrendsController
-            months = int(request.GET.get('months', 12))
-            data = TrendsController.get_algorithm_adoption(months=months)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class ValidationLevelTrendsView(View):
-    """
-    GET /api/trends/validation-levels
-    Returns validation level (DV/OV/EV) distribution over time
-    Query params: months (default 12)
-    """
-    def get(self, request):
-        try:
-            from .controllers import TrendsController
-            months = int(request.GET.get('months', 12))
-            data = TrendsController.get_validation_level_trends(months=months)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class KeySizeTimelineView(View):
-    """
-    GET /api/trends/key-size-timeline
-    Returns key size distribution over time for animated visualization
-    Query params: months (default 12)
-    """
-    def get(self, request):
-        try:
-            from .controllers import TrendsController
-            months = int(request.GET.get('months', 12))
-            data = TrendsController.get_key_size_timeline(months=months)
-            return json_response(data)
-        except Exception as e:
-            return json_response({'error': str(e)}, status=500)
-
-class GeographicDistributionView(View):
-    """
-    GET /api/geographic-distribution
-    Returns certificate distribution by country
-    Query params: limit, start_date, end_date, countries, issuers, statuses, validation_levels
-    """
-    def get(self, request):
-        try:
-            from .controllers import GlobalFilterParams
-            
-            limit = int(request.GET.get('limit', 10))
-            
-            # Parse global filter params - date range
-            start_date = request.GET.get('start_date')
-            end_date = request.GET.get('end_date')
-            
-            # Parse multi-select arrays (comma-separated)
-            countries_str = request.GET.get('countries', '')
-            issuers_str = request.GET.get('issuers', '')
-            statuses_str = request.GET.get('statuses', '')
-            validation_levels_str = request.GET.get('validation_levels', '')
-            
-            countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
-            issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
-            statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
-            validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
-            
-            global_filters = None
-            if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
-                global_filters = GlobalFilterParams(
-                    start_date=start_date,
-                    end_date=end_date,
-                    countries=countries,
-                    issuers=issuers_list,
-                    statuses=statuses_list,
-                    validation_levels=validation_levels
-                )
-            
-            data = AnalyticsController.get_geographic_distribution(limit=limit, global_filters=global_filters)
-            return json_response(data)
-        except Exception as e:
-            # print(f"Error in GeographicDistributionView: {e}")
-            return json_response({'error': str(e)}, status=500)
-
 
 
 
@@ -1073,53 +500,6 @@ class CertificateDownloadView(View):
         return output.getvalue()
 
 
-# @method_decorator(csrf_exempt, name='dispatch')
-# class ValidityStatsView(View):
-#     """
-#     GET /api/validity-stats
-#     Returns validity statistics: avg duration, expiring counts, compliance rate
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import ValidityAnalysisController
-#             result = ValidityAnalysisController.get_validity_stats()
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class ValidityDistributionView(View):
-#     """
-#     GET /api/validity-distribution
-#     Returns validity period distribution by buckets
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import ValidityAnalysisController
-#             result = ValidityAnalysisController.get_validity_distribution()
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class IssuanceTimelineView(View):
-#     """
-#     GET /api/issuance-timeline
-#     Returns certificate issuance and expiration timeline by month
-#     """
-#     def get(self, request):
-#         try:
-#             from .controllers import ValidityAnalysisController
-#             result = ValidityAnalysisController.get_issuance_timeline()
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# ========== DATABASE MANAGEMENT VIEWS ==========
-
 @csrf_exempt
 def get_current_database(request):
     """GET /api/databases/current/ - Get current database configuration"""
@@ -1174,26 +554,7 @@ def switch_database(request):
         return json_response({'error': str(e)}, status=500)
 
 
-# ============================================================
-# COMMENT FOR NOTIFICATION ICON - Backend View
-# ============================================================
-# @method_decorator(csrf_exempt, name='dispatch')
-# class NotificationView(View):
-#     """
-#     GET /api/notifications
-#     Returns real-time notifications based on certificate status
-#     (expiring soon, vulnerabilities, weak encryption, etc.)
-#     """
-#     def get(self, request):
-#         try:
-#             result = NotificationController.get_notifications()
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-pass
 
-
-# Keep legacy view for backwards compatibility
 def hello_mongo_view(request):
     try:
         from .db import db
@@ -1207,106 +568,9 @@ def hello_mongo_view(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
 
 
-# ----- New views for Signature and Hashes page -----
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class SignatureStatsView(View):
-#     """
-#     GET /api/signature-stats
-#     Returns comprehensive signature and hash statistics.
-#     Includes algorithm distribution, hash distribution, key sizes, compliance rate, strength score.
-#     Cached for 5 minutes.
-#     """
-#     def get(self, request):
-#         try:
-#             from .models import CertificateModel
-#             from .cache_service import cache
-            
-#             # Check cache first
-#             cache_key = 'signature_stats'
-#             cached = cache.get(cache_key, {})
-#             if cached:
-#                 return json_response(cached)
-            
-#             # Get fresh data from pre-computed results (OPTIMIZED)
-#             result = CertificateModel.get_signature_stats_fast()
-            
-#             # Cache for 5 minutes
-#             cache.set(cache_key, {}, result, ttl=300)
-            
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class HashTrendsView(View):
-#     """
-#     GET /api/hash-trends
-#     Returns hash algorithm adoption trends over time.
-#     Query params: months (default 36), granularity ('quarterly' or 'yearly')
-#     Cached for 10 minutes.
-#     """
-#     def get(self, request):
-#         try:
-#             from .models import CertificateModel
-#             from .cache_service import cache
-            
-#             months = int(request.GET.get('months', 36))
-#             granularity = request.GET.get('granularity', 'quarterly')
-            
-#             # Validate granularity
-#             if granularity not in ['quarterly', 'yearly']:
-#                 granularity = 'quarterly'
-            
-#             # Check cache first
-#             cache_params = {'months': months, 'granularity': granularity}
-#             cached = cache.get('hash_trends', cache_params)
-#             if cached:
-#                 return json_response(cached)
-            
-#             # Get fresh data from pre-computed results (OPTIMIZED)
-#             result = CertificateModel.get_hash_trends_fast(months=months, granularity=granularity)
-            
-#             # Cache for 10 minutes
-#             cache.set('hash_trends', cache_params, result, ttl=600)
-            
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
-
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class IssuerAlgorithmMatrixView(View):
-#     """
-#     GET /api/issuer-algorithm-matrix
-#     Returns matrix of issuer x algorithm combinations with counts.
-#     Cached for 10 minutes.
-#     """
-#     def get(self, request):
-#         try:
-#             from .models import CertificateModel
-#             from .cache_service import cache
-            
-#             limit = int(request.GET.get('limit', 10))
-            
-#             # Check cache first
-#             cache_params = {'limit': limit}
-#             cached = cache.get('issuer_matrix', cache_params)
-#             if cached:
-#                 return json_response(cached)
-            
-#             # Get fresh data from pre-computed results (OPTIMIZED)
-#             result = CertificateModel.get_issuer_algorithm_matrix_fast(limit=limit)
-            
-#             # Cache for 10 minutes
-#             cache.set('issuer_matrix', cache_params, result, ttl=600)
-            
-#             return json_response(result)
-#         except Exception as e:
-#             return json_response({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1422,6 +686,753 @@ class CertificateExportView(View):
             return response
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class GlobalHealthView(View):
+#     """
+#     GET /api/dashboard/global-health
+#     Returns overall health metrics for the dashboard
+#     """
+#     def get(self, request):
+#         try:
+#             metrics = DashboardController.get_global_health()
+#             return json_response(metrics)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class CertificateListView(View):
+#     """
+#     GET /api/certificates
+#     Returns paginated list of certificates with optional filters
+#     Query params: page, page_size, status, country, issuer, search, encryption_type, 
+#                   has_vulnerabilities, expiring_month, expiring_year, expiring_days, validity_bucket,
+#                   start_date, end_date, countries, issuers, statuses, validation_levels
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import GlobalFilterParams
+            
+#             # Get query parameters
+#             page = int(request.GET.get('page', 1))
+#             page_size = int(request.GET.get('page_size', 10))
+#             status = request.GET.get('status')
+#             country = request.GET.get('country')
+#             issuer = request.GET.get('issuer')
+#             search = request.GET.get('search')
+#             encryption_type = request.GET.get('encryption_type')
+#             has_vulnerabilities = request.GET.get('has_vulnerabilities', '').lower() == 'true'
+            
+#             # Expiring month/year filter (for validity trends clicks)
+#             expiring_month_str = request.GET.get('expiring_month')
+#             expiring_year_str = request.GET.get('expiring_year')
+#             expiring_month = int(expiring_month_str) if expiring_month_str else None
+#             expiring_year = int(expiring_year_str) if expiring_year_str else None
+            
+#             # Expiring days filter (for 30/60/90 day specific filtering)
+#             expiring_days_str = request.GET.get('expiring_days')
+#             expiring_days = int(expiring_days_str) if expiring_days_str else None
+            
+#             # Expiring date range filter (for weekly trends clicks)
+#             expiring_start = request.GET.get('expiring_start')
+#             expiring_end = request.GET.get('expiring_end')
+            
+#             # Validity bucket filter (for distribution card clicks)
+#             validity_bucket = request.GET.get('validity_bucket')  # e.g., "0-90", "90-365", "365-730", "730+"
+            
+#             # Global filter params - date range
+#             start_date = request.GET.get('start_date')
+#             end_date = request.GET.get('end_date')
+            
+#             # Global filter params - multi-select arrays (comma-separated)
+#             countries_str = request.GET.get('countries', '')
+#             issuers_str = request.GET.get('issuers', '')
+#             statuses_str = request.GET.get('statuses', '')
+#             validation_levels_str = request.GET.get('validation_levels', '')
+            
+#             # Issued month/year filter (for issuance timeline clicks)
+#             issued_month_str = request.GET.get('issued_month')
+#             issued_year_str = request.GET.get('issued_year')
+#             issued_month = int(issued_month_str) if issued_month_str else None
+#             issued_year = int(issued_year_str) if issued_year_str else None
+            
+#             # Issued within days filter (for "Issued (30d)" card click)
+#             issued_within_days_str = request.GET.get('issued_within_days')
+#             issued_within_days = int(issued_within_days_str) if issued_within_days_str else None
+            
+#             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+#             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+#             statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+#             validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+#             # Build global filters if any filter params provided
+#             global_filters = None
+#             if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+#                 global_filters = GlobalFilterParams(
+#                     start_date=start_date,
+#                     end_date=end_date,
+#                     countries=countries,
+#                     issuers=issuers_list,
+#                     statuses=statuses_list,
+#                     validation_levels=validation_levels
+#                 )
+            
+#             # Signature/Hash page specific filters
+#             signature_algorithm = request.GET.get('signature_algorithm')
+#             weak_hash = request.GET.get('weak_hash', '').lower() == 'true'
+#             self_signed_filter = request.GET.get('self_signed', '').lower() == 'true'
+#             key_size_str = request.GET.get('key_size')
+#             key_size = int(key_size_str) if key_size_str else None
+#             hash_type = request.GET.get('hash_type')
+            
+#             # SAN Analytics page specific filters
+#             san_tld = request.GET.get('san_tld')  # e.g., ".com", ".pk"
+#             san_type = request.GET.get('san_type')  # "wildcard" or "standard"
+#             san_count_min_str = request.GET.get('san_count_min')  # For SAN Count Distribution
+#             san_count_max_str = request.GET.get('san_count_max')
+#             san_count_min = int(san_count_min_str) if san_count_min_str else None
+#             san_count_max = int(san_count_max_str) if san_count_max_str else None
+            
+#             # Shared Keys page specific filter
+#             shared_key = request.GET.get('shared_key', '').lower() == 'true'
+            
+#             result = CertificateController.get_certificates(
+#                 page=page,
+#                 page_size=page_size,
+#                 status=status,
+#                 country=country,
+#                 issuer=issuer,
+#                 search=search,
+#                 encryption_type=encryption_type,
+#                 has_vulnerabilities=has_vulnerabilities if has_vulnerabilities else None,
+#                 expiring_month=expiring_month,
+#                 expiring_year=expiring_year,
+#                 expiring_days=expiring_days,
+#                 validity_bucket=validity_bucket,
+#                 issued_month=issued_month,
+#                 issued_year=issued_year,
+#                 issued_within_days=issued_within_days,
+#                 signature_algorithm=signature_algorithm,
+#                 weak_hash=weak_hash if weak_hash else None,
+#                 self_signed=self_signed_filter if self_signed_filter else None,
+#                 key_size=key_size,
+#                 hash_type=hash_type,
+#                 san_tld=san_tld,
+#                 san_type=san_type,
+#                 san_count_min=san_count_min,
+#                 san_count_max=san_count_max,
+#                 expiring_start=expiring_start,
+#                 expiring_end=expiring_end,
+#                 shared_key=shared_key if shared_key else None,
+#                 global_filters=global_filters
+#             )
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class CertificateDetailView(View):
+#     """
+#     GET /api/certificates/{id}
+#     Returns full details of a single certificate
+#     """
+#     def get(self, request, cert_id):
+#         try:
+#             certificate = CertificateController.get_certificate_by_id(cert_id)
+#             if certificate:
+#                 return json_response(certificate)
+#             return json_response({'error': 'Certificate not found'}, status=404)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# overview views.
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class EncryptionStrengthView(View):
+#     """
+#     GET /api/encryption-strength
+#     Returns encryption type distribution for charts
+#     Query params: start_date, end_date, countries, issuers, statuses, validation_levels
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import GlobalFilterParams
+            
+#             # Parse global filter params - date range
+#             start_date = request.GET.get('start_date')
+#             end_date = request.GET.get('end_date')
+            
+#             # Parse multi-select arrays (comma-separated)
+#             countries_str = request.GET.get('countries', '')
+#             issuers_str = request.GET.get('issuers', '')
+#             statuses_str = request.GET.get('statuses', '')
+#             validation_levels_str = request.GET.get('validation_levels', '')
+            
+#             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+#             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+#             statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+#             validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+#             global_filters = None
+#             if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+#                 global_filters = GlobalFilterParams(
+#                     start_date=start_date,
+#                     end_date=end_date,
+#                     countries=countries,
+#                     issuers=issuers_list,
+#                     statuses=statuses_list,
+#                     validation_levels=validation_levels
+#                 )
+            
+#             data = AnalyticsController.get_encryption_distribution(global_filters=global_filters)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+#@method_decorator(csrf_exempt, name='dispatch')
+# class UniqueFiltersView(View):
+#     """
+#     GET /api/unique-filters
+#     Returns unique values for filter dropdowns (issuers, countries, statuses, grades)
+#     """
+#     def get(self, request):
+#         try:
+#             filters = AnalyticsController.get_filter_options()
+#             return json_response(filters)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class FutureRiskView(View):
+#     """
+#     GET /api/future-risk
+#     Returns predicted risk data
+#     """
+#     def get(self, request):
+#         try:
+#             data = AnalyticsController.get_future_risk()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ValidityTrendsView(View):
+#     """
+#     GET /api/validity-trends
+#     Returns certificate expiration trends by month or week for line chart
+#     Query params: months_before (default 4), months_after (default 4), granularity ('monthly' or 'weekly')
+#     """
+#     def get(self, request):
+#         try:
+#             months_before = int(request.GET.get('months_before', 4))
+#             months_after = int(request.GET.get('months_after', 4))
+#             granularity = request.GET.get('granularity', 'monthly')
+#             data = AnalyticsController.get_validity_trends(
+#                 months_before=months_before,
+#                 months_after=months_after,
+#                 granularity=granularity
+#             )
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class CAAnalyticsView(View):
+#     """
+#     GET /api/ca-analytics
+#     Returns Certificate Authority distribution for leaderboard
+#     Query params: limit, start_date, end_date, countries, issuers, statuses, validation_levels
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import GlobalFilterParams
+            
+#             limit = int(request.GET.get('limit', 10))
+            
+#             # Parse global filter params - date range
+#             start_date = request.GET.get('start_date')
+#             end_date = request.GET.get('end_date')
+            
+#             # Parse multi-select arrays (comma-separated)
+#             countries_str = request.GET.get('countries', '')
+#             issuers_str = request.GET.get('issuers', '')
+#             statuses_str = request.GET.get('statuses', '')
+#             validation_levels_str = request.GET.get('validation_levels', '')
+            
+#             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+#             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+#             statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+#             validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+#             global_filters = None
+#             if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+#                 global_filters = GlobalFilterParams(
+#                     start_date=start_date,
+#                     end_date=end_date,
+#                     countries=countries,
+#                     issuers=issuers_list,
+#                     statuses=statuses_list,
+#                     validation_levels=validation_levels
+#                 )
+            
+#             data = AnalyticsController.get_ca_leaderboard(limit=limit, global_filters=global_filters)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class CAStatsView(View):
+#     """
+#     GET /api/ca-stats
+#     Returns CA statistics for metric cards (total CAs, top CA, self-signed, countries)
+#     """
+#     def get(self, request):
+#         try:
+#             data = AnalyticsController.get_ca_stats()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuerValidationMatrixView(View):
+#     """
+#     GET /api/issuer-validation-matrix
+#     Returns matrix of issuer × validation level combinations
+#     Query params: limit
+#     """
+#     def get(self, request):
+#         try:
+#             limit = int(request.GET.get('limit', 10))
+#             data = AnalyticsController.get_issuer_validation_matrix(limit=limit)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# ==================== SAN ANALYTICS VIEWS ====================
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SANStatsView(View):
+#     """
+#     GET /api/san-stats
+#     Returns SAN statistics for metric cards
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import SANAnalyticsController
+#             data = SANAnalyticsController.get_san_stats()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SANDistributionView(View):
+#     """
+#     GET /api/san-distribution
+#     Returns SAN count distribution (histogram buckets)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import SANAnalyticsController
+#             data = SANAnalyticsController.get_san_distribution()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SANTLDBreakdownView(View):
+#     """
+#     GET /api/san-tld-breakdown
+#     Returns top TLDs from SAN entries
+#     Query params: limit
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import SANAnalyticsController
+#             limit = int(request.GET.get('limit', 15))
+#             data = SANAnalyticsController.get_san_tld_breakdown(limit=limit)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SANWildcardBreakdownView(View):
+#     """
+#     GET /api/san-wildcard-breakdown
+#     Returns wildcard vs standard SAN breakdown
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import SANAnalyticsController
+#             data = SANAnalyticsController.get_san_wildcard_breakdown()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SANFilteredCertsView(View):
+#     """
+#     GET /api/san-filtered-certs?filter_type=wildcard&page=1&page_size=50
+#     GET /api/san-filtered-certs?filter_type=san-count&filter_value=50+&page=1
+#     GET /api/san-filtered-certs?filter_type=tld&filter_value=.com&page=1
+    
+#     Returns filtered certificates from pre-computed collections (fast!)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import SANAnalyticsController
+            
+#             filter_type = request.GET.get('filter_type', 'wildcard')
+#             filter_value = request.GET.get('filter_value', None)
+#             page = int(request.GET.get('page', 1))
+#             page_size = int(request.GET.get('page_size', 50))
+            
+#             data = SANAnalyticsController.get_san_filtered_certs(
+#                 filter_type=filter_type,
+#                 filter_value=filter_value,
+#                 page=page,
+#                 page_size=page_size
+#             )
+#             return json_response(data)
+#         except ValueError as e:
+#             return json_response({'error': str(e)}, status=400)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# ========== TRENDS ANALYTICS VIEWS ==========
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class TrendsStatsView(View):
+#     """
+#     GET /api/trends/stats
+#     Returns trend statistics for metric cards
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             data = TrendsController.get_trends_stats()
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuanceTimelineView(View):
+#     """
+#     GET /api/trends/issuance-timeline
+#     Returns certificate issuance count by month
+#     Query params: months (default 12)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             months = int(request.GET.get('months', 12))
+#             data = TrendsController.get_issuance_timeline(months=months)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ExpirationForecastView(View):
+#     """
+#     GET /api/trends/expiration-forecast
+#     Returns certificate expiration count by month
+#     Query params: months (default 12)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             months = int(request.GET.get('months', 12))
+#             data = TrendsController.get_expiration_forecast(months=months)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class AlgorithmAdoptionView(View):
+#     """
+#     GET /api/trends/algorithm-adoption
+#     Returns algorithm distribution over time
+#     Query params: months (default 12)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             months = int(request.GET.get('months', 12))
+#             data = TrendsController.get_algorithm_adoption(months=months)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ValidationLevelTrendsView(View):
+#     """
+#     GET /api/trends/validation-levels
+#     Returns validation level (DV/OV/EV) distribution over time
+#     Query params: months (default 12)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             months = int(request.GET.get('months', 12))
+#             data = TrendsController.get_validation_level_trends(months=months)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class KeySizeTimelineView(View):
+#     """
+#     GET /api/trends/key-size-timeline
+#     Returns key size distribution over time for animated visualization
+#     Query params: months (default 12)
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import TrendsController
+#             months = int(request.GET.get('months', 12))
+#             data = TrendsController.get_key_size_timeline(months=months)
+#             return json_response(data)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+# class GeographicDistributionView(View):
+#     """
+#     GET /api/geographic-distribution
+#     Returns certificate distribution by country
+#     Query params: limit, start_date, end_date, countries, issuers, statuses, validation_levels
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import GlobalFilterParams
+            
+#             limit = int(request.GET.get('limit', 10))
+            
+#             # Parse global filter params - date range
+#             start_date = request.GET.get('start_date')
+#             end_date = request.GET.get('end_date')
+            
+#             # Parse multi-select arrays (comma-separated)
+#             countries_str = request.GET.get('countries', '')
+#             issuers_str = request.GET.get('issuers', '')
+#             statuses_str = request.GET.get('statuses', '')
+#             validation_levels_str = request.GET.get('validation_levels', '')
+            
+#             countries = [c.strip() for c in countries_str.split(',') if c.strip()] if countries_str else None
+#             issuers_list = [i.strip() for i in issuers_str.split(',') if i.strip()] if issuers_str else None
+#             statuses_list = [s.strip() for s in statuses_str.split(',') if s.strip()] if statuses_str else None
+#             validation_levels = [v.strip() for v in validation_levels_str.split(',') if v.strip()] if validation_levels_str else None
+            
+#             global_filters = None
+#             if start_date or end_date or countries or issuers_list or statuses_list or validation_levels:
+#                 global_filters = GlobalFilterParams(
+#                     start_date=start_date,
+#                     end_date=end_date,
+#                     countries=countries,
+#                     issuers=issuers_list,
+#                     statuses=statuses_list,
+#                     validation_levels=validation_levels
+#                 )
+            
+#             data = AnalyticsController.get_geographic_distribution(limit=limit, global_filters=global_filters)
+#             return json_response(data)
+#         except Exception as e:
+#             # print(f"Error in GeographicDistributionView: {e}")
+#             return json_response({'error': str(e)}, status=500)
+
+
+
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ValidityStatsView(View):
+#     """
+#     GET /api/validity-stats
+#     Returns validity statistics: avg duration, expiring counts, compliance rate
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import ValidityAnalysisController
+#             result = ValidityAnalysisController.get_validity_stats()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class ValidityDistributionView(View):
+#     """
+#     GET /api/validity-distribution
+#     Returns validity period distribution by buckets
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import ValidityAnalysisController
+#             result = ValidityAnalysisController.get_validity_distribution()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuanceTimelineView(View):
+#     """
+#     GET /api/issuance-timeline
+#     Returns certificate issuance and expiration timeline by month
+#     """
+#     def get(self, request):
+#         try:
+#             from .controllers import ValidityAnalysisController
+#             result = ValidityAnalysisController.get_issuance_timeline()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# ========== DATABASE MANAGEMENT VIEWS ==========
+
+
+# ============================================================
+# COMMENT FOR NOTIFICATION ICON - Backend View
+# ============================================================
+# @method_decorator(csrf_exempt, name='dispatch')
+# class NotificationView(View):
+#     """
+#     GET /api/notifications
+#     Returns real-time notifications based on certificate status
+#     (expiring soon, vulnerabilities, weak encryption, etc.)
+#     """
+#     def get(self, request):
+#         try:
+#             result = NotificationController.get_notifications()
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+# pass
+
+
+# Keep legacy view for backwards compatibility
+
+
+# ----- New views for Signature and Hashes page -----
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class SignatureStatsView(View):
+#     """
+#     GET /api/signature-stats
+#     Returns comprehensive signature and hash statistics.
+#     Includes algorithm distribution, hash distribution, key sizes, compliance rate, strength score.
+#     Cached for 5 minutes.
+#     """
+#     def get(self, request):
+#         try:
+#             from .models import CertificateModel
+#             from .cache_service import cache
+            
+#             # Check cache first
+#             cache_key = 'signature_stats'
+#             cached = cache.get(cache_key, {})
+#             if cached:
+#                 return json_response(cached)
+            
+#             # Get fresh data from pre-computed results (OPTIMIZED)
+#             result = CertificateModel.get_signature_stats_fast()
+            
+#             # Cache for 5 minutes
+#             cache.set(cache_key, {}, result, ttl=300)
+            
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class HashTrendsView(View):
+#     """
+#     GET /api/hash-trends
+#     Returns hash algorithm adoption trends over time.
+#     Query params: months (default 36), granularity ('quarterly' or 'yearly')
+#     Cached for 10 minutes.
+#     """
+#     def get(self, request):
+#         try:
+#             from .models import CertificateModel
+#             from .cache_service import cache
+            
+#             months = int(request.GET.get('months', 36))
+#             granularity = request.GET.get('granularity', 'quarterly')
+            
+#             # Validate granularity
+#             if granularity not in ['quarterly', 'yearly']:
+#                 granularity = 'quarterly'
+            
+#             # Check cache first
+#             cache_params = {'months': months, 'granularity': granularity}
+#             cached = cache.get('hash_trends', cache_params)
+#             if cached:
+#                 return json_response(cached)
+            
+#             # Get fresh data from pre-computed results (OPTIMIZED)
+#             result = CertificateModel.get_hash_trends_fast(months=months, granularity=granularity)
+            
+#             # Cache for 10 minutes
+#             cache.set('hash_trends', cache_params, result, ttl=600)
+            
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
+
+# @method_decorator(csrf_exempt, name='dispatch')
+# class IssuerAlgorithmMatrixView(View):
+#     """
+#     GET /api/issuer-algorithm-matrix
+#     Returns matrix of issuer x algorithm combinations with counts.
+#     Cached for 10 minutes.
+#     """
+#     def get(self, request):
+#         try:
+#             from .models import CertificateModel
+#             from .cache_service import cache
+            
+#             limit = int(request.GET.get('limit', 10))
+            
+#             # Check cache first
+#             cache_params = {'limit': limit}
+#             cached = cache.get('issuer_matrix', cache_params)
+#             if cached:
+#                 return json_response(cached)
+            
+#             # Get fresh data from pre-computed results (OPTIMIZED)
+#             result = CertificateModel.get_issuer_algorithm_matrix_fast(limit=limit)
+            
+#             # Cache for 10 minutes
+#             cache.set('issuer_matrix', cache_params, result, ttl=600)
+            
+#             return json_response(result)
+#         except Exception as e:
+#             return json_response({'error': str(e)}, status=500)
+
 
 
 # ==================== SHARED KEYS ANALYTICS VIEWS ====================
