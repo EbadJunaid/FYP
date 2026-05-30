@@ -5,7 +5,10 @@ from .views import (
     CAAnalyticsView,
     GeographicDistributionView,
     ValidityTrendsView,
-    GlobalHealthView
+    GlobalHealthView,
+    SwitchDatabaseView,
+    AvailableDatabasesView,
+    CurrentDatabaseView
     )
 
 urlpatterns = [
@@ -15,5 +18,8 @@ urlpatterns = [
     path('geographic-distribution/', GeographicDistributionView.as_view(), name='geographic_distribution'),
     path('certificates/', CertificateListView.as_view(), name='certificate_list'),
     path('certificates/<str:cert_id>/', CertificateDetailView.as_view(), name='certificate_detail'),
-    
+    path('databases/current/', CurrentDatabaseView.as_view(), name='current_database'),
+    path('databases/available/', AvailableDatabasesView.as_view(), name='available_databases'),
+    path('databases/switch/', SwitchDatabaseView.as_view(), name='switch_database'),
+   
     ]

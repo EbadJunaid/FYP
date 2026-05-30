@@ -65,7 +65,8 @@ urlpatterns = [
     path('databases/available/', get_available_databases, name='available_databases'),
     path('databases/switch/', switch_database, name='switch_database'),
    
-    
+
+   
     path('ca/', include('certificates.ca_analytics.urls')),  # Include CA analytics URLs from separate file
     path('san/', include('certificates.san_analytics.urls')),  # Include SAN analytics URLs from separate file
     path('signature-hash/', include('certificates.signature_hash.urls')),  # Include Signature & Hash analytics URLs from separate file
@@ -74,10 +75,8 @@ urlpatterns = [
     path('shared-keys/',include('certificates.shared_keys.urls')), # Include Shared Keys Analytics URLs from separate file
     path('trends/', include('certificates.trends.urls')), # Include Trends Analytics URLs from separate file    
     path('shared/',include('certificates.shared_apis.urls')),
-  
+    
     # Shared APIs in many pages...
-
-
     # path('dashboard/global-health/', GlobalHealthView.as_view(), name='global_health'),
     # path('validity-trends/', ValidityTrendsView.as_view(), name='validity_trends'),
     # path('ca-analytics/', CAAnalyticsView.as_view(), name='ca_analytics'),

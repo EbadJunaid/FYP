@@ -4,7 +4,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 import csv
 import json
-
+from ..db import MongoDBClient
 from .controllers import SharedApisController,GlobalFilterParams
 
 
@@ -290,3 +290,62 @@ class CertificateDetailView(View):
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
 
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CurrentDatabaseView(View):
+    
+    def get(self, request):
+        """GET /api/databases/current/ - Get current database configuration"""
+        if request.method != 'GET':
+            return json_response({'error': 'Method not allowed'}, status=405)
+        
+        try:
+            current_db = MongoDBClient.get_current_database()
+            return json_response(current_db)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AvailableDatabasesView(View):
+    
+    def get(self, request):
+        """GET /api/databases/available/ - Get all available databases"""
+        if request.method != 'GET':
+            return json_response({'error': 'Method not allowed'}, status=405)
+        
+        try:
+            databases = MongoDBClient.get_available_databases()
+            return json_response(databases)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SwitchDatabaseView(View):
+
+    def get(self, request):
+        """POST /api/databases/switch/ - Switch to a different database"""
+        if request.method != 'POST':
+            return json_response({'error': 'Method not allowed'}, status=405)
+        
+        try:
+            data = json.loads(request.body)
+            db_id = data.get('database_id')
+            
+            if not db_id:
+                return json_response({'error': 'database_id is required'}, status=400)
+            
+            success = MongoDBClient.switch_database(db_id)
+            
+            if success:
+                current_db = MongoDBClient.get_current_database()
+                return json_response({
+                    'success': True,
+                    'message': f'Successfully switched to {current_db["name"]}',
+                    'current_database': current_db
+                })
+            else:
+                return json_response({'error': 'Invalid database_id'}, status=400)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)
