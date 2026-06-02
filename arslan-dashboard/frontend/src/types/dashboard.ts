@@ -166,7 +166,7 @@ export interface NavItem {
 // Card Props
 export interface CardProps {
     title?: string;
-    subtitle?: string;
+    subtitle?: React.ReactNode;
     headerAction?: React.ReactNode;
     children: React.ReactNode;
     className?: string;

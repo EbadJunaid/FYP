@@ -45,6 +45,7 @@ const pageTitles: Record<string, string> = {
     '/dashboard/cas-vs-urls': 'CAs vs URLs',
     '/dashboard/cas-vs-public-keys': 'CAs vs Public Keys',
     '/dashboard/shared-public-keys': 'Shared Public Keys',
+    '/dashboard/shared-keys': 'Shared Public Keys',
 };
 
 export default function Header({ onMenuClick, onSearch, onFilterClick /*, onNotificationClick */ }: HeaderProps) {

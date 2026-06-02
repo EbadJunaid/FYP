@@ -24,10 +24,9 @@ const navItems: NavItem[] = [
     // { id: 'issuer-organizations', label: 'Issuer Organizations', icon: 'issuer', href: '/dashboard/issuer-organizations' },
     { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },
     // { id: 'subject-names', label: 'Subject Names', icon: 'subject', href: '/dashboard/subject-names' },
-    // { id: 'cas-vs-domains', label: 'CAs vs Domains', icon: 'domains', href: '/dashboard/cas-vs-domains' },
-    // { id: 'cas-vs-urls', label: 'CAs vs URLs', icon: 'urls', href: '/dashboard/cas-vs-urls' },
+    // { id: 'cas-vs-domains', label: 'CAs vs Domains', icon: 'domains', href: '/dashboard/cas-vs-domains' },    // { id: 'cas-vs-urls', label: 'CAs vs URLs', icon: 'urls', href: '/dashboard/cas-vs-urls' },
     // { id: 'cas-vs-public-keys', label: 'CAs vs Public Keys', icon: 'keys', href: '/dashboard/cas-vs-public-keys' },
-    { id: 'shared-public-keys', label: 'Shared Public Keys', icon: 'shared', href: '/dashboard/shared-public-keys' },
+    { id: 'shared-keys', label: 'Shared Public Keys', icon: 'shared', href: '/dashboard/shared-keys' },
 ];
 
 interface MobileDrawerProps {

@@ -7,7 +7,8 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import DownloadModal from '@/components/DownloadModal';
-import { CertificateIcon, GlobeIcon, ShieldIcon, AlertIcon, DownloadIcon } from '@/components/icons/Icons';
+import {ChevronRightIcon, CertificateIcon, GlobeIcon, ShieldIcon, AlertIcon, DownloadIcon } from '@/components/icons/Icons';
+
 import { useSearch } from '@/context/SearchContext';
 import apiClient, { CAStats, IssuerValidationEntry, CALeaderboardEntry } from '@/services/apiClient';
 import { fetchCertificates } from '@/controllers/pageController';
@@ -329,7 +330,20 @@ export default function CAAnalyticsPage() {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* CA Market Share - Horizontal Bar Chart with fixed name wrapping */}
-                <Card title="CA Market Share" infoTooltip="Top Certificate Authorities by certificate count. Click a bar to filter the table.">
+                <Card 
+                    title="CA Market Share" 
+                    infoTooltip="Top Certificate Authorities by certificate count. Click a bar to filter the table."
+                    headerAction={
+                        <button
+                            onClick={() => router.push('/dashboard/cas')}
+                            className="flex items-center gap-1 text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
+                        >
+                            View details
+                            <ChevronRightIcon className="w-4 h-4" />
+                            
+                        </button>
+                    }
+                >
                     <div className="h-80">
                         {isDistLoading ? (
                             <div className="flex items-center justify-center h-full">

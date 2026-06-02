@@ -537,7 +537,7 @@ class ApiClient {
     }
 
     async getSANFilteredCerts(params: {
-        filter_type: 'wildcard' | 'multi-domain' | 'san-count' | 'tld';
+        filter_type: 'wildcard' | 'standard' | 'multi-domain' | 'san-count' | 'tld';
         filter_value?: string;
         page?: number;
         page_size?: number;

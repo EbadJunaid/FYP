@@ -98,11 +98,11 @@ export const mockCALeaderboard: CALeaderboardEntry[] = [
 
 // Geographic Distribution
 export const mockGeographicDistribution: GeographicEntry[] = [
-    { id: 'us', country: 'United States (53%)', percentage: 53, color: '#3b82f6' },
-    { id: 'uk', country: 'United Kingdom (42%)', percentage: 42, color: '#8b5cf6' },
-    { id: 'de', country: 'Germany (35%)', percentage: 35, color: '#10b981' },
-    { id: 'jp', country: 'Japan (18%)', percentage: 18, color: '#f59e0b' },
-    { id: 'others', country: 'Others (32%)', percentage: 32, color: '#64748b' },
+    { id: 'us', country: 'United States (53%)', count: 53, percentage: 53, color: '#3b82f6' },
+    { id: 'uk', country: 'United Kingdom (42%)', count: 42, percentage: 42, color: '#8b5cf6' },
+    { id: 'de', country: 'Germany (35%)', count: 35, percentage: 35, color: '#10b981' },
+    { id: 'jp', country: 'Japan (18%)', count: 18, percentage: 18, color: '#f59e0b' },
+    { id: 'others', country: 'Others (32%)', count: 32, percentage: 32, color: '#64748b' },
 ];
 
 // Validity Trend Data (18 months for better visualization)

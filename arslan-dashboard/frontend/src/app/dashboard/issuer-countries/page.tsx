@@ -8,18 +8,43 @@ import ProgressBar from '@/components/charts/ProgressBar';
 import { GlobeIcon, CertificateIcon, CloseIcon } from '@/components/icons/Icons';
 import { fetchGeographicDistribution, fetchCertificates, fetchDashboardMetrics } from '@/controllers/pageController';
 import { ScanEntry, GeographicEntry } from '@/types/dashboard';
+import { useSearch } from '@/context/SearchContext';
+
+const STORAGE_KEY = 'issuer-countries-page-state';
 
 export default function IssuerCountriesPage() {
     const [tableData, setTableData] = useState<ScanEntry[]>([]);
     const [geoData, setGeoData] = useState<GeographicEntry[]>([]);
     const [selectedCountry, setSelectedCountry] = useState<GeographicEntry | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [metrics, setMetrics] = useState<{ total: number; countries: number; topCountry: string } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCerts, setTotalCerts] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasRestoredState, setHasRestoredState] = useState(false);
     const itemsPerPage = 10;
     const tableRef = React.useRef<HTMLDivElement>(null); // Ref for scrolling to table
+    const pageSearchRef = React.useRef<HTMLInputElement>(null);
+    const { searchQuery: globalSearchQuery } = useSearch();
+    const savedStateRef = React.useRef<{ selectedCountryName?: string; currentPage?: number; searchQuery?: string; scrollY?: number } | null>(null);
+    const normalizeSearch = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const normalizedSearch = normalizeSearch(searchQuery);
+    const displayedGeoData = normalizedSearch
+        ? geoData.filter((geo) => normalizeSearch(geo.country).includes(normalizedSearch))
+        : geoData;
+
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                savedStateRef.current = JSON.parse(saved);
+                sessionStorage.removeItem(STORAGE_KEY);
+            }
+        } catch (error) {
+            console.error('Error restoring issuer countries page state:', error);
+        }
+    }, []);
 
     // Load initial geographic distribution
     useEffect(() => {
@@ -37,10 +62,20 @@ export default function IssuerCountriesPage() {
                     topCountry: geoDistribution[0]?.country || 'N/A',
                 });
                 setGeoData(geoDistribution);
-                
-                // ⚡ Auto-select TOP country (the one with most domains) on first load
-                if (geoDistribution.length > 0 && !selectedCountry) {
-                    setSelectedCountry(geoDistribution[0]); // Select first country (highest count)
+                const savedState = savedStateRef.current;
+                if (savedState && geoDistribution.length > 0) {
+                    const restoredCountry = geoDistribution.find((geo) => geo.country === savedState.selectedCountryName) || geoDistribution[0];
+                    setSelectedCountry(restoredCountry);
+                    setCurrentPage(savedState.currentPage || 1);
+                    setSearchQuery(savedState.searchQuery || '');
+                    if (savedState.scrollY !== undefined && savedState.scrollY !== null) {
+                        setTimeout(() => {
+                            window.scrollTo(0, savedState.scrollY as number);
+                        }, 100);
+                    }
+                    setHasRestoredState(true);
+                } else if (geoDistribution.length > 0) {
+                    setSelectedCountry(geoDistribution[0]);
                 }
             } catch (error) {
                 console.error('Error loading geographic data:', error);
@@ -58,7 +93,8 @@ export default function IssuerCountriesPage() {
                 const result = await fetchCertificates({
                     page: currentPage,
                     pageSize: itemsPerPage,
-                    country: selectedCountry?.country  // ⚡ Uses pre-computed IDs!
+                    country: selectedCountry?.country,  // ⚡ Uses pre-computed IDs!
+                    search: globalSearchQuery || undefined,
                 });
 
                 setTableData(result.certificates);
@@ -70,7 +106,26 @@ export default function IssuerCountriesPage() {
             setIsLoading(false);
         };
         loadCertificates();
-    }, [selectedCountry, currentPage]);
+    }, [selectedCountry, currentPage, globalSearchQuery]);
+
+    // When global header search changes, reset to first page
+    useEffect(() => {
+        if (globalSearchQuery) {
+            setCurrentPage(1);
+        }
+    }, [globalSearchQuery]);
+
+    // Shortcut: Ctrl+Shift+K focuses the page's country search input
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                pageSearchRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     // Handle country selection from heat map
     const handleCountryClick = (country: GeographicEntry) => {
@@ -81,6 +136,19 @@ export default function IssuerCountriesPage() {
         setTimeout(() => {
             tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
+    };
+
+    const handleTableRowClick = (entry: ScanEntry) => {
+        try {
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+                selectedCountryName: selectedCountry?.country,
+                currentPage,
+                searchQuery,
+                scrollY: window.scrollY,
+            }));
+        } catch (error) {
+            console.error('Error saving issuer countries page state:', error);
+        }
     };
 
     // Clear country filter - go back to top country
@@ -136,38 +204,54 @@ export default function IssuerCountriesPage() {
             </div>
 
             {/* Geographic Distribution */}
-            <Card title="Issuer Countries Heat Map" subtitle="Click on a country to filter certificates">
+            <Card
+                title="Issuer Countries Heat Map"
+                subtitle={`Click on a country to filter certificates · Showing ${displayedGeoData.length} of ${geoData.length} countries${normalizedSearch ? ` matching "${searchQuery}"` : ''}`}
+                headerAction={
+                    <input
+                        ref={pageSearchRef}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search country"
+                        className="rounded-full border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none transition focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
+                    />
+                }
+            >
                 <div className="space-y-4">
-                    {geoData.map((geo, index) => {
-                        const colors = [
-                            'bg-primary-blue',
-                            'bg-accent-green',
-                            'bg-primary-purple',
-                            'bg-primary-cyan',
-                            'bg-accent-yellow',
-                            'bg-accent-pink',
-                            'bg-accent-orange',
-                            'bg-text-muted',
-                        ];
-                        const isSelected = selectedCountry?.country === geo.country;
-                        
-                        return (
-                            <div 
-                                key={geo.id}
-                                onClick={() => handleCountryClick(geo)}
-                                className="cursor-pointer transition-all duration-200 hover:bg-background/30 rounded-lg p-1 -m-1"
-                            >
-                                <ProgressBar
-                                    value={geo.percentage}
-                                    maxValue={100}
-                                    label={`${geo.country} (${geo.count.toLocaleString()} certs)`}
-                                    valueLabel={`${geo.percentage}%`}
-                                    color={colors[index % colors.length]}
-                                    height="md"
-                                />
-                            </div>
-                        );
-                    })}
+                    {displayedGeoData.length > 0 ? (
+                        displayedGeoData.map((geo, index) => {
+                            const colors = [
+                                'bg-primary-blue',
+                                'bg-accent-green',
+                                'bg-primary-purple',
+                                'bg-primary-cyan',
+                                'bg-accent-yellow',
+                                'bg-accent-pink',
+                                'bg-accent-orange',
+                                'bg-text-muted',
+                            ];
+                            const isSelected = selectedCountry?.country === geo.country;
+                            
+                            return (
+                                <div 
+                                    key={geo.id}
+                                    onClick={() => handleCountryClick(geo)}
+                                    className="cursor-pointer transition-all duration-200 hover:bg-background/30 rounded-lg p-1 -m-1"
+                                >
+                                    <ProgressBar
+                                        value={geo.percentage}
+                                        maxValue={100}
+                                        label={`${geo.country} (${geo.count.toLocaleString()} certs)`}
+                                        valueLabel={`${geo.percentage}%`}
+                                        color={colors[index % colors.length]}
+                                        height="md"
+                                    />
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="py-10 text-center text-text-muted">No country found.</div>
+                    )}
                 </div>
             </Card>
 
@@ -192,7 +276,7 @@ export default function IssuerCountriesPage() {
                     currentPage={currentPage}
                     totalPages={totalPages}
                     onPageChange={setCurrentPage}
-                    onRowClick={(entry) => console.log('Row clicked:', entry)}
+                    onRowClick={handleTableRowClick}
                 />
                 </Card>
             </div>

@@ -6,7 +6,7 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import DownloadModal from '@/components/DownloadModal';
-import { CertificateIcon, CheckCircleIcon, AlertIcon } from '@/components/icons/Icons';
+import { CertificateIcon, CheckCircleIcon, AlertIcon, ClockIcon } from '@/components/icons/Icons';
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry, DashboardMetrics } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
@@ -402,7 +402,9 @@ export default function ValidityAnalyticsPage() {
             {/* Top 4 Metric Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <MetricCard
-                    icon={<CertificateIcon className="w-6 h-6 text-primary-blue" />}
+                    // icon={<CertificateIcon className="w-6 h-6 text-primary-blue" />}
+                    icon={<ClockIcon className="w-6 h-6 text-primary-blue" />}
+                    
                     iconBgColor="bg-primary-blue/15"
                     value={`${validityStats?.averageValidityDays || 0} days`}
                     label="Avg Validity Duration"
@@ -410,7 +412,8 @@ export default function ValidityAnalyticsPage() {
                 />
 
                 <MetricCard
-                    icon={<AlertIcon className="w-6 h-6 text-accent-red" />}
+                    // icon={<AlertIcon className="w-6 h-6 text-accent-red" />}
+                    icon={<ClockIcon className="w-6 h-6 text-accent-red" />}
                     iconBgColor="bg-accent-red/15"
                     value={(validityStats?.expiring30Days || 0).toLocaleString()}
                     label="Expiring <30 Days"
@@ -420,7 +423,7 @@ export default function ValidityAnalyticsPage() {
                 />
 
                 <MetricCard
-                    icon={<AlertIcon className="w-6 h-6 text-accent-orange" />}
+                    icon={<ClockIcon className="w-6 h-6 text-accent-orange" />}
                     iconBgColor="bg-accent-orange/15"
                     value={(validityStats?.expiring90Days || 0).toLocaleString()}
                     label="Expiring <90 Days"
@@ -470,7 +473,7 @@ export default function ValidityAnalyticsPage() {
                             <div className="text-text-muted">Loading trends...</div>
                         </div>
                     ) : (
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <AreaChart data={trendsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                 <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
@@ -547,15 +550,14 @@ export default function ValidityAnalyticsPage() {
                 <Card title="Certificate Status Breakdown" infoTooltip="Distribution of certificates by status. Click legend items to toggle visibility. Double-click to filter the table by that status.">
                     <div className="flex items-center justify-center h-64">
                         <div className="flex items-center gap-8">
-                            <div className="relative">
-                                <ResponsiveContainer width={180} height={180} minWidth={0}>
-                                    <PieChart>
+                            <div className="relative" style={{ width: 240, height: 240, minWidth: 0, minHeight: 0 }}>
+                                <PieChart width={240} height={240}>
                                         <Pie
                                             data={visibleStatusBreakdown}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={50}
-                                            outerRadius={80}
+                                            innerRadius={60}
+                                            outerRadius={100}
                                             paddingAngle={2}
                                             dataKey="value"
                                             onClick={(data) => handleStatusClick(data.name)}
@@ -569,7 +571,6 @@ export default function ValidityAnalyticsPage() {
                                             contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                                         />
                                     </PieChart>
-                                </ResponsiveContainer>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <span className="text-2xl font-bold text-text-primary">{totalCerts.toLocaleString()}</span>
                                     <span className="text-xs text-text-muted">TOTAL CERTS</span>
@@ -616,7 +617,7 @@ export default function ValidityAnalyticsPage() {
                             <div className="text-text-muted">Loading timeline...</div>
                         </div>
                     ) : (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <AreaChart data={timeline} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                                 <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
