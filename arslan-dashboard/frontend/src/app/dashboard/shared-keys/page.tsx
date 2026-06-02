@@ -292,7 +292,7 @@ export default function SharedKeysPage() {
 
                 {/* Key Reuse by Issuer */}
                 <Card title="Key Reuse by Issuer" infoTooltip="Top Certificate Authorities with certificates involved in key reuse.">
-                    <div className="h-72">
+                    <div className="h-80">
                         {isIssuerLoading ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-text-muted">Loading...</div>
@@ -302,7 +302,7 @@ export default function SharedKeysPage() {
                                 <BarChart
                                     layout="vertical"
                                     data={issuerData || []}
-                                    margin={{ top: 5, right: 20, left: 100, bottom: 5 }}
+                                    margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                     <XAxis type="number" stroke="#9ca3af" fontSize={12} />
@@ -311,8 +311,8 @@ export default function SharedKeysPage() {
                                         dataKey="issuer"
                                         stroke="#9ca3af"
                                         fontSize={11}
-                                        width={90}
-                                        tickFormatter={(value: string) => value.length > 15 ? value.substring(0, 15) + '...' : value}
+                                        width={140}
+                                        tickFormatter={(value: string) => value.length > 18 ? value.substring(0, 18) + '...' : value}
                                     />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}

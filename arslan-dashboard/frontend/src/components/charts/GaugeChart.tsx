@@ -46,11 +46,12 @@ export default function GaugeChart({
     };
 
     return (
-        <div className={`relative inline-flex flex-col items-center ${className}`}>
+        <div className={`relative inline-flex flex-col items-center ${className}`} style={{ width: size, maxWidth: '100%' }}>
             <svg
-                width={size}
-                height={size / 2 + 20}
+                width="100%"
+                height="auto"
                 viewBox={`0 0 ${size} ${size / 2 + 20}`}
+                preserveAspectRatio="xMidYMid meet"
                 className="transform"
             >
                 {/* Gradient Definitions */}

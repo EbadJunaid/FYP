@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import GaugeChart from '@/components/charts/GaugeChart';
-import { TrendUpIcon } from '@/components/icons/Icons';
 
 // Info icon component
 const InfoIcon = ({ className = '' }: { className?: string }) => (
@@ -14,7 +12,6 @@ const InfoIcon = ({ className = '' }: { className?: string }) => (
 interface GlobalHealthCardProps {
     score: number;
     maxScore: number;
-    trend?: number;
     status: 'SECURE' | 'AT_RISK' | 'CRITICAL';
     lastUpdated: string;
     onClick?: () => void;
@@ -23,9 +20,7 @@ interface GlobalHealthCardProps {
 export default function GlobalHealthCard({
     score,
     maxScore,
-    trend,
     status,
-    
     lastUpdated,
     onClick,
 }: GlobalHealthCardProps) {
@@ -55,12 +50,6 @@ export default function GlobalHealthCard({
                     </span>
                 );
         }
-    };
-
-    const getGaugeStatus = () => {
-        if (score >= 80) return 'secure';
-        if (score >= 50) return 'warning';
-        return 'critical';
     };
 
     return (
@@ -101,21 +90,11 @@ export default function GlobalHealthCard({
                     </div>
                 </div>
 
-                {/* Right Side - Gauge with Trend Below */}
-                <div className="flex flex-col items-center">
-                    <GaugeChart
-                        value={score}
-                        maxValue={maxScore}
-                        size={90}
-                        strokeWidth={10}
-                        status={getGaugeStatus()}
-                        showValue={false}
-                    />
-                    {/* Trend Indicator - Below the gauge */}
-                    {/* <div className="flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded bg-accent-green/20 text-accent-green text-[10px] font-medium">
-                        <TrendUpIcon size={10} />
-                        <span>+{trend}%</span>
-                    </div> */}
+                {/* Right Side - Score summary */}
+                <div className="flex flex-col items-end text-right">
+                    <span className="text-sm text-text-muted">Health score</span>
+                    <span className="text-3xl font-semibold text-text-primary">{score}%</span>
+                    <span className="text-xs text-text-muted mt-1">Out of {maxScore}</span>
                 </div>
             </div>
         </div>

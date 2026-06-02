@@ -468,7 +468,7 @@ export default function CAAnalyticsPage() {
                     title={getTableTitle()}
                     subtitle="Certificates filtered by CA analysis criteria"
                     infoTooltip="View certificates filtered by selected CA, validation level, or self-signed status."
-                    headerAction={
+                    headerAction={null /*
                         <button
                             onClick={() => setIsDownloadModalOpen(true)}
                             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
@@ -478,7 +478,7 @@ export default function CAAnalyticsPage() {
                             </svg>
                             Download
                         </button>
-                    }
+                    */}
                 >
                     <div className={`transition-opacity duration-200 ${isCertsLoading ? 'opacity-50' : 'opacity-100'}`}>
                         {!swrKey ? (

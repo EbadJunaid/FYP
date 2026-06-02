@@ -283,7 +283,7 @@ export default function ActiveVsExpiredPage() {
             <div ref={tableRef}>
                 <Card
                     title={tableTitles[filter]}
-                    headerAction={
+                    headerAction={null /*
                         <button
                             onClick={handleDownload}
                             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
@@ -293,7 +293,7 @@ export default function ActiveVsExpiredPage() {
                             </svg>
                             Download
                         </button>
-                    }
+                    */}
                 >
                     {/* Show loading indicator without unmounting table */}
                     <div className={`transition-opacity duration-200 ${isTableLoading || isPending ? 'opacity-50' : 'opacity-100'}`}>

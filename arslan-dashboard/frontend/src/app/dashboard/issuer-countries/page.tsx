@@ -5,6 +5,7 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import ProgressBar from '@/components/charts/ProgressBar';
+import SmallSearchInput from '@/components/SmallSearchInput';
 import { GlobeIcon, CertificateIcon, CloseIcon } from '@/components/icons/Icons';
 import { fetchGeographicDistribution, fetchCertificates, fetchDashboardMetrics } from '@/controllers/pageController';
 import { ScanEntry, GeographicEntry } from '@/types/dashboard';
@@ -208,12 +209,11 @@ export default function IssuerCountriesPage() {
                 title="Issuer Countries Heat Map"
                 subtitle={`Click on a country to filter certificates · Showing ${displayedGeoData.length} of ${geoData.length} countries${normalizedSearch ? ` matching "${searchQuery}"` : ''}`}
                 headerAction={
-                    <input
+                    <SmallSearchInput
                         ref={pageSearchRef}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search country"
-                        className="rounded-full border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none transition focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
                     />
                 }
             >

@@ -370,7 +370,7 @@ export default function SignatureHashPage() {
             </div>
 
             {/* Metrics Row - 6 Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
                 {/* Card 1: Max Encryption Type */}
                 <MetricCard
                     icon={<svg className="w-6 h-6 text-primary-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
@@ -681,6 +681,7 @@ export default function SignatureHashPage() {
                                     </button>
                                 ))}
                             </div>
+                    {/*
                             <button
                                 onClick={() => setDownloadModalOpen(true)}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
@@ -690,6 +691,7 @@ export default function SignatureHashPage() {
                                 </svg>
                                 Download
                             </button>
+                    */}
                         </div>
                     }
                 >

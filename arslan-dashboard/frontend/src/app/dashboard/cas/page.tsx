@@ -5,6 +5,7 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import ProgressBar from '@/components/charts/ProgressBar';
+import SmallSearchInput from '@/components/SmallSearchInput';
 import { ShieldIcon, CertificateIcon, CloseIcon } from '@/components/icons/Icons';
 import { fetchCertificates } from '@/controllers/pageController';
 import apiClient, { CALeaderboardEntry } from '@/services/apiClient';
@@ -270,12 +271,11 @@ export default function CAsPage() {
                 title="CA Market Share"
                 subtitle={`Click on a CA to filter certificates · Showing ${totalVisibleCAs} of ${caData.length} CAs${hasSearch ? ` matching "${searchQuery}"` : ''}`}
                 headerAction={
-                    <input
+                    <SmallSearchInput
                         ref={caSearchRef}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search CA"
-                        className="rounded-full border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none transition focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
                     />
                 }
             >

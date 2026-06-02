@@ -152,9 +152,7 @@ const certificatesFetcher = async (key: string) => {
 const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#14b8a6', '#6366f1', '#ec4899', '#84cc16'];
 const PIE_COLORS = { wildcard: '#f59e0b', standard: '#10b981' };
 const formatSanBucketLabel = (bucket: string) => {
-    if (bucket === '1') return '1 SAN';
-    if (bucket === '0') return '0 SANs';
-    return `${bucket} SANs`;
+    return bucket;
 };
 const SAN_BUCKET_TICKS = ['0', '1', '2-3', '4-5', '6-10', '11-30', '31-50', '50+'];
 
@@ -573,7 +571,7 @@ export default function SANAnalyticsPage() {
                             </select>
 
                             <div className="w-px h-5 bg-border-default mx-1" />
-                            {/* Download Button */}
+                    {/*
                             <button
                                 onClick={() => setIsDownloadModalOpen(true)}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
@@ -583,6 +581,7 @@ export default function SANAnalyticsPage() {
                                 </svg>
                                 Download
                             </button>
+                    */}
                         </div>
                     }
                 >

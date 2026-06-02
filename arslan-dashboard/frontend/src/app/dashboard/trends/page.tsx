@@ -547,6 +547,7 @@ export default function TrendsAnalyticsPage() {
                                 Expiring 30d
                             </button>
                             <div className="w-px h-5 bg-border-default mx-1" />
+                    {/*
                             <button
                                 onClick={() => setIsDownloadModalOpen(true)}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
@@ -556,6 +557,7 @@ export default function TrendsAnalyticsPage() {
                                 </svg>
                                 Download
                             </button>
+                    */}
                         </div>
                     }
                 >

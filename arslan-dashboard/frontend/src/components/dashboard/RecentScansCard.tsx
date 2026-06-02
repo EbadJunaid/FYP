@@ -29,7 +29,7 @@ export default function RecentScansCard({
     return (
         <Card
             title={title}
-            headerAction={
+            headerAction={null /*
                 <button
                     onClick={onDownloadClick}
                     className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-background transition-colors"
@@ -37,7 +37,7 @@ export default function RecentScansCard({
                 >
                     <DownloadIcon size={18} />
                 </button>
-            }
+            */}
             infoTooltip="List of SSL certificates with key details. Click on a row to view certificate details."
         >
             <DataTable
