@@ -62,3 +62,15 @@ slides
 .vscode
 
 
+### Adding the .pycache folder and files here : 
+
+arslan-dashboard/backend/certificates/ca_analytics/__pycache__
+arslan-dashboard/backend/certificates/overview/__pycache__
+arslan-dashboard/backend/certificates/san_analytics/__pycache__
+arslan-dashboard/backend/certificates/shared_apis/__pycache__
+arslan-dashboard/backend/certificates/signature_hash/__pycache__
+arslan-dashboard/backend/certificates/trends/__pycache__
+arslan-dashboard/backend/certificates/shared_keys/__pycache__
+arslan-dashboard/backend/certificates/validity_analysis/__pycache__
+
+arslan-dashboard/frontend/next-env.d.ts
