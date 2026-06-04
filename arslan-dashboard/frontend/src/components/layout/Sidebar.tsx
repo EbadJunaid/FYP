@@ -177,7 +177,8 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                 transition-all duration-200 group
                 ${isActive
                                     ? 'bg-primary-blue/10 text-primary-blue border border-primary-blue/20'
-                                    : 'text-sidebar-text hover:bg-white/5 hover:text-white border border-transparent'
+                                    // : 'text-sidebar-text hover:bg-white/5 hover:text-white border border-transparent'
+                                    : 'text-sidebar-text hover:bg-foreground/5 hover:text-text-primary border border-transparent'
                                 }
               `}
                         >

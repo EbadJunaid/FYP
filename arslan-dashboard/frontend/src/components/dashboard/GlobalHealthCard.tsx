@@ -90,12 +90,6 @@ export default function GlobalHealthCard({
                     </div>
                 </div>
 
-                {/* Right Side - Score summary */}
-                <div className="flex flex-col items-end text-right">
-                    <span className="text-sm text-text-muted">Health score</span>
-                    <span className="text-3xl font-semibold text-text-primary">{score}%</span>
-                    <span className="text-xs text-text-muted mt-1">Out of {maxScore}</span>
-                </div>
             </div>
         </div>
     );

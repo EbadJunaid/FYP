@@ -65,12 +65,6 @@ export default function FutureRiskCard({ data }: FutureRiskCardProps) {
                 title="Future Risk Predictor"
                 onClick={handleCardClick}
                 isClickable={true}
-                headerAction={
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-text-muted uppercase">Confidence</span>
-                        <span className="text-sm font-bold text-primary-blue">{data.confidenceLevel}%</span>
-                    </div>
-                }
                 className="hover-lift h-full"
                 onViewDetails={handleViewDetails}
                 infoTooltip="AI-predicted future security risks based on current certificate configurations and industry trends."
