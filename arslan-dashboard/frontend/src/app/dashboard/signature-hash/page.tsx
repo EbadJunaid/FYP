@@ -463,6 +463,7 @@ export default function SignatureHashPage() {
                                     formatter={(value) => [typeof value === 'number' ? value.toLocaleString() : String(value ?? 0), 'Count']}
                                     contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
                                     labelStyle={{ color: '#fff' }}
+                                    itemStyle={{ color: '#fff' }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>

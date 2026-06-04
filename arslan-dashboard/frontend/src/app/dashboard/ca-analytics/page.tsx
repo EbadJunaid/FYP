@@ -335,7 +335,7 @@ export default function CAAnalyticsPage() {
                     infoTooltip="Top Certificate Authorities by certificate count. Click a bar to filter the table."
                     headerAction={
                         <button
-                            onClick={() => router.push('/dashboard/cas')}
+                            onClick={() => router.push('/dashboard/cas-vs-domains')}
                             className="flex items-center gap-1 text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
                         >
                             View details
@@ -372,6 +372,8 @@ export default function CAAnalyticsPage() {
                                     />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        itemStyle={{ color: '#ffffff' }}
+                                        labelStyle={{ color: '#ffffff' }}
                                         formatter={(value, name) => [
                                             `${Number(value).toLocaleString()} (${caDistribution?.find(d => d.count === value)?.percentage || 0}%)`,
                                             name === 'count' ? 'Certificates' : String(name)
