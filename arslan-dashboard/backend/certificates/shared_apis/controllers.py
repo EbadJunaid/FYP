@@ -186,6 +186,11 @@ class SharedApisController(object):
         global_filters: Optional[GlobalFilterParams] = None
     ) -> Dict:
         """Get paginated and filtered certificates (cached 3 min)"""
+        if search:
+            search = search.strip().lower()
+            if not search:
+                search = None
+
         cache_params = {
             'page': page,
             'page_size': page_size,

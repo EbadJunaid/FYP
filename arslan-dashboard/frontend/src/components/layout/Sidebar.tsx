@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { CertificateIcon, ChevronRightIcon } from '@/components/icons/Icons';
 import { NavItem } from '@/types/dashboard';
 
+
 // Navigation items configuration matching the image exactly
 const navItems: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: 'overview', href: '/' },
@@ -155,9 +156,13 @@ export default function Sidebar({ activeItem }: SidebarProps) {
         <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar-bg border-r border-card-border flex-col hidden lg:flex z-40">
             {/* Logo Section */}
             <div className="flex items-center gap-3 px-6 py-5 border-b border-card-border bg-gradient-to-r from-primary-blue/10 to-primary-purple/10 hover:from-primary-blue/15 hover:to-primary-purple/15 transition-colors">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-blue to-primary-purple flex items-center justify-center shadow-lg">
-                    <CertificateIcon className="w-6 h-6 text-white" />
-                </div>
+                <div className="w-10 h-10 flex items-center justify-center">
+                    <img
+                        src="/logo-1.png"
+                        alt="Certificate Analysis"
+                        className="w-12 h-12 object-contain"
+                    />
+                    </div>
                 <div className="flex items-center gap-2">
                     <span className="text-lg font-bold bg-gradient-to-r from-primary-blue to-primary-purple bg-clip-text text-transparent">Certificate Analysis</span>
                 </div>

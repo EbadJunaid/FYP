@@ -1,5 +1,6 @@
 
 from datetime import datetime, timezone, timedelta
+import re
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
 
@@ -1036,9 +1037,9 @@ class SharedModels:
             query = base_filter.copy()
         
         if search:
-            # ⚡ OPTIMIZED: Use MongoDB text search index instead of regex
-            # Text index (idx_text_search) enables fast full-text search
-            query['$text'] = {'$search': search}
+            # Prefix search on domain (index-friendly with idx_domain).
+            prefix = re.escape(search)
+            query['domain'] = {'$regex': f'^{prefix}'}
         
         if issuer:
             if issuer.lower() == 'others':
@@ -1463,7 +1464,7 @@ class SharedModels:
         # When using issuer filter, skip sort to avoid expensive in-memory sort operation
         skip = (page - 1) * page_size
         if search:
-            # Text search: MongoDB automatically uses text index, no hint needed
+            # Prefix search: use indexed domain filter and stable _id sort.
             cursor = cls.collection.find(query).sort('_id', 1).skip(skip).limit(page_size)
         elif issuer:
             # Issuer filter: Return results in natural order to avoid expensive in-memory sort

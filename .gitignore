@@ -49,8 +49,7 @@ arslan-dashboard/backend/CA_ANALYTICS_SETUP.md
 arslan-dashboard/backend/MULTIPLE_DATABASE_GUIDE.md
 arslan-dashboard/backend/UNDERSTANDING_INDEXES.md
 arslan-dashboard/README-old.md
-arslan-dashboard/data-sample.json
-arslan-dashboard/data-sample.json
+
 
 arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/archive-2
 arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/not-used-scripts
@@ -74,3 +73,7 @@ arslan-dashboard/backend/certificates/shared_keys/__pycache__
 arslan-dashboard/backend/certificates/validity_analysis/__pycache__
 
 arslan-dashboard/frontend/next-env.d.ts
+
+
+arslan-dashboard/data-sample.json
+crawler-expr
