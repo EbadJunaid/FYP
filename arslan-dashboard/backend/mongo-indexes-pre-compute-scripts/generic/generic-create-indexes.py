@@ -50,7 +50,7 @@ def build_indexes():
     return [
         {"name": "idx_validity_end", "keys": [("parsed.validity.end", ASCENDING)], "options": {"background": True}},
         {"name": "idx_zlint_errors", "keys": [("zlint.errors_present", ASCENDING)], "options": {"background": True}},
-        {"name": "idx_issuer_org_primary", "keys": [("parsed.issuer_org_primary", ASCENDING)], "options": {"background": True}},
+        # {"name": "idx_issuer_organization", "keys": [("parsed.issuer.organization", ASCENDING)], "options": {"background": True}},
         {
             "name": "idx_text_search",
             "keys": [("domain", TEXT), ("parsed.subject.common_name", TEXT)],
@@ -127,3 +127,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

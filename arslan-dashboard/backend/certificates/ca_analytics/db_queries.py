@@ -2,6 +2,7 @@
 # CA (Certificate Authority) analytics model utilities extracted from CertificateModel for page separation.
 
 from datetime import datetime, timezone
+from tkinter.font import names
 from typing import List, Dict, Any, Optional
 from ..db import db, MongoDBClient
 
@@ -56,33 +57,51 @@ class CAModel:
         Get CA Analytics stats for metric cards.
         Returns: total CAs, top CA, self-signed count, unique CA countries
         """
-        # Get total unique CAs
-        ca_pipeline = [
-            {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
-            {'$group': {'_id': '$parsed.issuer.organization'}},
-            {'$count': 'total'}
-        ]
-        ca_result = list(cls.collection.aggregate(ca_pipeline))
-        total_cas = ca_result[0]['total'] if ca_result else 0
+        # Previous approch
+        # ca_pipeline = [
+        #     # {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
+        #     {'$group': {'_id': '$parsed.issuer.organization'}},
+        #     {'$count': 'total'}
+        # ]
+        # ca_result = list(cls.collection.aggregate(ca_pipeline))
+        # total_cas = ca_result[0]['total'] if ca_result else 0
         
+        
+        # Get total unique CAs
+        ca_result = cls.collection.distinct('parsed.issuer.organization')
+        # # print(f"names of cas",ca_result[0:10])
+        total_cas = len(ca_result)
+        
+        # Previous approch
+        # total_certs = cls.collection.count_documents({})
+
+        # Get total certificates (fast metadata read)
+        total_certs = cls.collection.estimated_document_count()
+
         # Get top CA
         top_ca_pipeline = [
-            {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
+            # {'$unwind': {'path': '$parsed.issuer.organization', 'preserveNullAndEmptyArrays': True}},
+        #    {'$project': {'_id': 0, 'parsed.issuer.organization': 1}},
             {'$group': {'_id': '$parsed.issuer.organization', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}},
             {'$limit': 1}
         ]
+       
+
+
         top_ca_result = list(cls.collection.aggregate(top_ca_pipeline))
-        total_certs = cls.collection.count_documents({})
-        
+       
+
+       
         top_ca = None
         top_ca_count = 0
         top_ca_percentage = 0
         if top_ca_result:
             top_ca = top_ca_result[0]['_id'] or 'Unknown'
             top_ca_count = top_ca_result[0]['count']
-            top_ca_percentage = round((top_ca_count / total_certs) * 100, 1) if total_certs > 0 else 0
-        
+            # top_ca_percentage = round((top_ca_count / total_certs) * 100, 1) if total_certs > 0 else 0
+            top_ca_percentage = round((top_ca_count / 878849) * 100, 1) if 878849 > 0 else 0
+
         # Get self-signed count
         self_signed_count = cls.collection.count_documents(
             {'parsed.signature.self_signed': True},

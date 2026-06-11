@@ -13,6 +13,8 @@ class CAAnalyticsController:
         if cached:
             return cached
         result = CAModel.get_ca_stats_fast()
+        # result = CAModel.get_ca_stats()
+
         cache.set('ca_stats', cache_params, result)
         return result
 
