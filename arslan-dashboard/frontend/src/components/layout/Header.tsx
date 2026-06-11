@@ -162,7 +162,7 @@ export default function Header({ onMenuClick, onSearch, onFilterClick /*, onNoti
         }
         debounceTimerRef.current = setTimeout(() => {
             onSearchRef.current(query); // Use ref to get latest callback
-        }, 300);
+        }, 500);
     }, []); // No dependencies - stable reference
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,7 +279,7 @@ export default function Header({ onMenuClick, onSearch, onFilterClick /*, onNoti
                             type="text"
                             value={searchQuery}
                             onChange={handleSearchChange}
-                            placeholder="Enter domain to analyze..."
+                            placeholder="Enter domain name ..."
                             suppressHydrationWarning={true}
                             className="w-full h-10 pl-10 pr-16 bg-card-bg border border-card-border rounded-xl 
                          text-sm text-text-primary placeholder-text-muted

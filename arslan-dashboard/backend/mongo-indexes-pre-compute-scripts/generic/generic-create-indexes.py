@@ -12,7 +12,7 @@ Usage:
 import argparse
 import json
 import os
-from pymongo import MongoClient, ASCENDING, TEXT
+from pymongo import MongoClient, ASCENDING
 
 DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "databases.json")
 
@@ -50,15 +50,10 @@ def build_indexes():
     return [
         {"name": "idx_validity_end", "keys": [("parsed.validity.end", ASCENDING)], "options": {"background": True}},
         {"name": "idx_zlint_errors", "keys": [("zlint.errors_present", ASCENDING)], "options": {"background": True}},
-        # {"name": "idx_issuer_organization", "keys": [("parsed.issuer.organization", ASCENDING)], "options": {"background": True}},
-        {
-            "name": "idx_text_search",
-            "keys": [("domain", TEXT), ("parsed.subject.common_name", TEXT)],
-            "options": {
-                "default_language": "english",
-                "weights": {"domain": 10, "parsed.subject.common_name": 5},
-            },
-        },
+
+        # {"name": "idx_issuer_org_primary", "keys": [("parsed.issuer_org_primary", ASCENDING)], "options": {"background": True}},
+        {"name": "idx_domain", "keys": [("domain", ASCENDING)], "options": {"background": True}},
+
         {"name": "idx_issuer_org", "keys": [("parsed.issuer.organization", ASCENDING)], "options": {"background": True}},
         {"name": "idx_signature_algo", "keys": [("parsed.signature_algorithm.name", ASCENDING)], "options": {"background": True}},
         {

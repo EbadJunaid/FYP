@@ -69,7 +69,7 @@ REQUIRED_CERTIFICATE_INDEXES = [
     "idx_validity_end",
     "idx_zlint_errors",
     "idx_issuer_org_primary",
-    "idx_text_search",
+    "idx_domain",
     "idx_issuer_org",
     "idx_signature_algo",
     "idx_algo_rsa_length",
