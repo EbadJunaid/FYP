@@ -17,15 +17,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG = {
     'MONGODB_URL': "mongodb://localhost:27017",
-    'DB_NAME': "tranco-latest-full",
+    'DB_NAME': "arslan-v5",
     'STATUS_COLLECTION': "domain_status",
     'CERTIFICATES_COLLECTION': "certificates",
     
     # Paths
-    'CSV_FILE': os.path.join(BASE_DIR, "../datasets/tranco/raw/tranco-full-list-latest.csv"),
+    'CSV_FILE': os.path.join(BASE_DIR, "../datasets/final-dataset-mine/merged-pk-tranco-rapid-x.csv"),
     'ZCERT_BINARY': os.path.join(BASE_DIR, "../zcertificate/zcertificate"),
-    'LOG_FILE': os.path.join(BASE_DIR, "../logs/tranco-latest-full.log"),
-    'ISSUE_LOG_FILE': os.path.join(BASE_DIR, "../logs/threads-issue-tranco.txt"),
+    'LOG_FILE': os.path.join(BASE_DIR, "../logs/pk-latest-full-1.log"),
+    'ISSUE_LOG_FILE': os.path.join(BASE_DIR, "../logs/pk-issue-1.txt"),
     'NUM_THREADS': 30,
     'SOCKET_TIMEOUT': 10,
     'ZCERT_TIMEOUT': 10,
