@@ -2,21 +2,13 @@
 """
 Generic SAN analytics pre-compute script.
 
-Reads databases.json unless --dbs is provided, and writes:
-- <results_db>.san-stats
-- <results_db>.san-distribution
-- <results_db>.san-wildcard-certs
-- <results_db>.san-standard-certs
-- <results_db>.san-multi-domain-certs
-- <results_db>.san-count-groups
-- <results_db>.san-tld-certs
-- <results_db>.san-filter-metadata
+Reads databases.json unless --dbs is provided, and writes one document to:
+- <results_db>.san-analysis
 """
 
 import argparse
 import json
 import os
-from collections import defaultdict
 from datetime import datetime, timezone
 from pymongo import MongoClient, ASCENDING
 
@@ -68,11 +60,13 @@ def resolve_targets(db_names, entries):
         return entries
 
     lookup = {entry["main"]: entry for entry in entries}
+    # print(f"lookup: {lookup}")
     targets = []
     for name in db_names:
         if name in lookup:
             targets.append(lookup[name])
         else:
+            # print(f"in else condition of resolve_targets: {name}")
             targets.append({"main": name, "results": f"{name}-results"})
     return targets
 
@@ -125,26 +119,37 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     source_collection = client[main_db]["certificates"]
     results_db_ref = client[results_db]
 
-    wildcard_collection = results_db_ref["san-wildcard-certs"]
-    standard_collection = results_db_ref["san-standard-certs"]
-    multi_domain_collection = results_db_ref["san-multi-domain-certs"]
-    san_count_collection = results_db_ref["san-count-groups"]
-    tld_collection = results_db_ref["san-tld-certs"]
-    stats_collection = results_db_ref["san-stats"]
-    distribution_collection = results_db_ref["san-distribution"]
-    metadata_collection = results_db_ref["san-filter-metadata"]
+    # Legacy split-collection approach kept here for review:
+    # wildcard_collection = results_db_ref["san-wildcard-certs"]
+    # standard_collection = results_db_ref["san-standard-certs"]
+    # multi_domain_collection = results_db_ref["san-multi-domain-certs"]
+    # san_count_collection = results_db_ref["san-count-groups"]
+    # tld_collection = results_db_ref["san-tld-certs"]
+    # stats_collection = results_db_ref["san-stats"]
+    # distribution_collection = results_db_ref["san-distribution"]
+    # metadata_collection = results_db_ref["san-filter-metadata"]
+    #
+    # New approach requested for now:
+    # one collection, one document with counts and first-1000 ObjectId arrays.
+    target_collection = results_db_ref["san-analysis"]
 
     log(f"SAN analytics: {main_db} -> {results_db}")
-    log("Step 1/5: Clearing existing SAN collections")
+    log("Step 1/4: Clearing existing SAN analytics collections")
 
-    wildcard_collection.drop()
-    standard_collection.drop()
-    multi_domain_collection.drop()
-    san_count_collection.drop()
-    tld_collection.drop()
-    stats_collection.drop()
-    distribution_collection.drop()
-    metadata_collection.drop()
+    # Drop legacy split collections so stale data does not look authoritative.
+    for collection_name in [
+        "san-wildcard-certs",
+        "san-standard-certs",
+        "san-multi-domain-certs",
+        "san-count-groups",
+        "san-tld-certs",
+        "san-stats",
+        "san-distribution",
+        "san-filter-metadata",
+    ]:
+        results_db_ref[collection_name].drop()
+
+    target_collection.delete_many({})
 
     start_time = datetime.now(timezone.utc)
 
@@ -152,16 +157,21 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     if limit:
         total_docs = min(limit, total_docs)
 
-    log(f"Step 2/5: Scanning certificates ({total_docs:,} total)")
+    log(f"Step 2/4: Scanning certificates ({total_docs:,} total)")
 
-    wildcard_certs = []
-    standard_certs = []
-    multi_domain_certs = []
-
+    # Legacy split-collection approach stored full cert_ref docs in these lists:
+    # wildcard_certs = []
+    # standard_certs = []
+    # multi_domain_certs = []
+    #
+    # New approach stores only first 1000 ObjectIds per group/category.
     wildcard_count = 0
     standard_count = 0
     multi_domain_count = 0
     total_sans_count = 0
+    wildcard_certificate_ids = []
+    standard_certificate_ids = []
+    multi_domain_certificate_ids = []
 
     bucket_order = ["0", "1", "2-3", "4-5", "6-10", "11-30", "31-50", "50+"]
     distribution_buckets = {bucket: 0 for bucket in bucket_order}
@@ -169,34 +179,24 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     san_count_groups = {}
     tld_groups = {}
 
-    def add_group(group_map, bucket, cert_ref):
-        entry = group_map.setdefault(bucket, {"count": 0, "certs": []})
+    def add_group(group_map, bucket, cert_id):
+        # Legacy shape was {"count": int, "certs": [cert_ref, ...]}.
+        # New shape is {"count": int, "certificate_ids": [ObjectId, ...]}.
+        entry = group_map.setdefault(bucket, {"count": 0, "certificate_ids": []})
         entry["count"] += 1
-        if len(entry["certs"]) < 1000:
-            entry["certs"].append(cert_ref)
+        if len(entry["certificate_ids"]) < 1000:
+            entry["certificate_ids"].append(cert_id)
 
-    def add_tld(tld, cert_ref, seen_tlds):
+    def add_tld(tld, cert_id, seen_tlds):
         if tld in seen_tlds:
             return
         seen_tlds.add(tld)
-        entry = tld_groups.setdefault(tld, {"count": 0, "certs": []})
+        entry = tld_groups.setdefault(tld, {"count": 0, "certificate_ids": []})
         entry["count"] += 1
-        if len(entry["certs"]) < 1000:
-            entry["certs"].append(cert_ref)
-
-    def flush_batches():
-        if wildcard_certs:
-            wildcard_collection.insert_many(wildcard_certs, ordered=False)
-            wildcard_certs.clear()
-        if standard_certs:
-            standard_collection.insert_many(standard_certs, ordered=False)
-            standard_certs.clear()
-        if multi_domain_certs:
-            multi_domain_collection.insert_many(multi_domain_certs, ordered=False)
-            multi_domain_certs.clear()
+        if len(entry["certificate_ids"]) < 1000:
+            entry["certificate_ids"].append(cert_id)
 
     batch_size = 10000
-    flush_interval = 10000
     progress_interval = 5000
     processed = 0
 
@@ -220,9 +220,6 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
 
     for cert in cursor:
         processed += 1
-
-        if processed % flush_interval == 0:
-            flush_batches()
 
         if processed % progress_interval == 0:
             elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
@@ -266,150 +263,107 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
 
         distribution_buckets[bucket] += 1
 
-        sig_alg = cert.get("parsed", {}).get("signature_algorithm", {})
-        encryption = sig_alg.get("name", "Unknown") if sig_alg else "Unknown"
-        country = pick_country(cert)
-        vulnerabilities = format_vulnerabilities(cert.get("zlint", {}))
-
-        cert_ref = {
-            "cert_id": cert_id,
-            "domain": domain,
-            "san_count": san_count,
-            "sample_sans": sans[:5] if sans else [],
-            "issuer": cert.get("parsed", {}).get("issuer", {}).get("common_name", "N/A"),
-            "expiry": cert.get("parsed", {}).get("validity", {}).get("end"),
-            "encryption": encryption,
-            "country": country,
-            "vulnerabilities": vulnerabilities,
-        }
-
+        # Legacy code built a full cert_ref here and inserted it into separate
+        # collections. Backend APIs now hydrate these ObjectIds from the main
+        # certificates collection when filtered SAN certs are requested.
+        #
+        # cert_ref = {
+        #     "cert_id": cert_id,
+        #     "domain": domain,
+        #     "san_count": san_count,
+        #     "sample_sans": sans[:5] if sans else [],
+        #     ...
+        # }
         has_wildcard = any(s.startswith("*.") for s in sans)
         if has_wildcard:
-            wildcard_certs.append(cert_ref)
             wildcard_count += 1
+            if len(wildcard_certificate_ids) < 1000:
+                wildcard_certificate_ids.append(cert_id)
 
         if san_count > 0 and not has_wildcard:
-            standard_certs.append(cert_ref)
             standard_count += 1
+            if len(standard_certificate_ids) < 1000:
+                standard_certificate_ids.append(cert_id)
 
         if san_count >= 5:
-            multi_domain_certs.append(cert_ref)
             multi_domain_count += 1
+            if len(multi_domain_certificate_ids) < 1000:
+                multi_domain_certificate_ids.append(cert_id)
 
-        add_group(san_count_groups, bucket, cert_ref)
+        add_group(san_count_groups, bucket, cert_id)
 
         seen_tlds = set()
         for san in sans:
             tld = extract_tld(san)
             if tld:
-                add_tld(tld, cert_ref, seen_tlds)
+                add_tld(tld, cert_id, seen_tlds)
 
-    flush_batches()
-    log("Step 3/5: Creating indexes")
+    log("Step 3/4: Building single san-analysis document")
 
-    wildcard_count_total = wildcard_collection.count_documents({})
-    if wildcard_count_total > 0:
-        wildcard_collection.create_index([("domain", ASCENDING)])
-        wildcard_collection.create_index([("san_count", ASCENDING)])
-        wildcard_collection.create_index([("cert_id", ASCENDING)])
+    bucket_groups = []
+    for bucket in bucket_order:
+        entry = san_count_groups.get(bucket, {"count": 0, "certificate_ids": []})
+        bucket_groups.append({
+            "bucket": bucket,
+            "count": entry["count"],
+            "certificate_ids": entry["certificate_ids"],
+            "has_more": entry["count"] > len(entry["certificate_ids"]),
+        })
 
-    standard_count_total = standard_collection.count_documents({})
-    if standard_count_total > 0:
-        standard_collection.create_index([("domain", ASCENDING)])
-        standard_collection.create_index([("san_count", ASCENDING)])
-        standard_collection.create_index([("cert_id", ASCENDING)])
-
-    multi_count_total = multi_domain_collection.count_documents({})
-    if multi_count_total > 0:
-        multi_domain_collection.create_index([("san_count", ASCENDING)])
-        multi_domain_collection.create_index([("domain", ASCENDING)])
-        multi_domain_collection.create_index([("cert_id", ASCENDING)])
-
-    log("Step 4/5: Writing grouped collections")
-
-    for bucket, entry in san_count_groups.items():
-        doc = {
-            "_id": bucket,
-            "certificate_count": entry["count"],
-            "certificates": entry["certs"],
-            "has_more": entry["count"] > len(entry["certs"]),
-            "total_count": entry["count"],
-        }
-        san_count_collection.replace_one({"_id": bucket}, doc, upsert=True)
-
-    san_count_collection.create_index([("certificate_count", ASCENDING)])
-
-    tld_sorted = sorted(tld_groups.items(), key=lambda x: x[1]["count"], reverse=True)[:50]
-    for tld, entry in tld_sorted:
-        doc = {
-            "_id": tld,
-            "certificate_count": entry["count"],
-            "certificates": entry["certs"],
-            "has_more": entry["count"] > len(entry["certs"]),
-            "total_count": entry["count"],
-        }
-        tld_collection.replace_one({"_id": tld}, doc, upsert=True)
-
-    tld_collection.create_index([("certificate_count", ASCENDING)])
-
-    log("Step 5/5: Writing stats and distribution")
+    tld_groups_list = []
+    for tld, entry in sorted(tld_groups.items(), key=lambda x: x[1]["count"], reverse=True)[:50]:
+        tld_groups_list.append({
+            "tld": tld,
+            "count": entry["count"],
+            "certificate_ids": entry["certificate_ids"],
+            "has_more": entry["count"] > len(entry["certificate_ids"]),
+        })
 
     avg_sans = total_sans_count / processed if processed else 0
-    stats_doc = {
-        "_id": "san_stats",
-        "total_sans": total_sans_count,
-        "avg_sans_per_cert": round(avg_sans, 2),
-        "wildcard_certs": wildcard_count,
-        "multi_domain_certs": multi_domain_count,
-        "total_certs": processed,
+    san_analysis_doc = {
+        "_id": "san_analysis",
+        "scope": "all",
+        "total_san_count": total_sans_count,
+        "avg_san_count": round(avg_sans, 2),
+        "total_certificates": processed,
+        "standard_san_count": standard_count,
+        "standard_san_certificate_ids": standard_certificate_ids,
+        "standard_san_has_more": standard_count > len(standard_certificate_ids),
+        "multi_domain_count": multi_domain_count,
+        "multi_domain_certificate_ids": multi_domain_certificate_ids,
+        "multi_domain_has_more": multi_domain_count > len(multi_domain_certificate_ids),
+        "wildcard_san_count": wildcard_count,
+        "wildcard_certificate_ids": wildcard_certificate_ids,
+        "wildcard_has_more": wildcard_count > len(wildcard_certificate_ids),
+        "bucket_groups": bucket_groups,
+        "tlds": tld_groups_list,
         "computed_at": datetime.now(timezone.utc),
         "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
+        "source_database": main_db,
+        "source_collection": "certificates",
+        "testing_mode": bool(limit),
     }
-    stats_collection.replace_one({"_id": "san_stats"}, stats_doc, upsert=True)
 
-    for idx, bucket in enumerate(bucket_order):
-        dist_doc = {
-            "_id": idx,
-            "bucket_id": idx,
-            "bucket": bucket,
-            "count": distribution_buckets[bucket],
-            "computed_at": datetime.now(timezone.utc),
-        }
-        distribution_collection.replace_one({"_id": idx}, dist_doc, upsert=True)
-
-    dist_metadata = {
-        "_id": "metadata",
-        "last_computed": datetime.now(timezone.utc),
-        "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
-        "total_buckets": len(bucket_order),
-    }
-    distribution_collection.replace_one({"_id": "metadata"}, dist_metadata, upsert=True)
-
-    metadata = {
-        "_id": "metadata",
-        "last_computed": datetime.now(timezone.utc),
-        "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
-        "total_certificates_scanned": processed,
-        "wildcard_certificates": wildcard_count_total,
-        "standard_certificates": standard_count_total,
-        "multi_domain_certificates": multi_count_total,
-        "san_count_groups": {k: v["count"] for k, v in san_count_groups.items()},
-        "top_tlds_count": len(tld_sorted),
-    }
-    metadata_collection.replace_one({"_id": "metadata"}, metadata, upsert=True)
+    log("Step 4/4: Writing san-analysis document")
+    target_collection.replace_one({"_id": "san_analysis"}, san_analysis_doc, upsert=True)
+    target_collection.create_index([("country", ASCENDING)])
+    target_collection.create_index([("computed_at", ASCENDING)])
 
     if verify:
-        if wildcard_count_total != wildcard_count:
+        stored_doc = target_collection.find_one({"_id": "san_analysis"})
+        if not stored_doc:
+            raise RuntimeError("Verification failed: san-analysis document missing")
+        if stored_doc.get("total_certificates") != processed:
+            raise RuntimeError("Verification failed: total_certificates mismatch")
+        if stored_doc.get("wildcard_san_count") != wildcard_count:
             raise RuntimeError("Verification failed: wildcard count mismatch")
-        if standard_count_total != standard_count:
+        if stored_doc.get("standard_san_count") != standard_count:
             raise RuntimeError("Verification failed: standard count mismatch")
-        if multi_count_total != multi_domain_count:
+        if stored_doc.get("multi_domain_count") != multi_domain_count:
             raise RuntimeError("Verification failed: multi-domain count mismatch")
-        stored_stats = stats_collection.find_one({"_id": "san_stats"})
-        if not stored_stats or stored_stats.get("total_certs") != processed:
-            raise RuntimeError("Verification failed: san-stats total_certs mismatch")
-        if sum(distribution_buckets.values()) != processed:
-            raise RuntimeError("Verification failed: distribution total mismatch")
+        stored_bucket_total = sum(item.get("count", 0) for item in stored_doc.get("bucket_groups", []))
+        if stored_bucket_total != processed:
+            raise RuntimeError("Verification failed: bucket total mismatch")
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     log(f"Completed {main_db} in {duration:.1f}s")
@@ -424,8 +378,10 @@ def main():
     args = parser.parse_args()
 
     entries = load_db_entries(args.config)
-    targets = resolve_targets(args.dbs, entries)
+    # print(f"entries: {entries}")
 
+    targets = resolve_targets(args.dbs, entries)
+    # print(f"Targets: {targets}")
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
         compute_san_analytics(
@@ -435,6 +391,7 @@ def main():
             limit=args.limit,
             verify=args.verify,
         )
+        # print(target," - Skipping actual computation (uncomment to run)")
     client.close()
 
 

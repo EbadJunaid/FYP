@@ -15,20 +15,34 @@ from django.conf import settings
 # ============================================================================
 
 # Global variables for current database (can be changed at runtime)
-_CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
-_CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
-# _CURRENT_MAIN_DB = 'test-api-tranco'
-# _CURRENT_RESULTS_DB = 'test-api-tranco-results'
+# _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
+# _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
+_CURRENT_MAIN_DB = 'Testing-tranco-1lakh'
+_CURRENT_RESULTS_DB = 'Testing-tranco-1lakh-results'
 MAIN_DB = _CURRENT_MAIN_DB
 RESULTS_DB = _CURRENT_RESULTS_DB
 
 # Available databases configuration
+# AVAILABLE_DATABASES = {
+#     'global': {
+#         'main': 'tranco-latest-8-lakh',
+#         'results': 'tranco-latest-8-lakh-results',
+#         'name': 'Global',
+#         'description': '878k certificates'
+#     },
+#     'pakistani': {
+#         'main': 'pakistani-domains',
+#         'results': 'pakistani-domains-results',
+#         'name': 'Pakistani Domains',
+#         'description': '7,724 certificates'
+#     }
+# }
 AVAILABLE_DATABASES = {
     'global': {
-        'main': 'tranco-latest-8-lakh',
-        'results': 'tranco-latest-8-lakh-results',
+        'main': 'Testing-tranco-1lakh',
+        'results': 'Testing-tranco-1lakh-results',
         'name': 'Global',
-        'description': '878k certificates'
+        'description': '1lakh certificates'
     },
     'pakistani': {
         'main': 'pakistani-domains',
@@ -37,20 +51,6 @@ AVAILABLE_DATABASES = {
         'description': '7,724 certificates'
     }
 }
-# AVAILABLE_DATABASES = {
-#     'global': {
-#         'main': 'test-api-tranco',
-#         'results': 'test-api-tranco-results',
-#         'name': 'Global',
-#         'description': '878k certificates'
-#     },
-#     'pakistani': {
-#         'main': 'test-api-pakistani',
-#         'results': 'test-api-pakistani-results',
-#         'name': 'Pakistani Domains',
-#         'description': '7,724 certificates'
-#     }
-# }
 # ============================================================================
 
 # MongoDB Connection Singleton with Multiple Database Support

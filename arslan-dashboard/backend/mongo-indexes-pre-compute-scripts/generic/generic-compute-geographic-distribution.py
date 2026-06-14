@@ -143,6 +143,7 @@ def get_tld_country(domain):
     parts = domain.lower().split(".")
     if len(parts) >= 2:
         two_part = ".".join(parts[-2:])
+        # print(f"Domain: {domain}, Two-part TLD: {two_part}")
         if two_part in TLD_TO_COUNTRY:
             return TLD_TO_COUNTRY[two_part]
 
@@ -165,6 +166,8 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
     projection = {"_id": 1, "domain": 1}
 
     cursor = source_collection.find(query, projection)
+    # print(f"cursor first enrty: {cursor[0] if cursor.count() > 0 else 'No entries'}")
+
     if limit:
         cursor = cursor.limit(limit)
 
@@ -177,13 +180,21 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
         country = get_tld_country(domain)
 
         if country not in country_groups:
-            country_groups[country] = []
-        country_groups[country].append(cert_id)
+            country_groups[country] = {
+                "count": 0,
+                "certificate_ids": []
+            }
+
+        group = country_groups[country]
+        group["count"] += 1
+        if len(group["certificate_ids"]) < 1000:
+            group["certificate_ids"].append(cert_id)
+
         processed_count += 1
 
-    sorted_countries = sorted(country_groups.items(), key=lambda x: len(x[1]), reverse=True)
-    total_certificates = sum(len(ids) for ids in country_groups.values())
-    max_count = len(sorted_countries[0][1]) if sorted_countries else 1
+    sorted_countries = sorted(country_groups.items(), key=lambda x: x[1]["count"], reverse=True)
+    total_certificates = sum(group["count"] for group in country_groups.values())
+    max_count = sorted_countries[0][1]["count"] if sorted_countries else 1
 
     colors = [
         "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444",
@@ -193,9 +204,10 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
     ]
 
     country_docs = []
-    for i, (country, cert_ids) in enumerate(sorted_countries):
-        count = len(cert_ids)
+    for i, (country, group) in enumerate(sorted_countries):
+        count = group["count"]
         percentage = round((count / total_certificates) * 100, 3) if total_certificates else 0
+        certificate_ids = group["certificate_ids"]
         country_docs.append({
             "_id": country,
             "country": country,
@@ -203,7 +215,8 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
             "percentage": percentage,
             "color": colors[i % len(colors)],
             "rank": i + 1,
-            "certificate_ids": cert_ids,
+            "certificate_ids": certificate_ids,
+            "has_more": count > len(certificate_ids),
             "computed_at": datetime.now(timezone.utc),
             "source_database": main_db,
             "source_collection": "certificates",

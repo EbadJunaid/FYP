@@ -7,35 +7,64 @@ from bson import ObjectId
 from ..db import db, MongoDBClient
 
 TLD_TO_COUNTRY = {
-    'pk': 'Pakistan',
-    'us': 'United States',
-    'com': 'United States',
-    'uk': 'United Kingdom',
-    'co.uk': 'United Kingdom',
-    'de': 'Germany',
-    'fr': 'France',
-    'jp': 'Japan',
-    'ca': 'Canada',
-    'au': 'Australia',
-    'nl': 'Netherlands',
-    'in': 'India',
-    'cn': 'China',
-    'br': 'Brazil',
-    'kr': 'South Korea',
-    'sg': 'Singapore',
-    'ie': 'Ireland',
-    'se': 'Sweden',
-    'ch': 'Switzerland',
-    'it': 'Italy',
-    'es': 'Spain',
-    'ru': 'Russia',
-    'mx': 'Mexico',
-    'za': 'South Africa',
-    'nz': 'New Zealand',
-    'org': 'International',
-    'net': 'International',
-    'io': 'International',
-    'dev': 'International',
+    "us": "United States", "ca": "Canada", "mx": "Mexico",
+    "gt": "Guatemala", "bz": "Belize", "sv": "El Salvador", "hn": "Honduras",
+    "ni": "Nicaragua", "cr": "Costa Rica", "pa": "Panama", "cu": "Cuba",
+    "jm": "Jamaica", "ht": "Haiti", "do": "Dominican Republic", "tt": "Trinidad and Tobago",
+    "bb": "Barbados", "bs": "Bahamas", "ag": "Antigua and Barbuda", "dm": "Dominica",
+    "gd": "Grenada", "kn": "Saint Kitts and Nevis", "lc": "Saint Lucia",
+    "vc": "Saint Vincent and the Grenadines",
+    "br": "Brazil", "ar": "Argentina", "co": "Colombia", "cl": "Chile",
+    "pe": "Peru", "ve": "Venezuela", "ec": "Ecuador", "bo": "Bolivia",
+    "py": "Paraguay", "uy": "Uruguay", "gy": "Guyana", "sr": "Suriname",
+    "uk": "United Kingdom", "co.uk": "United Kingdom", "gb": "United Kingdom",
+    "ie": "Ireland", "fr": "France", "es": "Spain", "pt": "Portugal",
+    "de": "Germany", "nl": "Netherlands", "be": "Belgium", "lu": "Luxembourg",
+    "ch": "Switzerland", "at": "Austria", "it": "Italy", "gr": "Greece",
+    "se": "Sweden", "no": "Norway", "dk": "Denmark", "fi": "Finland",
+    "is": "Iceland",
+    "pl": "Poland", "cz": "Czech Republic", "sk": "Slovakia", "hu": "Hungary",
+    "ro": "Romania", "bg": "Bulgaria", "si": "Slovenia", "hr": "Croatia",
+    "rs": "Serbia", "ba": "Bosnia and Herzegovina", "mk": "North Macedonia",
+    "al": "Albania", "me": "Montenegro", "xk": "Kosovo",
+    "ee": "Estonia", "lv": "Latvia", "lt": "Lithuania",
+    "ru": "Russia", "ua": "Ukraine", "by": "Belarus", "md": "Moldova",
+    "ge": "Georgia", "am": "Armenia", "az": "Azerbaijan",
+    "tr": "Turkey", "il": "Israel", "ps": "Palestine", "jo": "Jordan",
+    "lb": "Lebanon", "sy": "Syria", "iq": "Iraq", "ir": "Iran",
+    "sa": "Saudi Arabia", "ae": "United Arab Emirates", "kw": "Kuwait",
+    "qa": "Qatar", "bh": "Bahrain", "om": "Oman", "ye": "Yemen",
+    "kz": "Kazakhstan", "uz": "Uzbekistan", "tm": "Turkmenistan",
+    "kg": "Kyrgyzstan", "tj": "Tajikistan", "af": "Afghanistan",
+    "in": "India", "pk": "Pakistan", "bd": "Bangladesh", "lk": "Sri Lanka",
+    "np": "Nepal", "bt": "Bhutan", "mv": "Maldives",
+    "th": "Thailand", "vn": "Vietnam", "sg": "Singapore", "my": "Malaysia",
+    "id": "Indonesia", "ph": "Philippines", "mm": "Myanmar", "kh": "Cambodia",
+    "la": "Laos", "bn": "Brunei", "tl": "Timor-Leste",
+    "cn": "China", "jp": "Japan", "kr": "South Korea", "kp": "North Korea",
+    "mn": "Mongolia", "tw": "Taiwan", "hk": "Hong Kong", "mo": "Macau",
+    "au": "Australia", "com.au": "Australia", "nz": "New Zealand",
+    "pg": "Papua New Guinea", "fj": "Fiji", "sb": "Solomon Islands",
+    "vu": "Vanuatu", "ws": "Samoa", "ki": "Kiribati", "to": "Tonga",
+    "fm": "Micronesia", "mh": "Marshall Islands", "pw": "Palau",
+    "nr": "Nauru", "tv": "Tuvalu",
+    "eg": "Egypt", "ly": "Libya", "tn": "Tunisia", "dz": "Algeria",
+    "ma": "Morocco", "sd": "Sudan", "ss": "South Sudan",
+    "ng": "Nigeria", "gh": "Ghana", "ci": "Cote d'Ivoire", "sn": "Senegal",
+    "ml": "Mali", "bf": "Burkina Faso", "ne": "Niger", "gn": "Guinea",
+    "sl": "Sierra Leone", "lr": "Liberia", "tg": "Togo", "bj": "Benin",
+    "mr": "Mauritania", "gm": "Gambia", "gw": "Guinea-Bissau",
+    "cv": "Cape Verde",
+    "cd": "Democratic Republic of Congo", "cg": "Republic of Congo",
+    "cm": "Cameroon", "cf": "Central African Republic", "td": "Chad",
+    "ga": "Gabon", "gq": "Equatorial Guinea", "st": "Sao Tome and Principe",
+    "ke": "Kenya", "tz": "Tanzania", "ug": "Uganda", "rw": "Rwanda",
+    "bi": "Burundi", "et": "Ethiopia", "so": "Somalia", "dj": "Djibouti",
+    "er": "Eritrea", "sc": "Seychelles", "mu": "Mauritius", "km": "Comoros",
+    "mg": "Madagascar",
+    "za": "South Africa", "zw": "Zimbabwe", "zm": "Zambia", "mw": "Malawi",
+    "mz": "Mozambique", "bw": "Botswana", "na": "Namibia", "sz": "Eswatini",
+    "ls": "Lesotho", "ao": "Angola", "na": "Namibia", "gh": "Ghana", "ng": "Nigeria", "dz": "Algeria",
     'ebad': 'ebad',  # For testing unknown TLD handling
     'soy' : 'say' # For testing again 
 }
@@ -1259,7 +1288,8 @@ class SharedModels:
                 
                 # Get all certificate IDs for this country
                 cert_ids = country_doc.get('certificate_ids', [])
-                total = len(cert_ids)
+                total = country_doc.get('count', len(cert_ids))
+                has_more = country_doc.get('has_more', total > len(cert_ids))
                 
                 print(f"[COUNTRY FILTER] Found {total} certificates for {country}")
                 
@@ -1267,11 +1297,15 @@ class SharedModels:
                 skip = (page - 1) * page_size
                 page_ids = cert_ids[skip:skip + page_size]
                 
-                # Fetch full certificates by ID (FAST - indexed lookup!)
+                docs_by_id = {
+                    doc['_id']: doc
+                    for doc in cls.collection.find({'_id': {'$in': page_ids}})
+                }
                 certificates = []
-                for doc in cls.collection.find({'_id': {'$in': page_ids}}):
-                    cert = cls.serialize_certificate(doc)
-                    certificates.append(cert)
+                for cert_id in page_ids:
+                    doc = docs_by_id.get(cert_id)
+                    if doc:
+                        certificates.append(cls.serialize_certificate(doc))
                 
                 return {
                     'certificates': certificates,
@@ -1279,7 +1313,8 @@ class SharedModels:
                         'page': page,
                         'pageSize': page_size,
                         'total': total,
-                        'totalPages': max(1, (total + page_size - 1) // page_size)
+                        'totalPages': max(1, (total + page_size - 1) // page_size),
+                        'has_more': has_more and (skip + len(certificates) < min(total, len(cert_ids)))
                     }
                 }
                 
