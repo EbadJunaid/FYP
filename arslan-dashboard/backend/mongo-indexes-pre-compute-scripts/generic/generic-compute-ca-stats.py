@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-Generic CA stats pre-compute script.
+Generic CA analysis pre-compute script.
 
-Reads databases.json unless --dbs is provided, and writes to <results_db>.ca-stats.
+Reads databases.json unless --dbs is provided, and writes to <results_db>.ca-analysis.
+This replaces the old split outputs:
+- ca-stats
+- ca-analytics
+- issuer-validation-matrix
 """
 
 import argparse
@@ -63,41 +67,99 @@ def resolve_targets(db_names, entries):
     return targets
 
 
-def compute_ca_stats(client, main_db, results_db, verify=False):
+def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
     source_collection = client[main_db]["certificates"]
-    target_collection = client[results_db]["ca-stats"]
+    results_db_ref = client[results_db]
+    target_collection = results_db_ref["ca-analysis"]
+
+    start_time = datetime.now(timezone.utc)
+
+    # Legacy split collections are cleared so stale data is not mistaken for
+    # the current materialized view.
+    for collection_name in ["ca-stats", "ca-analytics", "issuer-validation-matrix"]:
+        results_db_ref[collection_name].drop()
 
     total_certs = source_collection.estimated_document_count()
 
-    ca_pipeline = [
-        {"$unwind": {"path": "$parsed.issuer.organization", "preserveNullAndEmptyArrays": True}},
-        {"$group": {"_id": "$parsed.issuer.organization"}},
-        {"$count": "total"},
+    colors = [
+        "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444",
+        "#06b6d4", "#14b8a6", "#6366f1", "#ec4899", "#84cc16",
+        "#f97316", "#a855f7", "#22c55e", "#0ea5e9", "#d946ef",
+        "#eab308", "#6b7280",
     ]
-    try:
-        ca_result = list(source_collection.aggregate(ca_pipeline, hint="idx_issuer_org", allowDiskUse=True))
-    except Exception:
-        ca_result = list(source_collection.aggregate(ca_pipeline, allowDiskUse=True))
-    total_cas = ca_result[0]["total"] if ca_result else 0
 
-    top_ca_pipeline = [
-        {"$unwind": {"path": "$parsed.issuer.organization", "preserveNullAndEmptyArrays": True}},
-        {"$group": {"_id": "$parsed.issuer.organization", "count": {"$sum": 1}}},
+    ca_validation_pipeline = [
+        {
+            "$project": {
+                "issuer": {"$arrayElemAt": ["$parsed.issuer.organization", 0]},
+                "validationLevel": {"$ifNull": ["$parsed.validation_level", "Unknown"]},
+            }
+        },
+        {"$match": {"issuer": {"$exists": True, "$ne": None}}},
+        {
+            "$group": {
+                "_id": {
+                    "issuer": "$issuer",
+                    "validationLevel": "$validationLevel",
+                },
+                "count": {"$sum": 1},
+            }
+        },
         {"$sort": {"count": -1}},
-        {"$limit": 1},
     ]
-    try:
-        top_ca_result = list(source_collection.aggregate(top_ca_pipeline, hint="idx_issuer_org", allowDiskUse=True))
-    except Exception:
-        top_ca_result = list(source_collection.aggregate(top_ca_pipeline, allowDiskUse=True))
 
-    top_ca = None
-    top_ca_count = 0
-    top_ca_percentage = 0
-    if top_ca_result:
-        top_ca = top_ca_result[0]["_id"] or "Unknown"
-        top_ca_count = top_ca_result[0]["count"]
-        top_ca_percentage = round((top_ca_count / total_certs) * 100, 1) if total_certs else 0
+    try:
+        validation_results = list(source_collection.aggregate(
+            ca_validation_pipeline,
+            hint="idx_issuer_org",
+            allowDiskUse=True,
+        ))
+    except Exception:
+        validation_results = list(source_collection.aggregate(
+            ca_validation_pipeline,
+            allowDiskUse=True,
+        ))
+
+    issuer_map = {}
+    for record in validation_results:
+        issuer = record["_id"]["issuer"]
+        validation_level = record["_id"].get("validationLevel") or "Unknown"
+        count = record["count"]
+
+        issuer_entry = issuer_map.setdefault(issuer, {
+            "name": issuer,
+            "count": 0,
+            "validationLevel": [],
+        })
+        issuer_entry["count"] += count
+        issuer_entry["validationLevel"].append({
+            "validationlevel_type": validation_level,
+            "count": count,
+        })
+
+    ca_records = sorted(
+        issuer_map.values(),
+        key=lambda item: item["count"],
+        reverse=True,
+    )
+    total_with_issuer = sum(record["count"] for record in ca_records)
+    max_count = ca_records[0]["count"] if ca_records else 0
+
+    ca_list = []
+    for index, record in enumerate(ca_records):
+        ca_list.append({
+            "ca_id": f"ca-{index}",
+            "name": record["name"],
+            "count": record["count"],
+            "percentage": round((record["count"] / total_with_issuer) * 100, 1) if total_with_issuer else 0,
+            "color": colors[index % len(colors)],
+            "rank": index + 1,
+            "validationLevel": sorted(
+                record["validationLevel"],
+                key=lambda item: item["count"],
+                reverse=True,
+            ),
+        })
 
     try:
         self_signed_count = source_collection.count_documents(
@@ -123,37 +185,46 @@ def compute_ca_stats(client, main_db, results_db, verify=False):
         country_result = list(source_collection.aggregate(country_pipeline, allowDiskUse=True))
     unique_countries = country_result[0]["total"] if country_result else 0
 
-    stats_document = {
-        "_id": "ca_stats",
-        "total_cas": total_cas,
+    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+    analysis_document = {
+        "_id": "ca_analysis",
+        "scope": "all",
+        "total_cas": len(ca_list),
         "total_certs": total_certs,
-        "top_ca": {
-            "name": top_ca,
-            "count": top_ca_count,
-            "percentage": top_ca_percentage,
-        },
         "self_signed_count": self_signed_count,
         "unique_countries": unique_countries,
+        "max_ca_count": max_count,
         "computed_at": datetime.now(timezone.utc),
-        "computation_duration_seconds": 0,
+        "computation_duration_seconds": duration,
+        "source_database": main_db,
+        "source_collection": "certificates",
+
+        "ca-list": ca_list,
+        "top_limit": top_limit,
     }
 
-    target_collection.replace_one({"_id": "ca_stats"}, stats_document, upsert=True)
+    target_collection.replace_one({"_id": "ca_analysis"}, analysis_document, upsert=True)
+    target_collection.create_index("scope")
+    target_collection.create_index("computed_at")
+    target_collection.create_index("ca-list.rank")
 
     if verify:
-        stored = target_collection.find_one({"_id": "ca_stats"})
+        stored = target_collection.find_one({"_id": "ca_analysis"})
         if not stored:
-            raise RuntimeError("Verification failed: missing stats document")
-        if stored.get("total_cas") != total_cas:
+            raise RuntimeError("Verification failed: missing ca-analysis document")
+        if stored.get("total_cas") != len(ca_list):
             raise RuntimeError("Verification failed: total_cas mismatch")
         if stored.get("total_certs") != total_certs:
             raise RuntimeError("Verification failed: total_certs mismatch")
+        if sum(ca["count"] for ca in stored.get("ca-list", [])) != total_with_issuer:
+            raise RuntimeError("Verification failed: ca-list total mismatch")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generic CA stats pre-compute")
     parser.add_argument("--dbs", nargs="*", help="Main database names")
     parser.add_argument("--config", default=get_default_config_path(), help="Path to databases.json")
+    parser.add_argument("--limit", type=int, default=50, help="Top issuers expected by old matrix script; full CA list is still stored")
     parser.add_argument("--verify", action="store_true", help="Verify stored results")
     args = parser.parse_args()
 
@@ -162,7 +233,13 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_ca_stats(client, target["main"], target["results"], verify=args.verify)
+        compute_ca_stats(
+            client,
+            target["main"],
+            target["results"],
+            top_limit=args.limit,
+            verify=args.verify,
+        )
     client.close()
 
 

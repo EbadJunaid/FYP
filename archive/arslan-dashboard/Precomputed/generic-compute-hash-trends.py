@@ -149,31 +149,16 @@ def compute_hash_trends(source_collection, results_collection, months, granulari
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generic hash trends pre-compute")
-    parser.add_argument("--dbs", nargs="*", help="Main database names")
-    parser.add_argument("--config", default=get_default_config_path(), help="Path to databases.json")
-    parser.add_argument("--months", type=int, default=36, help="Number of months to look back")
-    parser.add_argument("--granularity", choices=["quarterly", "yearly", "both"], default="both")
-    parser.add_argument("--verify", action="store_true", help="Verify stored results")
-    args = parser.parse_args()
+    # Deprecated entry point: signature stats, hash trends, and issuer
+    # algorithm matrix are now computed together by generic-compute-signature-stats.py
+    # into <results_db>.signature-and-hash. Old implementation is kept above for reference.
+    import importlib.util
 
-    entries = load_db_entries(args.config)
-    targets = resolve_targets(args.dbs, entries)
-
-    client = MongoClient("mongodb://localhost:27017/")
-    for target in targets:
-        source_collection = client[target["main"]]["certificates"]
-        results_collection = client[target["results"]]["hash-trends"]
-
-        granularities = ["quarterly", "yearly"] if args.granularity == "both" else [args.granularity]
-        for granularity in granularities:
-            trends = compute_hash_trends(source_collection, results_collection, args.months, granularity)
-            if args.verify:
-                stored = list(results_collection.find({"granularity": granularity, "months": args.months}))
-                if len(stored) != len(trends):
-                    raise RuntimeError("Verification failed: trend count mismatch")
-
-    client.close()
+    merged_path = os.path.join(os.path.dirname(__file__), "generic-compute-signature-stats.py")
+    spec = importlib.util.spec_from_file_location("generic_compute_signature_stats", merged_path)
+    merged = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(merged)
+    merged.main()
 
 
 if __name__ == "__main__":

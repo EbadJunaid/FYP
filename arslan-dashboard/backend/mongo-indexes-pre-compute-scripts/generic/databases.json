@@ -5,6 +5,11 @@
       "id": "Testing-tranco-1lakh",
       "main": "Testing-tranco-1lakh",
       "results": "Testing-tranco-1lakh-results"
+    },
+    {
+      "id": "latest-pk-domains",
+      "main": "latest-pk-domains",
+      "results": "latest-pk-domains-results"
     }
   ]
 }

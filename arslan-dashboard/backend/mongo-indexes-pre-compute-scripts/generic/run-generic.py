@@ -37,17 +37,12 @@ MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 
 # Collections each compute script is expected to populate in <results_db>.
 SCRIPT_RESULT_COLLECTIONS: dict[str, list[str]] = {
-    "generic-compute-ca-analytics.py": ["ca-analytics"],
-    "generic-compute-ca-stats.py": ["ca-stats"],
-    "generic-compute-hash-trends.py": ["hash-trends"],
+    "generic-compute-ca-stats.py": ["ca-analysis"],
     "generic-compute-geographic-distribution.py": ["geographic-distribution-1"],
-    "generic-compute-issuance-timeline.py": ["issuance-timeline"],
-    "generic-compute-issuer-algorithm-matrix.py": ["issuer-algorithm-matrix"],
-    "generic-compute-issuer-validation-matrix.py": ["issuer-validation-matrix"],
     "generic-compute-san-analytics.py": ["san-analysis"],
     "generic-compute-shared-keys.py": ["shared-keys-detailed"],
-    "generic-compute-signature-stats.py": ["signature-stats"],
-    "generic-compute-validity-analytics.py": ["validity-stats", "validity-distribution"],
+    "generic-compute-signature-stats.py": ["signature-and-hash"],
+    "generic-compute-validity-analytics.py": ["validity-analysis"],
 }
 
 # Union of all results collections (used for final verification).
@@ -60,6 +55,8 @@ REQUIRED_CERTIFICATE_INDEXES = [
     "idx_validity_end",
     "idx_zlint_errors",
     # "idx_issuer_org_primary",
+    "idx_rsa_public_key_length",
+    "idx_ecdsa_public_key_length",
     "idx_domain",
     "idx_issuer_org",
     "idx_signature_algo",
@@ -111,7 +108,15 @@ def discover_generic_scripts() -> list[str]:
     scripts = [
         name
         for name in os.listdir(SCRIPT_DIR)
-        if name.startswith("generic-") and name.endswith(".py") and name != "run-generic.py"
+        if name.startswith("generic-") and name.endswith(".py") and name not in {
+            "run-generic.py",
+            "generic-compute-ca-analytics.py",
+            "generic-compute-issuer-validation-matrix.py",
+            "generic-compute-hash-trends.py",
+            "generic-compute-issuer-algorithm-matrix.py",
+            "generic-compute-issuance-timeline.py",
+            "generic-compute-validity-analytics-old.py",
+        }
     ]
     if INDEXES_SCRIPT in scripts:
         scripts.remove(INDEXES_SCRIPT)

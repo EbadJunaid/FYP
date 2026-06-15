@@ -45,8 +45,8 @@ AVAILABLE_DATABASES = {
         'description': '1lakh certificates'
     },
     'pakistani': {
-        'main': 'pakistani-domains',
-        'results': 'pakistani-domains-results',
+        'main': 'latest-pk-domains',
+        'results': 'latest-pk-domains-results',
         'name': 'Pakistani Domains',
         'description': '7,724 certificates'
     }

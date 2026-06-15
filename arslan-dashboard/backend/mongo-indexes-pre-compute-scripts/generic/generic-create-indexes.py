@@ -72,6 +72,16 @@ def build_indexes():
             ],
             "options": {"background": True},
         },
+        {
+            "name": "idx_rsa_public_key_length",
+            "keys": [("parsed.subject_key_info.rsa_public_key.length", ASCENDING)],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_ecdsa_public_key_length",
+            "keys": [("parsed.subject_key_info.ecdsa_public_key.length", ASCENDING)],
+            "options": {"background": True},
+        },
         {"name": "idx_self_signed", "keys": [("parsed.signature.self_signed", ASCENDING)], "options": {"background": True}},
         {"name": "idx_issuer_country", "keys": [("parsed.issuer.country", ASCENDING)], "options": {"background": True}},
         {"name": "idx_san_dns_names", "keys": [("parsed.extensions.subject_alt_name.dns_names", ASCENDING)], "options": {"background": True}},

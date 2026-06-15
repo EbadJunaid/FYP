@@ -198,105 +198,105 @@ class SharedModels:
             
         return ca_list
     
-    @classmethod
-    def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
-        """
-        ⚡ FAST VERSION: Get Certificate Authority distribution from pre-computed collection
+    # @classmethod
+    # def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+    #     """
+    #     ⚡ FAST VERSION: Get Certificate Authority distribution from pre-computed collection
         
-        This method reads from a materialized view that's updated periodically (every 6-12 hours)
-        by the compute_ca_analytics.py script.
+    #     This method reads from a materialized view that's updated periodically (every 6-12 hours)
+    #     by the compute_ca_analytics.py script.
         
-        Performance: ~0.01s (reads from pre-computed results)
+    #     Performance: ~0.01s (reads from pre-computed results)
         
-        Limitation: 
-        - Does NOT support base_filter (global filters) - returns full pre-computed data
-        - If you need filtered results, falls back to get_ca_distribution() (slow)
+    #     Limitation: 
+    #     - Does NOT support base_filter (global filters) - returns full pre-computed data
+    #     - If you need filtered results, falls back to get_ca_distribution() (slow)
         
-        Args:
-            limit: Number of top CAs to return (default: 10)
-            base_filter: If provided, falls back to slow method (not supported)
+    #     Args:
+    #         limit: Number of top CAs to return (default: 10)
+    #         base_filter: If provided, falls back to slow method (not supported)
             
-        Returns:
-            List of CA distribution data in API-ready format
-        """
+    #     Returns:
+    #         List of CA distribution data in API-ready format
+    #     """
         
-        # If filter is provided, fall back to slow method
-        if base_filter:
-            print("[WARNING] CA Analytics: base_filter provided, falling back to slow aggregation")
-            return cls.get_ca_distribution(limit=limit, base_filter=base_filter)
+    #     # If filter is provided, fall back to slow method
+    #     if base_filter:
+    #         print("[WARNING] CA Analytics: base_filter provided, falling back to slow aggregation")
+    #         return cls.get_ca_distribution(limit=limit, base_filter=base_filter)
         
-        try:
-            # Read from pre-computed collection
-            ca_analytics_collection = MongoDBClient.get_results_db()['ca-analytics']
+    #     try:
+    #         # Read from pre-computed collection
+    #         ca_analytics_collection = MongoDBClient.get_results_db()['ca-analytics']
             
-            # Get metadata to check freshness
-            metadata = ca_analytics_collection.find_one({'_id': 'metadata'})
-            if not metadata:
-                print("[WARNING] CA Analytics: No pre-computed data found, falling back to slow method")
-                return cls.get_ca_distribution(limit=limit, base_filter=None)
+    #         # Get metadata to check freshness
+    #         metadata = ca_analytics_collection.find_one({'_id': 'metadata'})
+    #         if not metadata:
+    #             print("[WARNING] CA Analytics: No pre-computed data found, falling back to slow method")
+    #             return cls.get_ca_distribution(limit=limit, base_filter=None)
             
-            # Check if data is stale (older than 24 hours)
-            last_computed = metadata.get('last_computed')
-            if last_computed:
-                # Ensure both datetimes are timezone-aware
-                now_utc = datetime.now(timezone.utc)
-                if isinstance(last_computed, datetime):
-                    # If last_computed is naive, make it aware (assume UTC)
-                    if last_computed.tzinfo is None:
-                        last_computed = last_computed.replace(tzinfo=timezone.utc)
+    #         # Check if data is stale (older than 24 hours)
+    #         last_computed = metadata.get('last_computed')
+    #         if last_computed:
+    #             # Ensure both datetimes are timezone-aware
+    #             now_utc = datetime.now(timezone.utc)
+    #             if isinstance(last_computed, datetime):
+    #                 # If last_computed is naive, make it aware (assume UTC)
+    #                 if last_computed.tzinfo is None:
+    #                     last_computed = last_computed.replace(tzinfo=timezone.utc)
                     
-                    age_hours = (now_utc - last_computed).total_seconds() / 3600
-                    if age_hours > 24:
-                        print(f"[WARNING] CA Analytics: Pre-computed data is {age_hours:.1f} hours old")
+    #                 age_hours = (now_utc - last_computed).total_seconds() / 3600
+    #                 if age_hours > 24:
+    #                     print(f"[WARNING] CA Analytics: Pre-computed data is {age_hours:.1f} hours old")
             
-            # Fetch top N CAs
-            ca_records = list(
-                ca_analytics_collection
-                .find({'_id': {'$ne': 'metadata'}})  # Exclude metadata document
-                .sort('rank', 1)  # Sort by rank ascending
-                .limit(limit)
-            )
+    #         # Fetch top N CAs
+    #         ca_records = list(
+    #             ca_analytics_collection
+    #             .find({'_id': {'$ne': 'metadata'}})  # Exclude metadata document
+    #             .sort('rank', 1)  # Sort by rank ascending
+    #             .limit(limit)
+    #         )
             
-            if not ca_records:
-                print("[WARNING] CA Analytics: No CA records found, falling back to slow method")
-                return cls.get_ca_distribution(limit=limit, base_filter=None)
+    #         if not ca_records:
+    #             print("[WARNING] CA Analytics: No CA records found, falling back to slow method")
+    #             return cls.get_ca_distribution(limit=limit, base_filter=None)
             
-            # Get total for "Others" calculation
-            total_certificates = metadata.get('total_certificates', 0)
-            top_ca_count = sum(record['count'] for record in ca_records)
-            others_count = max(0, total_certificates - top_ca_count)
+    #         # Get total for "Others" calculation
+    #         total_certificates = metadata.get('total_certificates', 0)
+    #         top_ca_count = sum(record['count'] for record in ca_records)
+    #         others_count = max(0, total_certificates - top_ca_count)
             
-            # Transform to API format
-            ca_list = [
-                {
-                    'id': record['ca_id'],
-                    'name': record['name'],
-                    'count': record['count'],
-                    'maxCount': record['max_count'],
-                    'percentage': record['percentage'],
-                    'color': record['color']
-                }
-                for record in ca_records
-            ]
+    #         # Transform to API format
+    #         ca_list = [
+    #             {
+    #                 'id': record['ca_id'],
+    #                 'name': record['name'],
+    #                 'count': record['count'],
+    #                 'maxCount': record['max_count'],
+    #                 'percentage': record['percentage'],
+    #                 'color': record['color']
+    #             }
+    #             for record in ca_records
+    #         ]
             
-            # Add "Others" if needed
-            if others_count > 0 and ca_records:
-                max_count = ca_records[0]['max_count']
-                ca_list.append({
-                    'id': 'ca-others',
-                    'name': 'Others',
-                    'count': others_count,
-                    'maxCount': max_count,
-                    'percentage': round((others_count / total_certificates) * 100, 1),
-                    'color': '#6b7280',
-                    'isOthers': True
-                })
+    #         # Add "Others" if needed
+    #         if others_count > 0 and ca_records:
+    #             max_count = ca_records[0]['max_count']
+    #             ca_list.append({
+    #                 'id': 'ca-others',
+    #                 'name': 'Others',
+    #                 'count': others_count,
+    #                 'maxCount': max_count,
+    #                 'percentage': round((others_count / total_certificates) * 100, 1),
+    #                 'color': '#6b7280',
+    #                 'isOthers': True
+    #             })
             
-            return ca_list
+    #         return ca_list
             
-        except Exception as e:
-            print(f"[ERROR] CA Analytics Fast: {str(e)}, falling back to slow method")
-            return cls.get_ca_distribution(limit=limit, base_filter=None)
+    #     except Exception as e:
+    #         print(f"[ERROR] CA Analytics Fast: {str(e)}, falling back to slow method")
+    #         return cls.get_ca_distribution(limit=limit, base_filter=None)
  
     @classmethod
     def get_validity_trends(cls, months_before: int = 4, months_after: int = 4, granularity: str = 'monthly') -> List[Dict]:
@@ -851,24 +851,27 @@ class SharedModels:
         
         # Validation level filter
         if validation_levels and len(validation_levels) > 0:
-            # EV, OV, DV derived from policy identifiers or subject organization presence
+            # Prefer direct validation_level field if present in the documents.
+            # This is more accurate than heuristics and matches the rest of the model.
             level_filters = []
             for level in validation_levels:
-                if level.upper() == 'EV':
-                    # EV certs have specific policy OIDs and extended validation
-                    level_filters.append({
-                        'parsed.extensions.certificate_policies': {'$exists': True}
-                    })
-                elif level.upper() == 'OV':
-                    # OV certs have organization in subject
-                    level_filters.append({
-                        'parsed.subject.organization': {'$exists': True}
-                    })
-                elif level.upper() == 'DV':
-                    # DV certs typically don't have organization
-                    level_filters.append({
-                        'parsed.subject.organization': {'$exists': False}
-                    })
+                normalized_level = level.strip().upper()
+                if normalized_level in ['EV', 'OV', 'DV']:
+                    level_filters.append({'parsed.validation_level': normalized_level})
+                elif normalized_level:
+                    # Fallback to heuristics for unknown or alternate labels
+                    if normalized_level == 'EV':
+                        level_filters.append({
+                            'parsed.extensions.certificate_policies': {'$exists': True}
+                        })
+                    elif normalized_level == 'OV':
+                        level_filters.append({
+                            'parsed.subject.organization': {'$exists': True}
+                        })
+                    elif normalized_level == 'DV':
+                        level_filters.append({
+                            'parsed.subject.organization': {'$exists': False}
+                        })
             if level_filters:
                 filters.append({'$or': level_filters})
         
@@ -1004,6 +1007,102 @@ class SharedModels:
         }
     
     @classmethod
+    def _hydrate_certificate_ids(cls, certificate_ids: List[Any], page: int, page_size: int) -> List[Dict[str, Any]]:
+        skip = (page - 1) * page_size
+        page_ids = certificate_ids[skip:skip + page_size]
+        if not page_ids:
+            return []
+
+        object_ids = []
+        for cert_id in page_ids:
+            if isinstance(cert_id, ObjectId):
+                object_ids.append(cert_id)
+                continue
+            try:
+                object_ids.append(ObjectId(str(cert_id)))
+            except Exception:
+                continue
+
+        if not object_ids:
+            return []
+
+        docs_by_id = {
+            doc['_id']: doc
+            for doc in cls.collection.find({'_id': {'$in': object_ids}})
+        }
+
+        certificates = []
+        for cert_id in object_ids:
+            doc = docs_by_id.get(cert_id)
+            if doc:
+                certificates.append(cls.serialize_certificate(doc))
+        
+        # print("certificates are fetched from db and hydrated based on the certificate ids")
+        return certificates
+
+    @classmethod
+    def _get_validity_analysis_doc(cls) -> Optional[Dict[str, Any]]:
+        try:
+            results_collection = MongoDBClient.get_results_db()['validity-analysis']
+            return results_collection.find_one({'_id': 'validity_analysis'})
+        except Exception as e:
+            print(f"[VALIDITY FILTER] Error reading pre-computed validity analysis: {e}")
+            return None
+
+    @classmethod
+    def _get_validity_filter_ids(
+        cls,
+        validity_bucket: Optional[str] = None,
+        expiring_month: Optional[int] = None,
+        expiring_year: Optional[int] = None,
+        issued_month: Optional[int] = None,
+        issued_year: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        doc = cls._get_validity_analysis_doc()
+        if not doc:
+            return None
+        # print("validity analysis doc is fetched for validity filters")
+        if validity_bucket:
+            bucket_label_map = {
+                '0-90': '< 90 Days',
+                '90-365': '90 Days - 1 Year',
+                '365-730': '1 - 2 Years',
+                '730+': '> 2 Years'
+            }
+            expected_range = bucket_label_map.get(validity_bucket, validity_bucket)
+
+            for bucket in doc.get('validity_distribution', []):
+                if bucket.get('range') == expected_range or bucket.get('bucket') == validity_bucket:
+                    return {
+                        'certificate_ids': bucket.get('certificate_ids', []),
+                        'total': bucket.get('count', 0),
+                        'has_more': bucket.get('has_more', False)
+                    }
+            return None
+
+        if expiring_month is not None and expiring_year is not None:
+            for item in doc.get('issuance_timeline', []):
+                if item.get('monthNum') == expiring_month and item.get('year') == expiring_year:
+                    return {
+                        'certificate_ids': item.get('expiring_certificate_ids', []),
+                        'total': item.get('expiring', 0),
+                        'has_more': item.get('expiring_has_more', False)
+                    }
+            return None
+
+        if issued_month is not None and issued_year is not None:
+            for item in doc.get('issuance_timeline', []):
+                if item.get('monthNum') == issued_month and item.get('year') == issued_year:
+                    return {
+                        'certificate_ids': item.get('issued_certificate_ids', []),
+                        'total': item.get('issued', 0),
+                        'has_more': item.get('issued_has_more', False)
+                    }
+            return None
+
+        return None
+
+    @classmethod
     def get_all(cls, page: int = 1, page_size: int = 10, 
                 status: Optional[str] = None, 
                 country: Optional[str] = None,
@@ -1031,8 +1130,12 @@ class SharedModels:
                 san_count_max: Optional[int] = None,
                 expiring_start: Optional[str] = None,
                 expiring_end: Optional[str] = None,
+                
                 # Shared Keys page filter
+
                 shared_key: Optional[bool] = None,
+                # Validation level filter
+                validation_levels: Optional[List[str]] = None,
                 base_filter: Optional[Dict] = None) -> Dict:
         """Get paginated list of certificates with optional filters
         
@@ -1211,7 +1314,24 @@ class SharedModels:
                 '$gt': now,  # Not yet expired
                 '$lte': target_date  # Within expiring_days window
             }
-        
+
+        # Filter by validation level (DV, OV, EV)
+        if validation_levels and len(validation_levels) > 0:
+            validation_queries = []
+            for level in validation_levels:
+                normalized_level = level.strip().upper()
+                if normalized_level in ['DV', 'OV', 'EV']:
+                    validation_queries.append({'parsed.validation_level': normalized_level})
+            if validation_queries:
+                validation_filter = validation_queries[0] if len(validation_queries) == 1 else {'$or': validation_queries}
+                if not query:
+                    query = validation_filter
+                else:
+                    if '$and' in query:
+                        query['$and'].append(validation_filter)
+                    else:
+                        query = {'$and': [query, validation_filter]}
+
         # Filter by validity period bucket (duration in days)
         # ✅ OPTIMIZED: Use pre-computed validity.length field instead of date parsing
         if validity_bucket:
@@ -1331,6 +1451,40 @@ class SharedModels:
                     }
                 }
         
+        # ⚡ OPTIMIZED: Handle validity filters using pre-computed IDs from validity-analysis
+        if validity_bucket or (expiring_month and expiring_year) or (issued_month and issued_year):
+            print("[VALIDITY FILTER] Using pre-computed IDs for validity filter")
+            if search or issuer or encryption_type or has_vulnerabilities or expiring_days or san_tld or san_type or san_count_min is not None or san_count_max is not None or expiring_start or expiring_end or signature_algorithm or weak_hash or self_signed or key_size or hash_type or shared_key or base_filter:
+                print("[VALIDITY FILTER] Additional filters detected, falling back to query path")
+            else:
+                ids_data = cls._get_validity_filter_ids(
+                    validity_bucket=validity_bucket,
+                    expiring_month=expiring_month,
+                    expiring_year=expiring_year,
+                    issued_month=issued_month,
+                    issued_year=issued_year,
+                )
+                if ids_data is None:
+                    print("[VALIDITY FILTER] No pre-computed results for this filter. Falling back to live query.")
+                else:
+                    certificate_ids = ids_data.get('certificate_ids', [])
+                    total = ids_data.get('total', 0)
+                    has_more = ids_data.get('has_more', total > len(certificate_ids))
+
+                    certificates = cls._hydrate_certificate_ids(certificate_ids, page, page_size)
+                    skip = (page - 1) * page_size
+
+                    return {
+                        'certificates': certificates,
+                        'pagination': {
+                            'page': page,
+                            'pageSize': page_size,
+                            'total': total,
+                            'totalPages': max(1, (total + page_size - 1) // page_size),
+                            'has_more': has_more and (skip + len(certificates) < min(total, len(certificate_ids)))
+                        }
+                    }
+
         # SAN TLD filter - filter certs where any dns_name ends with the TLD
         if san_tld:
             # Remove leading dot if present for regex
@@ -1476,22 +1630,37 @@ class SharedModels:
             total = cls.collection.estimated_document_count()
         elif issuer and not search and issuer.lower() != 'others':
             # ULTRA-FAST: Get count from pre-computed CA analytics for exact issuer matches
-            # This avoids expensive count operations on large result sets
-            try:
-                ca_analytics = MongoDBClient.get_results_db()['ca-analytics']
-                ca_doc = ca_analytics.find_one({'name': issuer})
-                print("before if condition")
-                if ca_doc:
-                    print("hello in if codition")
-                    total = ca_doc['count']
-                else:
-                    print("hello in else codition")
-                    # Fallback to aggregation count if not in pre-computed data
-                    pipeline = [{'$match': query}, {'$count': 'total'}]
-                    count_result = list(cls.collection.aggregate(pipeline))
-                    total = count_result[0]['total'] if count_result else 0
-            except Exception as e:
-                # Fallback to standard count on error
+            # ⚠️ CRITICAL: Only use pre-computed count if NO other filters are present!
+            # If any additional filters are applied, fall back to live count_documents()
+            # to ensure accurate pagination
+            has_additional_filters = (
+                status or encryption_type or signature_algorithm or weak_hash or 
+                self_signed or key_size or hash_type or expiring_days or validity_bucket or
+                (issued_month and issued_year) or issued_within_days or 
+                validation_levels or san_tld or san_type or 
+                (san_count_min is not None or san_count_max is not None) or
+                (expiring_start or expiring_end) or shared_key or base_filter
+            )
+            
+            if not has_additional_filters:
+                # Safe to use pre-computed count (issuer-only filter)
+                try:
+                    ca_analysis = MongoDBClient.get_results_db()['ca-analysis']
+                    ca_doc = ca_analysis.find_one(
+                        {'_id': 'ca_analysis', 'ca-list.name': issuer},
+                        {'ca-list.$': 1}
+                    )
+                    if ca_doc and ca_doc.get('ca-list'):
+                        total = ca_doc['ca-list'][0].get('count', 0)
+                    else:
+                        # Fallback to live count if not in pre-computed data
+                        total = cls.collection.count_documents(query)
+                except Exception as e:
+                    # Fallback to standard count on error
+                    total = cls.collection.count_documents(query)
+            else:
+                # Additional filters present: use live count for accurate pagination
+                print(f"[PAGINATION] Issuer + additional filters detected, using live count")
                 total = cls.collection.count_documents(query)
         else:
             total = cls.collection.count_documents(query)
@@ -1539,3 +1708,70 @@ class SharedModels:
         except Exception as e:
             print(f"Error getting certificate by ID: {e}")
             return None
+
+    # =========================================================================
+    # NEW CA-ANALYSIS IMPLEMENTATION
+    # -------------------------------------------------------------------------
+    # Overrides the earlier get_ca_distribution_fast method so shared
+    # /api/shared/ca-analytics/ reads from:
+    #
+    #   <results_db>.ca-analysis / {"_id": "ca_analysis"}
+    #
+    # The earlier method is kept above for reference and rollback.
+    # =========================================================================
+
+    @classmethod
+    def get_ca_distribution_fast(cls, limit: int = 10, base_filter: Optional[Dict] = None) -> List[Dict]:
+        if base_filter:
+            print("[WARNING] CA Analytics: base_filter provided, falling back to slow aggregation")
+            return cls.get_ca_distribution(limit=limit, base_filter=base_filter)
+
+        try:
+            analysis_collection = MongoDBClient.get_results_db()['ca-analysis']
+            analysis_doc = analysis_collection.find_one({'_id': 'ca_analysis'})
+            if not analysis_doc:
+                print("[WARNING] CA Analytics: No ca-analysis data found, falling back to slow method")
+                return cls.get_ca_distribution(limit=limit, base_filter=None)
+
+            ca_records = sorted(
+                analysis_doc.get('ca-list', []),
+                key=lambda item: item.get('rank', 999999),
+            )[:limit]
+
+            if not ca_records:
+                print("[WARNING] CA Analytics: Empty ca-list, falling back to slow method")
+                return cls.get_ca_distribution(limit=limit, base_filter=None)
+
+            total_certificates = analysis_doc.get('total_certs', 0)
+            top_ca_count = sum(record.get('count', 0) for record in ca_records)
+            others_count = max(0, total_certificates - top_ca_count)
+
+            ca_list = [
+                {
+                    'id': record.get('ca_id', f"ca-{i}"),
+                    'name': record.get('name'),
+                    'count': record.get('count', 0),
+                    'maxCount': record.get('max_count', ca_records[0].get('count', 0)),
+                    'percentage': record.get('percentage', 0),
+                    'color': record.get('color', '#6b7280')
+                }
+                for i, record in enumerate(ca_records)
+            ]
+
+            if others_count > 0 and ca_records:
+                max_count = ca_records[0].get('max_count', ca_records[0].get('count', 0))
+                ca_list.append({
+                    'id': 'ca-others',
+                    'name': 'Others',
+                    'count': others_count,
+                    'maxCount': max_count,
+                    'percentage': round((others_count / total_certificates) * 100, 1) if total_certificates else 0,
+                    'color': '#6b7280',
+                    'isOthers': True
+                })
+
+            return ca_list
+
+        except Exception as e:
+            print(f"[ERROR] CA Analytics Fast: {str(e)}, falling back to slow method")
+            return cls.get_ca_distribution(limit=limit, base_filter=None)

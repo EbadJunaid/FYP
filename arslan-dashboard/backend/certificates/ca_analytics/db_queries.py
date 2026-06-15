@@ -13,43 +13,43 @@ class CAModel:
     # Use the same certificates collection reference as CertificateModel
     collection = db['certificates']
 
-    @classmethod
-    def get_ca_stats_fast(cls) -> Dict:
-        """
-        FAST VERSION: Get CA Analytics stats from pre-computed materialized view.
+    # @classmethod
+    # def get_ca_stats_fast(cls) -> Dict:
+    #     """
+    #     FAST VERSION: Get CA Analytics stats from pre-computed materialized view.
         
-        Returns:
-            Dict with total_cas, total_certs, top_ca, self_signed_count, unique_countries
+    #     Returns:
+    #         Dict with total_cas, total_certs, top_ca, self_signed_count, unique_countries
         
-        Performance:
-            - Before: ~6 minutes (multiple aggregations)
-            - After: ~0.005s (single document read)
-            - Speedup: ~72,000x
+    #     Performance:
+    #         - Before: ~6 minutes (multiple aggregations)
+    #         - After: ~0.005s (single document read)
+    #         - Speedup: ~72,000x
         
-        Materialized View:
-            - Database: tranco-latest-8-lakh-results
-            - Collection: ca-stats
-            - Document: Single doc with _id='ca_stats'
+    #     Materialized View:
+    #         - Database: tranco-latest-8-lakh-results
+    #         - Collection: ca-stats
+    #         - Document: Single doc with _id='ca_stats'
         
-        To update pre-computed data:
-            python compute_ca_stats.py
-        """
-        stats_collection = MongoDBClient.get_results_db()['ca-stats']
+    #     To update pre-computed data:
+    #         python compute_ca_stats.py
+    #     """
+    #     stats_collection = MongoDBClient.get_results_db()['ca-stats']
         
-        # Read the single pre-computed document
-        stats_doc = stats_collection.find_one({'_id': 'ca_stats'})
+    #     # Read the single pre-computed document
+    #     stats_doc = stats_collection.find_one({'_id': 'ca_stats'})
         
-        if not stats_doc:
-            # Fallback to slow method if no pre-computed data
-            return cls.get_ca_stats()
+    #     if not stats_doc:
+    #         # Fallback to slow method if no pre-computed data
+    #         return cls.get_ca_stats()
         
-        return {
-            'total_cas': stats_doc['total_cas'],
-            'total_certs': stats_doc['total_certs'],
-            'top_ca': stats_doc['top_ca'],
-            'self_signed_count': stats_doc['self_signed_count'],
-            'unique_countries': stats_doc['unique_countries']
-        }
+    #     return {
+    #         'total_cas': stats_doc['total_cas'],
+    #         'total_certs': stats_doc['total_certs'],
+    #         'top_ca': stats_doc['top_ca'],
+    #         'self_signed_count': stats_doc['self_signed_count'],
+    #         'unique_countries': stats_doc['unique_countries']
+    #     }
 
     @classmethod
     def get_ca_stats(cls) -> Dict:
@@ -135,63 +135,129 @@ class CAModel:
             'unique_countries': unique_countries
         }
 
+    # @classmethod
+    # def get_issuer_validation_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+    #     """
+    #     FAST VERSION: Get issuer × validation level matrix from pre-computed materialized view.
+        
+    #     Args:
+    #         limit: Number of top issuers to return (default: 10)
+        
+    #     Returns:
+    #         List of dicts with issuer, validationLevel, and count
+        
+    #     Performance:
+    #         - Before: ~93 seconds (complex aggregation)
+    #         - After: ~0.015s (pre-filtered read)
+    #         - Speedup: ~6,200x
+        
+    #     Materialized View:
+    #         - Database: tranco-latest-8-lakh-results
+    #         - Collection: issuer-validation-matrix
+    #         - Documents: 114 records (top 50 issuers × validation levels)
+        
+    #     To update pre-computed data:
+    #         python compute_issuer_validation_matrix.py
+    #     """
+    #     matrix_collection = MongoDBClient.get_results_db()['issuer-validation-matrix']
+        
+    #     # Get top issuers by total count
+    #     pipeline = [
+    #         {'$match': {'record_id': {'$exists': True}}},  # Exclude metadata
+    #         {'$sort': {'issuer_total': -1, 'count': -1}},
+    #         {'$group': {
+    #             '_id': '$issuer',
+    #             'combinations': {
+    #                 '$push': {
+    #                     'validationLevel': '$validationLevel',
+    #                     'count': '$count'
+    #                 }
+    #             },
+    #             'total': {'$first': '$issuer_total'}
+    #         }},
+    #         {'$sort': {'total': -1}},
+    #         {'$limit': limit}
+    #     ]
+        
+    #     issuer_groups = list(matrix_collection.aggregate(pipeline))
+        
+    #     # Flatten to required format
+    #     matrix = []
+    #     for group in issuer_groups:
+    #         issuer = group['_id']
+    #         for combo in group['combinations']:
+    #             matrix.append({
+    #                 'issuer': issuer,
+    #                 'validationLevel': combo['validationLevel'],
+    #                 'count': combo['count']
+    #             })
+        
+    #     return matrix
+
+    # =========================================================================
+    # NEW CA-ANALYSIS IMPLEMENTATION
+    # -------------------------------------------------------------------------
+    # The methods below intentionally keep the same names as the legacy fast
+    # methods above. Python uses the later definition, so these methods now read
+    # from one collection/document:
+    #
+    #   <results_db>.ca-analysis / {"_id": "ca_analysis"}
+    #
+    # If that document is missing, they fall back to the existing slow methods.
+    # =========================================================================
+
+    @classmethod
+    def _get_ca_analysis_doc(cls) -> Optional[Dict]:
+        collection = MongoDBClient.get_results_db()['ca-analysis']
+        return collection.find_one({'_id': 'ca_analysis'})
+
+    @classmethod
+    def get_ca_stats_fast(cls) -> Dict:
+        doc = cls._get_ca_analysis_doc()
+        if not doc:
+            return cls.get_ca_stats()
+
+        ca_list = doc.get('ca-list', [])
+        top_ca_record = None
+        for ca in ca_list:
+            if ca.get('rank') == 1:
+                top_ca_record = ca
+                break
+        if not top_ca_record and ca_list:
+            top_ca_record = sorted(ca_list, key=lambda item: item.get('rank', 999999))[0]
+
+        return {
+            'total_cas': doc.get('total_cas', 0),
+            'total_certs': doc.get('total_certs', 0),
+            'top_ca': {
+                'name': top_ca_record.get('name') if top_ca_record else None,
+                'count': top_ca_record.get('count', 0) if top_ca_record else 0,
+                'percentage': top_ca_record.get('percentage', 0) if top_ca_record else 0,
+            },
+            'self_signed_count': doc.get('self_signed_count', 0),
+            'unique_countries': doc.get('unique_countries', 0)
+        }
+
     @classmethod
     def get_issuer_validation_matrix_fast(cls, limit: int = 10) -> List[Dict]:
-        """
-        FAST VERSION: Get issuer × validation level matrix from pre-computed materialized view.
-        
-        Args:
-            limit: Number of top issuers to return (default: 10)
-        
-        Returns:
-            List of dicts with issuer, validationLevel, and count
-        
-        Performance:
-            - Before: ~93 seconds (complex aggregation)
-            - After: ~0.015s (pre-filtered read)
-            - Speedup: ~6,200x
-        
-        Materialized View:
-            - Database: tranco-latest-8-lakh-results
-            - Collection: issuer-validation-matrix
-            - Documents: 114 records (top 50 issuers × validation levels)
-        
-        To update pre-computed data:
-            python compute_issuer_validation_matrix.py
-        """
-        matrix_collection = MongoDBClient.get_results_db()['issuer-validation-matrix']
-        
-        # Get top issuers by total count
-        pipeline = [
-            {'$match': {'record_id': {'$exists': True}}},  # Exclude metadata
-            {'$sort': {'issuer_total': -1, 'count': -1}},
-            {'$group': {
-                '_id': '$issuer',
-                'combinations': {
-                    '$push': {
-                        'validationLevel': '$validationLevel',
-                        'count': '$count'
-                    }
-                },
-                'total': {'$first': '$issuer_total'}
-            }},
-            {'$sort': {'total': -1}},
-            {'$limit': limit}
-        ]
-        
-        issuer_groups = list(matrix_collection.aggregate(pipeline))
-        
-        # Flatten to required format
+        doc = cls._get_ca_analysis_doc()
+        if not doc:
+            return cls.get_issuer_validation_matrix(limit=limit)
+
+        ca_list = sorted(
+            doc.get('ca-list', []),
+            key=lambda item: item.get('rank', 999999),
+        )[:limit]
+
         matrix = []
-        for group in issuer_groups:
-            issuer = group['_id']
-            for combo in group['combinations']:
+        for ca in ca_list:
+            issuer = ca.get('name')
+            for validation_item in ca.get('validationLevel', []):
                 matrix.append({
                     'issuer': issuer,
-                    'validationLevel': combo['validationLevel'],
-                    'count': combo['count']
+                    'validationLevel': validation_item.get('validationlevel_type', 'Unknown'),
+                    'count': validation_item.get('count', 0),
                 })
-        
         return matrix
 
     @classmethod

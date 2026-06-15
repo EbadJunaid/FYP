@@ -371,7 +371,7 @@ export default function ValidityAnalyticsPage() {
     };
 
     const statusBreakdown = [
-        { name: 'Valid', value: (metrics?.activeCertificates.count || 0) - (metrics?.expiringSoon.count || 0), color: STATUS_COLORS.valid },
+        { name: 'Valid', value: (metrics?.activeCertificates.count || 0), color: STATUS_COLORS.valid },
         { name: 'Expiring', value: metrics?.expiringSoon.count || 0, color: STATUS_COLORS.expiring },
         { name: 'Expired', value: metrics?.expiredCertificates?.count || 0, color: STATUS_COLORS.expired },
     ];
