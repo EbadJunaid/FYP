@@ -26,8 +26,8 @@ class GlobalFilterParams(object):
             result['countries'] = tuple(self.countries)
         if self.issuers and len(self.issuers) > 0:
             result['issuers'] = tuple(self.issuers)
-        if self.grades and len(self.grades) > 0:
-            result['grades'] = tuple(self.grades)
+        # if self.grades and len(self.grades) > 0:
+        # result['grades'] = tuple(self.grades)
         if self.statuses and len(self.statuses) > 0:
             result['statuses'] = tuple(self.statuses)
         if self.validation_levels and len(self.validation_levels) > 0:

@@ -87,6 +87,8 @@ const certificatesFetcher = async (key: string) => {
         apiFilterType = 'standard';
     } else if (filterType === 'wildcard' || filterType === 'sanType' && filterValue === 'wildcard') {
         apiFilterType = 'wildcard';
+    } else if (filterType === 'sanType' && filterValue === 'standard') {
+        apiFilterType = 'standard';
     } else if (filterType === 'multidomain') {
         apiFilterType = 'multi-domain';
     } else if (filterType === 'bucket') {
@@ -260,11 +262,12 @@ export default function SANAnalyticsPage() {
     const handleCardClick = useCallback((type: FilterType, value: string = '') => {
         setFilterType(type);
         setFilterValue(value);
+        setSearchQuery('');
         setCurrentPage(1);
         setTimeout(() => {
             tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
-    }, []);
+    }, [setSearchQuery]);
 
     const handleRowClick = useCallback((entry: ScanEntry) => {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify({

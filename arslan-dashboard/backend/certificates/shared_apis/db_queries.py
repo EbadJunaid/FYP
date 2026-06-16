@@ -696,6 +696,22 @@ class SharedModels:
             return TLD_TO_COUNTRY.get(tld, 'Unknown')
         return 'Unknown'
 
+    @staticmethod
+    def country_name_to_tld(country: str) -> Optional[str]:
+        """Convert a display country name like 'Pakistan' to its stored scope TLD."""
+        if not country:
+            return None
+
+        normalized = country.strip().lower()
+        direct_tld = normalized.lstrip('.')
+        if direct_tld in TLD_TO_COUNTRY:
+            return direct_tld
+
+        for tld, country_name in TLD_TO_COUNTRY.items():
+            if country_name.lower() == normalized:
+                return tld
+        return direct_tld or None
+
     # below functions are used by get_all and get_by_id functions to compute status, grade, and vulnerabilities for each certificate record before sending to frontend.
 
     @staticmethod
@@ -1159,6 +1175,244 @@ class SharedModels:
             shared_key: Filter for certs involved in true key reuse (different certs sharing same public key)
             base_filter: Global filter query from build_filter_query() - merged with specific filters
         """
+        now = cls.get_current_time_iso()
+        now_dt = datetime.now(timezone.utc)
+        now_plus_30 = (now_dt + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        filters = []
+
+        if base_filter:
+            filters.append(base_filter.copy())
+
+        if search:
+            prefix = re.escape(search)
+            filters.append({'domain': {'$regex': f'^{prefix}', '$options': 'i'}})
+
+        if issuer:
+            if issuer.lower() == 'others':
+                top_ca_pipeline = [
+                    {'$project': {'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}}},
+                    {'$match': {'issuer_org': {'$exists': True, '$ne': None}}},
+                    {'$group': {'_id': '$issuer_org', 'count': {'$sum': 1}}},
+                    {'$sort': {'count': -1}},
+                    {'$limit': 10}
+                ]
+                top_cas = [r['_id'] for r in cls.collection.aggregate(top_ca_pipeline, allowDiskUse=True)]
+                filters.append({
+                    '$or': [
+                        {'parsed.issuer.organization': {'$nin': top_cas}},
+                        {'parsed.issuer.organization': {'$exists': False}},
+                        {'parsed.issuer.organization': []}
+                    ]
+                })
+            else:
+                filters.append({'parsed.issuer.organization': issuer})
+
+        if status:
+            status_upper = status.upper()
+            if status_upper == 'EXPIRED':
+                filters.append({'parsed.validity.end': {'$lt': now}})
+            elif status_upper == 'EXPIRING_SOON':
+                filters.append({'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}})
+            elif status_upper == 'VALID':
+                filters.append({'parsed.validity.end': {'$gt': now}})
+
+        if country:
+            scope_tld = cls.country_name_to_tld(country)
+            print(f"[COUNTRY FILTER] Querying parsed.scope for {country} -> {scope_tld}")
+            filters.append({'scope': scope_tld})
+
+        if encryption_type:
+            parts = encryption_type.split()
+            if parts:
+                algo_name = parts[0]
+                filters.append({'parsed.subject_key_info.key_algorithm.name': algo_name})
+                if len(parts) >= 2:
+                    try:
+                        key_length = int(parts[1])
+                        if algo_name.upper() == 'RSA':
+                            filters.append({'parsed.subject_key_info.rsa_public_key.length': key_length})
+                        elif algo_name.upper() in ['ECDSA', 'EC']:
+                            filters.append({'parsed.subject_key_info.ecdsa_public_key.length': key_length})
+                    except ValueError:
+                        pass
+
+        if has_vulnerabilities:
+            filters.append({'zlint.errors_present': True})
+
+        if signature_algorithm:
+            filters.append({'parsed.signature_algorithm.name': signature_algorithm})
+
+        if weak_hash:
+            filters.append({
+                '$or': [
+                    {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
+                    {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
+                ]
+            })
+
+        if self_signed:
+            filters.append({'parsed.signature.self_signed': True})
+
+        if key_size:
+            print(f"Applying key size filter: {key_size} bits")
+            filters.append({
+                '$or': [
+                    {'parsed.subject_key_info.rsa_public_key.length': key_size},
+                    {'parsed.subject_key_info.ecdsa_public_key.length': key_size}
+                ]
+            })
+
+        if hash_type:
+            print(f"Applying hash type filter: {hash_type}")
+            hash_patterns = {
+                'SHA-256': '^SHA256|^SHA-256',
+                'SHA-384': '^SHA384|^SHA-384',
+                'SHA-512': '^SHA512|^SHA-512',
+                'SHA-1': '^SHA1|^SHA-1',
+                'MD5': '^MD5'
+            }
+            pattern = hash_patterns.get(hash_type, f'^{re.escape(hash_type.replace("-", ""))}')
+            filters.append({'parsed.signature_algorithm.name': {'$regex': pattern, '$options': 'i'}})
+
+        if expiring_month and expiring_year:
+            from calendar import monthrange
+            _, last_day = monthrange(expiring_year, expiring_month)
+            filters.append({'parsed.validity.end': {
+                '$gte': f"{expiring_year}-{expiring_month:02d}-01T00:00:00Z",
+                '$lte': f"{expiring_year}-{expiring_month:02d}-{last_day:02d}T23:59:59Z"
+            }})
+
+        if expiring_start and expiring_end:
+            print(f"Applying custom expiration range filter: {expiring_start} to {expiring_end}")
+            filters.append({'parsed.validity.end': {'$gte': expiring_start, '$lte': expiring_end}})
+
+        if issued_month and issued_year:
+            from calendar import monthrange
+            _, last_day = monthrange(issued_year, issued_month)
+            filters.append({'parsed.validity.start': {
+                '$gte': f"{issued_year}-{issued_month:02d}-01T00:00:00Z",
+                '$lte': f"{issued_year}-{issued_month:02d}-{last_day:02d}T23:59:59Z"
+            }})
+
+        if issued_within_days:
+            print(f"Applying issued within last {issued_within_days} days filter")
+            past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            filters.append({'parsed.validity.start': {'$gte': past_date, '$lte': now}})
+
+        if expiring_days:
+            target_date = (now_dt + timedelta(days=expiring_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            filters.append({'parsed.validity.end': {'$gt': now, '$lte': target_date}})
+
+        if validation_levels:
+            normalized_levels = [
+                level.strip().upper()
+                for level in validation_levels
+                if isinstance(level, str) and level.strip().upper() in ['DV', 'OV', 'EV']
+            ]
+            if normalized_levels:
+                filters.append({'parsed.validation_level': {'$in': normalized_levels}})
+            
+        if validity_bucket:
+            bucket_ranges = {
+                '0-90': (0, 90),
+                '90-365': (90, 365),
+                '365-730': (365, 730),
+                '730+': (730, 100000)
+            }
+            if validity_bucket in bucket_ranges:
+                min_days, max_days = bucket_ranges[validity_bucket]
+                filters.append({'parsed.validity.length': {
+                    '$gte': min_days * 86400,
+                    '$lt': max_days * 86400
+                }})
+
+        # SAN filters are intentionally disabled here because SAN analytics now
+        # handles these paths separately. Kept for reference:
+        # if san_tld:
+        #     tld_pattern = san_tld.lstrip('.')
+        #     filters.append({'parsed.extensions.subject_alt_name.dns_names': {
+        #         '$regex': f'\\.{tld_pattern}$',
+        #         '$options': 'i'
+        #     }})
+        # if san_type:
+        #     if san_type.lower() == 'wildcard':
+        #         filters.append({'parsed.extensions.subject_alt_name.dns_names': {
+        #             '$regex': '^\\*\\.',
+        #             '$options': 'i'
+        #         }})
+        #     elif san_type.lower() == 'standard':
+        #         filters.append({'parsed.extensions.subject_alt_name.dns_names': {'$exists': True, '$ne': []}})
+        #         filters.append({'parsed.extensions.subject_alt_name.dns_names': {'$not': {'$regex': '^\\*\\.'}}})
+        # if san_count_min is not None or san_count_max is not None:
+        #     san count requires aggregation with $size and is handled by SAN-specific code.
+
+        if shared_key:
+            try:
+                shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-groups']
+                shared_fingerprints = [
+                    doc['_id']
+                    for doc in shared_groups_collection.find({'_id': {'$ne': 'metadata'}}, {'_id': 1})
+                ]
+            except Exception:
+                shared_keys_pipeline = [
+                    {'$match': {
+                        'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                        'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+                    }},
+                    {'$group': {
+                        '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                        'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+                    }},
+                    {'$addFields': {'distinct_certs': {'$size': '$cert_fingerprints'}}},
+                    {'$match': {'distinct_certs': {'$gt': 1}}},
+                    {'$project': {'_id': 1}}
+                ]
+                shared_fingerprints = [
+                    row['_id']
+                    for row in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)
+                ]
+
+            filters.append({
+                'parsed.subject_key_info.fingerprint_sha256': {
+                    '$in': shared_fingerprints if shared_fingerprints else []
+                }
+            })
+
+        if not filters:
+            query = {}
+        elif len(filters) == 1:
+            query = filters[0]
+        else:
+            query = {'$and': filters}
+
+        print(f"[CERTIFICATES QUERY] {query}")
+
+        total = cls.collection.estimated_document_count() if not query else cls.collection.count_documents(query)
+
+        skip = (page - 1) * page_size
+        find_cursor = cls.collection.find(query)
+        if not issuer:
+            find_cursor = find_cursor.sort('_id', 1)
+            if not query:
+                find_cursor = find_cursor.hint('_id_')
+        cursor = find_cursor.skip(skip).limit(page_size)
+
+        certificates = [cls.serialize_certificate(doc) for doc in cursor]
+
+        pagination = {
+            'page': page,
+            'pageSize': page_size,
+            'total': total,
+            'totalPages': max(1, (total + page_size - 1) // page_size)
+        }
+        return {
+            'certificates': certificates,
+            'pagination': pagination
+        }
+
+        # Legacy get_all implementation is kept below for reference only.
+        # Runtime returns from the normalized single-query flow above.
         
         now = cls.get_current_time_iso()
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -1251,6 +1505,9 @@ class SharedModels:
         
         # Filter by exact key size (e.g., 2048, 4096)
         if key_size:
+
+            print(f"Applying key size filter: {key_size} bits")
+
             query['$or'] = query.get('$or', [])
             if not query['$or']:
                 query['$or'] = [
@@ -1261,6 +1518,7 @@ class SharedModels:
         # Filter by hash type (e.g., "SHA-256", "SHA-1")
         if hash_type:
             # Map hash type to regex pattern for signature_algorithm.name
+            print(f"Applying hash type filter: {hash_type}")
             hash_patterns = {
                 'SHA-256': '^SHA256',
                 'SHA-384': '^SHA384',
@@ -1282,6 +1540,7 @@ class SharedModels:
         
         # Filter by custom expiration range (e.g. for weekly view)
         if expiring_start and expiring_end:
+            print(f"Applying custom expiration range filter: {expiring_start} to {expiring_end}")
             # If both month filter and range filter are present, range takes precedence
             # or we could combine them, but range is usually more specific
             query['parsed.validity.end'] = {'$gte': expiring_start, '$lte': expiring_end}
@@ -1297,6 +1556,7 @@ class SharedModels:
         
         # Filter by issued within N days (for "Issued (30d)" card click)
         if issued_within_days:
+            print(f"Applying issued within last {issued_within_days} days filter")
             now_dt = datetime.now(timezone.utc)
             past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
             # Certificates with validity start date within the last N days
