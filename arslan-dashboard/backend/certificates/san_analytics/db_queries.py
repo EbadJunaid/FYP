@@ -461,8 +461,7 @@ class SANModel:
 
     @classmethod
     def _get_san_analysis_doc(cls) -> Dict[str, Any]:
-        collection = MongoDBClient.get_results_db()['san-analysis']
-        doc = collection.find_one({'_id': 'san_analysis'})
+        doc = MongoDBClient.find_scoped_result_doc('san-analysis', fallback_id='san_analysis')
         if not doc:
             raise ValueError("SAN analytics not computed. Run generic-compute-san-analytics.py first.")
         return doc

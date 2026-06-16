@@ -456,8 +456,7 @@ class SignatureHashModel:
 
     @classmethod
     def _get_signature_and_hash_doc(cls) -> Optional[Dict]:
-        collection = MongoDBClient.get_results_db()['signature-and-hash']
-        return collection.find_one({'_id': 'signature_and_hash'})
+        return MongoDBClient.find_scoped_result_doc('signature-and-hash', fallback_id='signature_and_hash')
 
     @classmethod
     def get_signature_stats_fast(cls) -> Dict:

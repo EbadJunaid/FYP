@@ -14,6 +14,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
+from scope_utils import add_scope_match, get_scope_filter, get_scopes_for_entry, normalize_db_entries, scoped_doc_id
 
 
 def get_default_config_path():
@@ -39,18 +40,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -63,11 +53,11 @@ def resolve_targets(db_names, entries):
         if name in lookup:
             targets.append(lookup[name])
         else:
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
-def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
+def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, scope="all"):
     source_collection = client[main_db]["certificates"]
     results_db_ref = client[results_db]
     target_collection = results_db_ref["ca-analysis"]
@@ -79,7 +69,12 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
     for collection_name in ["ca-stats", "ca-analytics", "issuer-validation-matrix"]:
         results_db_ref[collection_name].drop()
 
-    total_certs = source_collection.estimated_document_count()
+    scope_filter = get_scope_filter(scope)
+    total_certs = (
+        source_collection.count_documents(scope_filter)
+        if scope_filter
+        else source_collection.estimated_document_count()
+    )
 
     colors = [
         "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444",
@@ -110,13 +105,13 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
 
     try:
         validation_results = list(source_collection.aggregate(
-            ca_validation_pipeline,
+            add_scope_match(ca_validation_pipeline, scope),
             hint="idx_issuer_org",
             allowDiskUse=True,
         ))
     except Exception:
         validation_results = list(source_collection.aggregate(
-            ca_validation_pipeline,
+            add_scope_match(ca_validation_pipeline, scope),
             allowDiskUse=True,
         ))
 
@@ -163,11 +158,13 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
 
     try:
         self_signed_count = source_collection.count_documents(
-            {"parsed.signature.self_signed": True},
+            {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True},
             hint="idx_self_signed",
         )
     except Exception:
-        self_signed_count = source_collection.count_documents({"parsed.signature.self_signed": True})
+        self_signed_count = source_collection.count_documents(
+            {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True}
+        )
 
     country_pipeline = [
         {"$unwind": {"path": "$parsed.issuer.country", "preserveNullAndEmptyArrays": True}},
@@ -177,18 +174,18 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
     ]
     try:
         country_result = list(source_collection.aggregate(
-            country_pipeline,
+            add_scope_match(country_pipeline, scope),
             hint="idx_issuer_country",
             allowDiskUse=True,
         ))
     except Exception:
-        country_result = list(source_collection.aggregate(country_pipeline, allowDiskUse=True))
+        country_result = list(source_collection.aggregate(add_scope_match(country_pipeline, scope), allowDiskUse=True))
     unique_countries = country_result[0]["total"] if country_result else 0
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     analysis_document = {
-        "_id": "ca_analysis",
-        "scope": "all",
+        "_id": scoped_doc_id("ca_analysis", scope),
+        "scope": scope,
         "total_cas": len(ca_list),
         "total_certs": total_certs,
         "self_signed_count": self_signed_count,
@@ -203,13 +200,13 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False):
         "top_limit": top_limit,
     }
 
-    target_collection.replace_one({"_id": "ca_analysis"}, analysis_document, upsert=True)
+    target_collection.replace_one({"scope": scope}, analysis_document, upsert=True)
     target_collection.create_index("scope")
     target_collection.create_index("computed_at")
     target_collection.create_index("ca-list.rank")
 
     if verify:
-        stored = target_collection.find_one({"_id": "ca_analysis"})
+        stored = target_collection.find_one({"scope": scope})
         if not stored:
             raise RuntimeError("Verification failed: missing ca-analysis document")
         if stored.get("total_cas") != len(ca_list):
@@ -233,13 +230,15 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_ca_stats(
-            client,
-            target["main"],
-            target["results"],
-            top_limit=args.limit,
-            verify=args.verify,
-        )
+        for scope, _country in get_scopes_for_entry(target):
+            compute_ca_stats(
+                client,
+                target["main"],
+                target["results"],
+                top_limit=args.limit,
+                verify=args.verify,
+                scope=scope,
+            )
     client.close()
 
 

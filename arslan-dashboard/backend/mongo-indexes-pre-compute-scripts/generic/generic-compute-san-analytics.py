@@ -11,6 +11,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient, ASCENDING
+from scope_utils import get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -41,18 +42,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -67,7 +57,7 @@ def resolve_targets(db_names, entries):
             targets.append(lookup[name])
         else:
             # print(f"in else condition of resolve_targets: {name}")
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
@@ -115,7 +105,7 @@ def pick_country(cert):
     return "Unknown"
 
 
-def compute_san_analytics(client, main_db, results_db, limit=None, verify=False):
+def compute_san_analytics(client, main_db, results_db, limit=None, verify=False, scope="all"):
     source_collection = client[main_db]["certificates"]
     results_db_ref = client[results_db]
 
@@ -133,7 +123,7 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     # one collection, one document with counts and first-1000 ObjectId arrays.
     target_collection = results_db_ref["san-analysis"]
 
-    log(f"SAN analytics: {main_db} -> {results_db}")
+    log(f"SAN analytics: {main_db} -> {results_db} scope={scope}")
     log("Step 1/4: Clearing existing SAN analytics collections")
 
     # Drop legacy split collections so stale data does not look authoritative.
@@ -149,11 +139,16 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     ]:
         results_db_ref[collection_name].drop()
 
-    target_collection.delete_many({})
+    target_collection.delete_many({"scope": scope})
 
     start_time = datetime.now(timezone.utc)
 
-    total_docs = source_collection.estimated_document_count()
+    scope_filter = get_scope_filter(scope)
+    total_docs = (
+        source_collection.count_documents(scope_filter)
+        if scope_filter
+        else source_collection.estimated_document_count()
+    )
     if limit:
         total_docs = min(limit, total_docs)
 
@@ -201,7 +196,7 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     processed = 0
 
     cursor = source_collection.find(
-        {},
+        merge_scope_query({}, scope),
         {
             "_id": 1,
             "domain": 1,
@@ -321,8 +316,8 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
 
     avg_sans = total_sans_count / processed if processed else 0
     san_analysis_doc = {
-        "_id": "san_analysis",
-        "scope": "all",
+        "_id": scoped_doc_id("san_analysis", scope),
+        "scope": scope,
         "total_san_count": total_sans_count,
         "avg_san_count": round(avg_sans, 2),
         "total_certificates": processed,
@@ -345,12 +340,12 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False)
     }
 
     log("Step 4/4: Writing san-analysis document")
-    target_collection.replace_one({"_id": "san_analysis"}, san_analysis_doc, upsert=True)
-    target_collection.create_index([("country", ASCENDING)])
+    target_collection.replace_one({"scope": scope}, san_analysis_doc, upsert=True)
+    target_collection.create_index([("scope", ASCENDING)])
     target_collection.create_index([("computed_at", ASCENDING)])
 
     if verify:
-        stored_doc = target_collection.find_one({"_id": "san_analysis"})
+        stored_doc = target_collection.find_one({"scope": scope})
         if not stored_doc:
             raise RuntimeError("Verification failed: san-analysis document missing")
         if stored_doc.get("total_certificates") != processed:
@@ -384,13 +379,15 @@ def main():
     # print(f"Targets: {targets}")
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_san_analytics(
-            client,
-            target["main"],
-            target["results"],
-            limit=args.limit,
-            verify=args.verify,
-        )
+        for scope, _country in get_scopes_for_entry(target):
+            compute_san_analytics(
+                client,
+                target["main"],
+                target["results"],
+                limit=args.limit,
+                verify=args.verify,
+                scope=scope,
+            )
         # print(target," - Skipping actual computation (uncomment to run)")
     client.close()
 

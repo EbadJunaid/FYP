@@ -138,8 +138,15 @@ class CacheService:
         Format: ssl_guardian:{namespace}:{hash}
         Hash ensures unique key for different parameter combinations.
         """
+        scoped_params = dict(params or {})
+        try:
+            from certificates.db import MongoDBClient
+            scoped_params['_scope'] = MongoDBClient.get_precomputed_scope()
+        except Exception:
+            scoped_params['_scope'] = 'all'
+
         # Sort params for consistent key generation
-        sorted_params = json.dumps(params, sort_keys=True, default=str)
+        sorted_params = json.dumps(scoped_params, sort_keys=True, default=str)
         hash_val = hashlib.md5(sorted_params.encode()).hexdigest()[:12]
         return f"{self.prefix}:{namespace}:{hash_val}"
     

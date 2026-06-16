@@ -17,6 +17,7 @@ import os
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 from pymongo import MongoClient
+from scope_utils import add_scope_match, get_scope_filter, get_scopes_for_entry, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -47,18 +48,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -71,19 +61,20 @@ def resolve_targets(db_names, entries):
         if name in lookup:
             targets.append(lookup[name])
         else:
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
-def compute_signature_stats(client, main_db, results_db, months=36, granularity="quarterly", matrix_limit=50, verify=False):
+def compute_signature_stats(client, main_db, results_db, months=36, granularity="quarterly", matrix_limit=50, verify=False, scope="all"):
     source_collection = client[main_db]["certificates"]
     results_db_ref = client[results_db]
     results_collection = results_db_ref["signature-and-hash"]
 
-    log(f"Signature stats: {main_db} -> {results_db}")
+    log(f"Signature stats: {main_db} -> {results_db} scope={scope}")
 
     start_time = datetime.now(timezone.utc)
-    total = source_collection.count_documents({})
+    scope_filter = get_scope_filter(scope)
+    total = source_collection.count_documents(scope_filter)
 
     # Legacy split collections are cleared so stale data is not mistaken for
     # the current materialized view.
@@ -92,8 +83,8 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
 
     if total == 0:
         empty_doc = {
-            "_id": "signature_and_hash",
-            "scope": "all",
+            "_id": scoped_doc_id("signature_and_hash", scope),
+            "scope": scope,
             "algorithmDistribution": [],
             "hashDistribution": [],
             "keySizeDistribution": [],
@@ -114,7 +105,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
             "issuer-algo-matrix": [],
             "matrix_limit": matrix_limit,
         }
-        results_collection.replace_one({"_id": "signature_and_hash"}, empty_doc, upsert=True)
+        results_collection.replace_one({"scope": scope}, empty_doc, upsert=True)
         return
 
     log("Step 1/7: Computing signature algorithm distribution")
@@ -127,7 +118,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$sort": {"count": -1}},
         {"$limit": 10},
     ]
-    algo_results = list(source_collection.aggregate(algo_pipeline, allowDiskUse=True))
+    algo_results = list(source_collection.aggregate(add_scope_match(algo_pipeline, scope), allowDiskUse=True))
 
     algo_colors = {
         "SHA256-RSA": "#3b82f6",
@@ -174,7 +165,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$group": {"_id": "$hash", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
     ]
-    hash_results = list(source_collection.aggregate(hash_pipeline, allowDiskUse=True))
+    hash_results = list(source_collection.aggregate(add_scope_match(hash_pipeline, scope), allowDiskUse=True))
 
     hash_colors = {
         "SHA-512": "#1d4ed8",
@@ -232,7 +223,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$sort": {"count": -1}},
         {"$limit": 10},
     ]
-    keysize_results = list(source_collection.aggregate(keysize_pipeline, allowDiskUse=True))
+    keysize_results = list(source_collection.aggregate(add_scope_match(keysize_pipeline, scope), allowDiskUse=True))
 
     keysize_distribution = []
     key_score = 0
@@ -264,7 +255,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
 
     log("Step 4/7: Counting self-signed certificates")
     self_signed_count = source_collection.count_documents(
-        {"parsed.signature.self_signed": True}
+        {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True}
     )
 
     hash_compliance_rate = round((compliant_count / total) * 100, 1) if total > 0 else 0
@@ -289,7 +280,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$sort": {"count": -1}},
         {"$limit": 1},
     ]
-    enc_type_result = list(source_collection.aggregate(enc_type_pipeline, allowDiskUse=True))
+    enc_type_result = list(source_collection.aggregate(add_scope_match(enc_type_pipeline, scope), allowDiskUse=True))
 
     max_encryption_type = None
     if enc_type_result:
@@ -341,7 +332,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$group": {"_id": "$_id.period", "hashes": {"$push": {"hash": "$_id.hash", "count": "$count"}}, "total": {"$sum": "$count"}}},
         {"$sort": {"_id.year": 1, "_id.quarter": 1}},
     ]
-    trend_results = list(source_collection.aggregate(trends_pipeline, allowDiskUse=True))
+    trend_results = list(source_collection.aggregate(add_scope_match(trends_pipeline, scope), allowDiskUse=True))
 
     hash_trends = []
     for item in trend_results:
@@ -394,7 +385,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$sort": {"count": -1}},
         {"$limit": matrix_limit},
     ]
-    issuer_algo_results = list(source_collection.aggregate(issuer_algo_pipeline, allowDiskUse=True))
+    issuer_algo_results = list(source_collection.aggregate(add_scope_match(issuer_algo_pipeline, scope), allowDiskUse=True))
 
     issuer_matrix_map = {}
     for item in issuer_algo_results:
@@ -432,8 +423,8 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     result_doc = {
-        "_id": "signature_and_hash",
-        "scope": "all",
+        "_id": scoped_doc_id("signature_and_hash", scope),
+        "scope": scope,
         "algorithmDistribution": algorithm_distribution,
         "hashDistribution": hash_distribution,
         "keySizeDistribution": keysize_distribution,
@@ -455,7 +446,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         "matrix_limit": matrix_limit,
     }
 
-    results_collection.replace_one({"_id": "signature_and_hash"}, result_doc, upsert=True)
+    results_collection.replace_one({"scope": scope}, result_doc, upsert=True)
     results_collection.create_index("scope")
     results_collection.create_index("computed_at")
     results_collection.create_index("hash_trends_granularity")
@@ -463,7 +454,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
     results_collection.create_index("issuer-algo-matrix.issuer")
 
     if verify:
-        stored_doc = results_collection.find_one({"_id": "signature_and_hash"})
+        stored_doc = results_collection.find_one({"scope": scope})
         if not stored_doc:
             raise RuntimeError("Verification failed: missing signature-and-hash document")
         if stored_doc and stored_doc.get("totalCertificates") != total:
@@ -493,15 +484,17 @@ def main():
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
         granularity = "quarterly" if args.granularity == "both" else args.granularity
-        compute_signature_stats(
-            client,
-            target["main"],
-            target["results"],
-            months=args.months,
-            granularity=granularity,
-            matrix_limit=args.limit,
-            verify=args.verify,
-        )
+        for scope, _country in get_scopes_for_entry(target):
+            compute_signature_stats(
+                client,
+                target["main"],
+                target["results"],
+                months=args.months,
+                granularity=granularity,
+                matrix_limit=args.limit,
+                verify=args.verify,
+                scope=scope,
+            )
     client.close()
 
 

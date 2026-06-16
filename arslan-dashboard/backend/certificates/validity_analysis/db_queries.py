@@ -10,8 +10,7 @@ class ValidityModels:
     @classmethod
     def _get_precomputed_doc(cls) -> Optional[Dict[str, Any]]:
         try:
-            collection = MongoDBClient.get_results_db()['validity-analysis']
-            return collection.find_one({'_id': 'validity_analysis'})
+            return MongoDBClient.find_scoped_result_doc('validity-analysis', fallback_id='validity_analysis')
         except Exception as e:
             print(f"[VALIDITY ANALYTICS] Failed to read validity-analysis document: {e}")
             return None

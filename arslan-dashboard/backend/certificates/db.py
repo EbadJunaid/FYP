@@ -17,8 +17,11 @@ from django.conf import settings
 # Global variables for current database (can be changed at runtime)
 # _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
 # _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
-_CURRENT_MAIN_DB = 'Testing-tranco-1lakh'
-_CURRENT_RESULTS_DB = 'Testing-tranco-1lakh-results'
+_BASE_MAIN_DB = 'tranco-60k'
+_BASE_RESULTS_DB = 'tranco-60k-results'
+_CURRENT_MAIN_DB = _BASE_MAIN_DB
+_CURRENT_RESULTS_DB = _BASE_RESULTS_DB
+_CURRENT_SCOPE = 'all'
 MAIN_DB = _CURRENT_MAIN_DB
 RESULTS_DB = _CURRENT_RESULTS_DB
 
@@ -39,19 +42,72 @@ RESULTS_DB = _CURRENT_RESULTS_DB
 # }
 AVAILABLE_DATABASES = {
     'global': {
-        'main': 'Testing-tranco-1lakh',
-        'results': 'Testing-tranco-1lakh-results',
+        'main': _BASE_MAIN_DB,
+        'results': _BASE_RESULTS_DB,
+        'scope': 'all',
         'name': 'Global',
         'description': '1lakh certificates'
     },
     'pakistani': {
-        'main': 'latest-pk-domains',
-        'results': 'latest-pk-domains-results',
+        'main': _BASE_MAIN_DB,
+        'results': _BASE_RESULTS_DB,
+        'scope': 'pk',
         'name': 'Pakistani Domains',
+        'description': '7,724 certificates'
+    },
+    'indian': {
+        'main': _BASE_MAIN_DB,
+        'results': _BASE_RESULTS_DB,
+        'scope': 'in',
+        'name': 'Indian Domains',
         'description': '7,724 certificates'
     }
 }
 # ============================================================================
+
+class ScopedCollection:
+    """Small wrapper that applies the active logical scope to live certificate reads."""
+
+    def __init__(self, collection):
+        self._collection = collection
+
+    def _scope_filter(self):
+        return MongoDBClient.get_live_scope_filter()
+
+    def _merge_query(self, query=None):
+        query = query or {}
+        scope_filter = self._scope_filter()
+        if not scope_filter:
+            return query
+        if not query:
+            return scope_filter
+        return {'$and': [query, scope_filter]}
+
+    def find(self, filter=None, *args, **kwargs):
+        return self._collection.find(self._merge_query(filter), *args, **kwargs)
+
+    def find_one(self, filter=None, *args, **kwargs):
+        return self._collection.find_one(self._merge_query(filter), *args, **kwargs)
+
+    def count_documents(self, filter, *args, **kwargs):
+        return self._collection.count_documents(self._merge_query(filter), *args, **kwargs)
+
+    def estimated_document_count(self, *args, **kwargs):
+        scope_filter = self._scope_filter()
+        if scope_filter:
+            return self._collection.count_documents(scope_filter)
+        return self._collection.estimated_document_count(*args, **kwargs)
+
+    def aggregate(self, pipeline, *args, **kwargs):
+        scope_filter = self._scope_filter()
+        scoped_pipeline = list(pipeline)
+        if scope_filter:
+            scoped_pipeline = [{'$match': scope_filter}] + scoped_pipeline
+        return self._collection.aggregate(scoped_pipeline, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._collection, name)
+
 
 # MongoDB Connection Singleton with Multiple Database Support
 class MongoDBClient:
@@ -94,14 +150,15 @@ class MongoDBClient:
         Returns:
             bool: True if successful, False otherwise
         """
-        global _CURRENT_MAIN_DB, _CURRENT_RESULTS_DB, db, results_db
+        global _CURRENT_MAIN_DB, _CURRENT_RESULTS_DB, _CURRENT_SCOPE, db, results_db
         
         if db_id not in AVAILABLE_DATABASES:
             return False
         
-        # Update global database references
-        _CURRENT_MAIN_DB = AVAILABLE_DATABASES[db_id]['main']
-        _CURRENT_RESULTS_DB = AVAILABLE_DATABASES[db_id]['results']
+        # Keep one physical database pair and switch only the logical scope.
+        _CURRENT_MAIN_DB = _BASE_MAIN_DB
+        _CURRENT_RESULTS_DB = _BASE_RESULTS_DB
+        _CURRENT_SCOPE = AVAILABLE_DATABASES[db_id].get('scope', 'all')
         
         # Update class variable
         cls._current_db_id = db_id
@@ -123,15 +180,16 @@ class MongoDBClient:
 
         from certificates.models import CertificateModel
 
-        CertificateModel.collection = db_module.db['certificates']
-        SharedModels.collection = db_module.db['certificates']
-        ValidityModels.collection = db_module.db['certificates']
-        CAModel.collection = db_module.db['certificates']
-        SignatureHashModel.collection = db_module.db['certificates']
-        TrendsModel.collection = db_module.db['certificates']
-        SANModel.collection = db_module.db['certificates']
-        OverviewModels.collection = db_module.db['certificates']
-        SharedKeyModel.collection = db_module.db['certificates']
+        cert_collection = cls.get_certificates_collection()
+        CertificateModel.collection = cert_collection
+        SharedModels.collection = cert_collection
+        ValidityModels.collection = cert_collection
+        CAModel.collection = cert_collection
+        SignatureHashModel.collection = cert_collection
+        TrendsModel.collection = cert_collection
+        SANModel.collection = cert_collection
+        OverviewModels.collection = cert_collection
+        SharedKeyModel.collection = cert_collection
         # Clear all caches when switching databases
         try:
             from certificates.cache_service import cache
@@ -154,8 +212,85 @@ class MongoDBClient:
             'id': cls._current_db_id,
             'main_db': _CURRENT_MAIN_DB,
             'results_db': _CURRENT_RESULTS_DB,
+            'scope': _CURRENT_SCOPE,
             **AVAILABLE_DATABASES.get(cls._current_db_id, {})
         }
+
+    @classmethod
+    def normalize_scope(cls, scope):
+        normalized = (scope or 'all').strip().lower()
+        if normalized in ('', 'all', 'global', 'none', 'default'):
+            return 'all'
+        if normalized == 'pakistani':
+            return 'pk'
+        return normalized
+
+    @classmethod
+    def set_current_scope(cls, scope):
+        global _CURRENT_SCOPE
+        normalized_scope = cls.normalize_scope(scope)
+        if normalized_scope == _CURRENT_SCOPE:
+            return
+        _CURRENT_SCOPE = normalized_scope
+        if _CURRENT_SCOPE == 'pk':
+            cls._current_db_id = 'pakistani'
+        elif _CURRENT_SCOPE == 'in':
+            cls._current_db_id = 'indian'
+        elif _CURRENT_SCOPE == 'all':
+            cls._current_db_id = 'global'
+        cls.refresh_model_collections()
+
+    @classmethod
+    def refresh_model_collections(cls):
+        """Point all model collection handles at the scoped certificates wrapper."""
+        try:
+            import certificates.db as db_module
+            cert_collection = cls.get_certificates_collection()
+
+            from certificates.ca_analytics.db_queries import CAModel
+            from certificates.signature_hash.db_queries import SignatureHashModel
+            from certificates.san_analytics.db_queries import SANModel
+            from certificates.overview.db_queries import OverviewModels
+            from certificates.shared_keys.db_queries import SharedKeyModel
+            from certificates.trends.db_queries import TrendsModel
+            from certificates.validity_analysis.db_queries import ValidityModels
+            from certificates.shared_apis.db_queries import SharedModels
+            from certificates.models import CertificateModel
+
+            CertificateModel.collection = cert_collection
+            SharedModels.collection = cert_collection
+            ValidityModels.collection = cert_collection
+            CAModel.collection = cert_collection
+            SignatureHashModel.collection = cert_collection
+            TrendsModel.collection = cert_collection
+            SANModel.collection = cert_collection
+            OverviewModels.collection = cert_collection
+            SharedKeyModel.collection = cert_collection
+            db_module.results_db = cls.get_db(_CURRENT_RESULTS_DB)
+        except Exception:
+            pass
+
+    @classmethod
+    def get_current_scope(cls):
+        return _CURRENT_SCOPE or 'all'
+
+    @classmethod
+    def get_precomputed_scope(cls):
+        return 'all' if cls.get_current_scope() in ('', 'all', 'global') else cls.get_current_scope()
+
+    @classmethod
+    def get_precomputed_scope_filter(cls):
+        scope = cls.get_precomputed_scope()
+        if scope == 'all':
+            return {'$or': [{'scope': 'all'}, {'scope': {'$exists': False}}]}
+        return {'scope': scope}
+
+    @classmethod
+    def get_live_scope_filter(cls):
+        scope = cls.get_current_scope()
+        if scope in ('', 'all', 'global'):
+            return {}
+        return {'$or': [{'parsed.scope': scope}, {'scope': scope}]}
     
     @classmethod
     def get_available_databases(cls):
@@ -178,6 +313,21 @@ class MongoDBClient:
         """
         global _CURRENT_RESULTS_DB
         return cls.get_db(_CURRENT_RESULTS_DB)
+
+    @classmethod
+    def get_certificates_collection(cls):
+        return ScopedCollection(cls.get_db(_CURRENT_MAIN_DB)['certificates'])
+
+    @classmethod
+    def find_scoped_result_doc(cls, collection_name: str, fallback_id=None):
+        collection = cls.get_results_db()[collection_name]
+        scope = cls.get_precomputed_scope()
+        doc = collection.find_one({'scope': scope})
+        if doc:
+            return doc
+        if scope == 'all' and fallback_id is not None:
+            return collection.find_one({'_id': fallback_id})
+        return None
 
 
 # Default database (main certificates collection)

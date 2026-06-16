@@ -10,6 +10,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
+from scope_utils import get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 GENERIC_TLDS = {
@@ -108,18 +109,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -132,7 +122,7 @@ def resolve_targets(db_names, entries):
         if name in lookup:
             targets.append(lookup[name])
         else:
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
@@ -157,7 +147,7 @@ def get_tld_country(domain):
     return "Others"
 
 
-def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False):
+def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False, scope="all"):
     source_collection = client[main_db]["certificates"]
     target_collection_name = "geographic-distribution-1"
     target_collection = client[results_db][target_collection_name]
@@ -165,7 +155,7 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
     query = {"domain": {"$exists": True, "$ne": None, "$ne": ""}}
     projection = {"_id": 1, "domain": 1}
 
-    cursor = source_collection.find(query, projection)
+    cursor = source_collection.find(merge_scope_query(query, scope), projection)
     # print(f"cursor first enrty: {cursor[0] if cursor.count() > 0 else 'No entries'}")
 
     if limit:
@@ -175,20 +165,22 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
     processed_count = 0
 
     for doc in cursor:
-        cert_id = doc["_id"]
+        # Legacy shape stored sample certificate IDs in each country document.
+        # New shape intentionally omits them:
+        # cert_id = doc["_id"]
         domain = doc.get("domain", "")
-        country = get_tld_country(domain)
+        country = TLD_TO_COUNTRY.get(scope, scope.upper()) if get_scope_filter(scope) else get_tld_country(domain)
 
         if country not in country_groups:
             country_groups[country] = {
                 "count": 0,
-                "certificate_ids": []
+                # "certificate_ids": []
             }
 
         group = country_groups[country]
         group["count"] += 1
-        if len(group["certificate_ids"]) < 1000:
-            group["certificate_ids"].append(cert_id)
+        # if len(group["certificate_ids"]) < 1000:
+        #     group["certificate_ids"].append(cert_id)
 
         processed_count += 1
 
@@ -203,41 +195,33 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
         "#eab308", "#6b7280",
     ]
 
-    country_docs = []
+    countries = []
+    now = datetime.now(timezone.utc)
     for i, (country, group) in enumerate(sorted_countries):
         count = group["count"]
         percentage = round((count / total_certificates) * 100, 3) if total_certificates else 0
-        certificate_ids = group["certificate_ids"]
-        country_docs.append({
-            "_id": country,
-            "country": country,
+        # certificate_ids = group["certificate_ids"]
+        countries.append({
             "count": count,
+            "name": country,
             "percentage": percentage,
             "color": colors[i % len(colors)],
             "rank": i + 1,
-            "certificate_ids": certificate_ids,
-            "has_more": count > len(certificate_ids),
-            "computed_at": datetime.now(timezone.utc),
+            # "certificate_ids": certificate_ids,
+            # "has_more": count > len(certificate_ids),
+            "computed_at": now,
             "source_database": main_db,
             "source_collection": "certificates",
-            "testing_mode": bool(limit),
         })
 
-    target_collection.delete_many({})
-    if country_docs:
-        batch_size = 100
-        for i in range(0, len(country_docs), batch_size):
-            target_collection.insert_many(country_docs[i:i + batch_size])
-
-    target_collection.create_index("rank")
-    target_collection.create_index("count")
-    target_collection.create_index("computed_at")
-
-    metadata = {
-        "_id": "metadata",
-        "last_computed": datetime.now(timezone.utc),
+    geo_doc = {
+        "_id": scoped_doc_id("geographic_distribution", scope),
+        "scope": scope,
+        "countries": countries,
+        "computed_at": now,
+        "last_computed": now,
         "computation_duration_seconds": 0,
-        "total_countries": len(country_docs),
+        "total_countries": len(countries),
         "total_certificates": total_certificates,
         "source_database": main_db,
         "source_collection": "certificates",
@@ -246,17 +230,24 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
         "testing_mode": bool(limit),
         "documents_processed": processed_count,
     }
-    target_collection.replace_one({"_id": "metadata"}, metadata, upsert=True)
+
+    target_collection.replace_one({"scope": scope}, geo_doc, upsert=True)
+
+    target_collection.create_index("scope")
+    target_collection.create_index("countries.rank")
+    target_collection.create_index("countries.count")
+    target_collection.create_index("computed_at")
 
     if verify:
-        stored_count = target_collection.count_documents({"_id": {"$ne": "metadata"}})
-        if stored_count != len(country_docs):
-            raise RuntimeError("Verification failed: record count mismatch")
-        if sum(doc["count"] for doc in country_docs) != total_certificates:
+        stored_doc = target_collection.find_one({"scope": scope})
+        if not stored_doc:
+            raise RuntimeError("Verification failed: geographic distribution missing")
+        if len(stored_doc.get("countries", [])) != len(countries):
+            raise RuntimeError("Verification failed: countries count mismatch")
+        if sum(doc["count"] for doc in countries) != total_certificates:
             raise RuntimeError("Verification failed: total count mismatch")
-        stored_meta = target_collection.find_one({"_id": "metadata"})
-        if stored_meta and stored_meta.get("total_certificates") != total_certificates:
-            raise RuntimeError("Verification failed: metadata total mismatch")
+        if stored_doc.get("total_certificates") != total_certificates:
+            raise RuntimeError("Verification failed: stored total mismatch")
 
 
 def main():
@@ -272,13 +263,15 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_geographic_distribution(
-            client,
-            target["main"],
-            target["results"],
-            limit=args.limit,
-            verify=args.verify,
-        )
+        for scope, _country in get_scopes_for_entry(target):
+            compute_geographic_distribution(
+                client,
+                target["main"],
+                target["results"],
+                limit=args.limit,
+                verify=args.verify,
+                scope=scope,
+            )
     client.close()
 
 

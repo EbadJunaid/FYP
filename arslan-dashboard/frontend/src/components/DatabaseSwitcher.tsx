@@ -9,6 +9,7 @@ interface Database {
     description: string;
     mainDb: string;
     resultsDb: string;
+    scope: string;
 }
 
 const AVAILABLE_DATABASES: Database[] = [
@@ -17,18 +18,30 @@ const AVAILABLE_DATABASES: Database[] = [
         name: 'Global',
         description: '878k certificates',
         mainDb: 'tranco-latest-8-lakh',
-        resultsDb: 'tranco-latest-8-lakh-results'
+        resultsDb: 'tranco-latest-8-lakh-results',
+        scope: 'all'
     },
     {
         id: 'pakistani',
         name: 'Pakistani Domains',
-        description: '7,724 certificates',
-        mainDb: 'pakistani-domains',
-        resultsDb: 'pakistani-domains-results'
+        description: 'Pakistani scope',
+        mainDb: 'tranco-latest-8-lakh',
+        resultsDb: 'tranco-latest-8-lakh-results',
+        scope: 'pk'
+    },
+    {
+        id: 'indian',
+        name: 'Indian Domains',
+        description: 'Indian scope',
+        mainDb: 'tranco-latest-8-lakh',
+        resultsDb: 'tranco-latest-8-lakh-results',
+        scope: 'in'
     }
 ];
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const SELECTED_DB_KEY = 'selected_certificate_database';
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
 
 /**
  * Database Switcher Component
@@ -44,12 +57,23 @@ export default function DatabaseSwitcher() {
     useEffect(() => {
         const fetchCurrentDb = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/databases/current/`);
+                const params = new URLSearchParams(window.location.search);
+                const dbFromUrl = params.get('db');
+                const storedDb = localStorage.getItem(SELECTED_DB_KEY);
+                const preferredDbId = dbFromUrl || storedDb;
+                const preferredDb = AVAILABLE_DATABASES.find(d => d.id === preferredDbId);
+                if (preferredDb) {
+                    setCurrentDb(preferredDb);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/databases/current/?scope=${encodeURIComponent(preferredDb?.scope || 'all')}`);
                 if (response.ok) {
                     const data = await response.json();
-                    const db = AVAILABLE_DATABASES.find(d => d.id === data.id);
+                    const db = preferredDb || AVAILABLE_DATABASES.find(d => d.id === data.id);
                     if (db) {
                         setCurrentDb(db);
+                        localStorage.setItem(SELECTED_DB_KEY, db.id);
+                        localStorage.setItem(SELECTED_SCOPE_KEY, db.scope);
                     }
                 }
             } catch (error) {
@@ -118,6 +142,8 @@ export default function DatabaseSwitcher() {
             localStorage.clear();
             sessionStorage.clear();
             if (theme) localStorage.setItem('theme', theme);
+            localStorage.setItem(SELECTED_DB_KEY, database.id);
+            localStorage.setItem(SELECTED_SCOPE_KEY, database.scope);
             
             // Store the new database ID to verify after reload
             sessionStorage.setItem('switched_db', database.id);

@@ -29,6 +29,7 @@ from typing import Any
 
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
+from scope_utils import normalize_db_entries
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG = os.path.join(SCRIPT_DIR, "databases.json")
@@ -84,23 +85,7 @@ def load_db_entries(config_path: str) -> list[dict[str, str]]:
 
 
 def _normalize_db_entries(items: list[Any]) -> list[dict[str, str]]:
-    entries: list[dict[str, str]] = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db and results_db:
-                entry: dict[str, str] = {"main": main_db, "results": results_db}
-                if item.get("id"):
-                    entry["id"] = str(item["id"])
-                entries.append(entry)
-            elif main_db:
-                entries.append({"main": main_db, "results": f"{main_db}-results"})
-        else:
-            raise ValueError("Unsupported database entry in databases.json")
-    return entries
+    return normalize_db_entries(items)
 
 
 def discover_generic_scripts() -> list[str]:
@@ -282,7 +267,7 @@ def main() -> None:
     if args.dbs:
         lookup = {entry["main"]: entry for entry in entries}
         entries = [
-            lookup[name] if name in lookup else {"main": name, "results": f"{name}-results"}
+            lookup[name] if name in lookup else {"main": name, "results": f"{name}-results", "countries": []}
             for name in args.dbs
         ]
 
@@ -302,7 +287,8 @@ def main() -> None:
     print(f"Config:     {args.config}")
     print(f"Databases:  {len(entries)}")
     for entry in entries:
-        print(f"  - {entry['main']} -> {entry['results']}")
+        scopes = ["all"] + list(entry.get("countries", []))
+        print(f"  - {entry['main']} -> {entry['results']} scopes={', '.join(scopes)}")
     print(f"Scripts:    {len(scripts)}")
 
     if args.dry_run:

@@ -2,14 +2,11 @@
 {
   "databases": [
     {
-      "id": "Testing-tranco-1lakh",
-      "main": "Testing-tranco-1lakh",
-      "results": "Testing-tranco-1lakh-results"
-    },
-    {
-      "id": "latest-pk-domains",
-      "main": "latest-pk-domains",
-      "results": "latest-pk-domains-results"
+    
+      "id": "tranco-60k",
+      "main": "tranco-60k",
+      "results": "tranco-60k-results",
+      "countries": ["Pakistan","India","Russia"]
     }
   ]
 }

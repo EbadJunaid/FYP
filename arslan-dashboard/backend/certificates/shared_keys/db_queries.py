@@ -8,6 +8,34 @@ from ..db import MongoDBClient
 class SharedKeyModel:
     """Model class for shared key analytics operations."""
 
+    @staticmethod
+    def _metadata_query() -> Dict[str, Any]:
+        return {'scope': MongoDBClient.get_precomputed_scope(), 'doc_type': 'metadata'}
+
+    @staticmethod
+    def _group_scope_query() -> Dict[str, Any]:
+        scope_filter = MongoDBClient.get_precomputed_scope_filter()
+        return {
+            '$and': [
+                scope_filter,
+                {
+                    '$or': [
+                        {'doc_type': 'shared_key_group'},
+                        {
+                            'doc_type': {'$exists': False},
+                            '_id': {'$ne': 'metadata'}
+                        }
+                    ]
+                }
+            ]
+        }
+
+    @staticmethod
+    def _group_detail_query(public_key_hash: str) -> Dict[str, Any]:
+        query = SharedKeyModel._group_scope_query()
+        query['$and'].append({'public_key_hash': public_key_hash})
+        return query
+
     
     @classmethod
     def get_shared_key_stats(cls) -> Dict[str, Any]:
@@ -354,24 +382,27 @@ class SharedKeyModel:
         shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
         certs_collection = MongoDBClient.get_results_db()['certificates']
         
-        metadata = shared_keys_collection.find_one({'_id': 'metadata'})
+        metadata = shared_keys_collection.find_one(cls._metadata_query())
+        if not metadata and MongoDBClient.get_precomputed_scope() == 'all':
+            metadata = shared_keys_collection.find_one({'_id': 'metadata'})
         if not metadata:
             raise ValueError("Shared keys data not computed. Run compute_shared_keys.py first.")
         
         total_public_keys = metadata.get('total_public_keys', 0)
         unique_public_keys = metadata.get('unique_public_keys', 0)
         
-        shared_key_groups = shared_keys_collection.count_documents({'_id': {'$ne': 'metadata'}})
+        group_query = cls._group_scope_query()
+        shared_key_groups = shared_keys_collection.count_documents(group_query)
         
         pipeline = [
-            {'$match': {'_id': {'$ne': 'metadata'}}},
+            {'$match': group_query},
             {'$group': {'_id': None, 'total': {'$sum': '$certificate_count'}}}
         ]
         result = list(shared_keys_collection.aggregate(pipeline))
         certificates_at_risk = result[0]['total'] if result else 0
         
         most_affected = shared_keys_collection.find_one(
-            {'_id': {'$ne': 'metadata'}},
+            group_query,
             sort=[('most_affected_domain.sans_count', -1)]
         )
         
@@ -397,6 +428,7 @@ class SharedKeyModel:
             List of distribution buckets (e.g., "2 certs", "3-5 certs", etc.)
         """
         shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+        group_query = cls._group_scope_query()
         
         buckets = [
             {'id': 1, 'label': '2 certs', 'min': 2, 'max': 2},
@@ -411,8 +443,10 @@ class SharedKeyModel:
         results = []
         for bucket in buckets:
             count = shared_keys_collection.count_documents({
-                '_id': {'$ne': 'metadata'},
-                'certificate_count': {'$gte': bucket['min'], '$lte': bucket['max']}
+                '$and': [
+                    group_query,
+                    {'certificate_count': {'$gte': bucket['min'], '$lte': bucket['max']}}
+                ]
             })
             if count > 0:
                 results.append({
@@ -430,7 +464,7 @@ class SharedKeyModel:
         shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
         
         pipeline = [
-            {'$match': {'_id': {'$ne': 'metadata'}}},
+            {'$match': cls._group_scope_query()},
             {'$unwind': '$issuers'},
             {'$group': {
                 '_id': '$issuers.organization',
@@ -460,7 +494,10 @@ class SharedKeyModel:
         start_date = end_date - timedelta(days=months * 30)
         
         shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-        shared_hashes = shared_keys_collection.distinct('public_key_hash', {'_id': {'$ne': 'metadata'}})
+        shared_hashes = shared_keys_collection.distinct(
+            'public_key_hash',
+            cls._group_scope_query()
+        )
         
         if not shared_hashes:
             return []
@@ -508,7 +545,7 @@ class SharedKeyModel:
         shared_keys_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
         
         pipeline = [
-            {'$match': {'_id': {'$ne': 'metadata'}}},
+            {'$match': cls._group_scope_query()},
             {'$unwind': '$issuers'},
             {'$group': {
                 '_id': {
@@ -550,15 +587,15 @@ class SharedKeyModel:
         """
         collection = MongoDBClient.get_results_db()['shared-keys-detailed']
         
-        query = {'_id': {'$ne': 'metadata'}}
+        query = cls._group_scope_query()
         if risk_level:
-            query['risk_level'] = risk_level
+            query['$and'].append({'risk_level': risk_level})
         if key_type:
-            query['key_type'] = key_type
+            query['$and'].append({'key_type': key_type})
         if min_cert_count:
-            query['certificate_count'] = {'$gte': min_cert_count}
+            query['$and'].append({'certificate_count': {'$gte': min_cert_count}})
         if issuer:
-            query['issuers.organization'] = issuer
+            query['$and'].append({'issuers.organization': issuer})
         
         total = collection.count_documents(query)
         skip = (page - 1) * page_size
@@ -622,8 +659,10 @@ class SharedKeyModel:
         """
         collection = MongoDBClient.get_results_db()['shared-keys-detailed']
         
-        doc = collection.find_one({'_id': public_key_hash})
-        if not doc or doc.get('_id') == 'metadata':
+        doc = collection.find_one(cls._group_detail_query(public_key_hash))
+        if not doc and MongoDBClient.get_precomputed_scope() == 'all':
+            doc = collection.find_one({'_id': public_key_hash})
+        if not doc or doc.get('doc_type') == 'metadata' or doc.get('_id') == 'metadata':
             raise ValueError(f"Shared key group not found: {public_key_hash}")
         
         return {

@@ -12,6 +12,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
+from scope_utils import add_scope_match, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries
 
 
 def log(message):
@@ -42,18 +43,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -66,7 +56,7 @@ def resolve_targets(db_names, entries):
         if name in lookup:
             targets.append(lookup[name])
         else:
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
@@ -93,14 +83,19 @@ def calculate_days_until_expiry(validity_end_str):
         return None
 
 
-def compute_shared_keys(client, main_db, results_db, verify=False):
-    log(f"Shared keys analytics: {main_db} -> {results_db}")
+def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
+    log(f"Shared keys analytics: {main_db} -> {results_db} scope={scope}")
 
     source_collection = client[main_db]["certificates"]
     target_db = client[results_db]
     detailed_collection = target_db["shared-keys-detailed"]
 
-    total_docs = source_collection.estimated_document_count()
+    scope_filter = get_scope_filter(scope)
+    total_docs = (
+        source_collection.count_documents(scope_filter)
+        if scope_filter
+        else source_collection.estimated_document_count()
+    )
 
     log("Step 1/4: Clearing old shared keys collections")
     old_collections = [
@@ -114,7 +109,7 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
     for coll_name in old_collections:
         target_db[coll_name].drop()
 
-    detailed_collection.drop()
+    detailed_collection.delete_many({"scope": scope})
 
     log("Step 2/4: Identifying shared public keys")
     start_time = datetime.now(timezone.utc)
@@ -135,12 +130,14 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
         {"$match": {"distinct_certs": {"$gt": 1}}},
     ]
 
-    shared_key_groups = list(source_collection.aggregate(shared_keys_pipeline, allowDiskUse=True))
+    shared_key_groups = list(source_collection.aggregate(add_scope_match(shared_keys_pipeline, scope), allowDiskUse=True))
     log(f"Found {len(shared_key_groups):,} shared key groups")
 
     if not shared_key_groups:
         metadata = {
-            "_id": "metadata",
+            "_id": f"metadata:{scope}",
+            "doc_type": "metadata",
+            "scope": scope,
             "last_computed": datetime.now(timezone.utc),
             "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
             "total_shared_groups": 0,
@@ -149,9 +146,9 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
             "total_public_keys": total_docs,
             "unique_public_keys": total_docs,
         }
-        detailed_collection.replace_one({"_id": "metadata"}, metadata, upsert=True)
+        detailed_collection.replace_one({"scope": scope, "doc_type": "metadata"}, metadata, upsert=True)
         if verify:
-            stored_meta = detailed_collection.find_one({"_id": "metadata"})
+            stored_meta = detailed_collection.find_one({"scope": scope, "doc_type": "metadata"})
             if not stored_meta:
                 raise RuntimeError("Verification failed: metadata missing")
         return
@@ -167,9 +164,9 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
 
         public_key_hash = group["_id"]
 
-        certificates = list(source_collection.find({
+        certificates = list(source_collection.find(merge_scope_query({
             "parsed.subject_key_info.fingerprint_sha256": public_key_hash
-        }))
+        }, scope)))
 
         if not certificates:
             continue
@@ -338,7 +335,9 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
         sample_sans = unique_sans[:5]
 
         document = {
-            "_id": public_key_hash,
+            "_id": f"{scope}:{public_key_hash}",
+            "doc_type": "shared_key_group",
+            "scope": scope,
             "public_key_hash": public_key_hash,
             "public_key_hash_short": public_key_hash[:16],
             "certificate_count": cert_count,
@@ -364,7 +363,7 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
         }
 
         detailed_collection.replace_one(
-            {"_id": public_key_hash},
+            {"scope": scope, "public_key_hash": public_key_hash},
             document,
             upsert=True,
         )
@@ -375,6 +374,8 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
     log("Step 4/4: Creating indexes")
 
     detailed_collection.create_index([("certificate_count", -1)])
+    detailed_collection.create_index([("scope", 1), ("doc_type", 1)])
+    detailed_collection.create_index([("scope", 1), ("public_key_hash", 1)])
     detailed_collection.create_index([("total_sans", -1)])
     detailed_collection.create_index([("risk_level", 1)])
     detailed_collection.create_index([("key_type", 1)])
@@ -387,7 +388,9 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
     unique_public_keys = total_docs - total_certs_at_risk
 
     metadata = {
-        "_id": "metadata",
+        "_id": f"metadata:{scope}",
+        "doc_type": "metadata",
+        "scope": scope,
         "last_computed": datetime.now(timezone.utc),
         "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
         "total_shared_groups": processed_count,
@@ -397,13 +400,13 @@ def compute_shared_keys(client, main_db, results_db, verify=False):
         "unique_public_keys": unique_public_keys,
     }
 
-    detailed_collection.replace_one({"_id": "metadata"}, metadata, upsert=True)
+    detailed_collection.replace_one({"scope": scope, "doc_type": "metadata"}, metadata, upsert=True)
 
     if verify:
-        stored_groups = detailed_collection.count_documents({"_id": {"$ne": "metadata"}})
+        stored_groups = detailed_collection.count_documents({"scope": scope, "doc_type": "shared_key_group"})
         if stored_groups != processed_count:
             raise RuntimeError("Verification failed: shared groups count mismatch")
-        stored_meta = detailed_collection.find_one({"_id": "metadata"})
+        stored_meta = detailed_collection.find_one({"scope": scope, "doc_type": "metadata"})
         if not stored_meta or stored_meta.get("total_shared_groups") != processed_count:
             raise RuntimeError("Verification failed: metadata shared groups mismatch")
 
@@ -423,7 +426,8 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_shared_keys(client, target["main"], target["results"], verify=args.verify)
+        for scope, _country in get_scopes_for_entry(target):
+            compute_shared_keys(client, target["main"], target["results"], verify=args.verify, scope=scope)
     client.close()
 
 

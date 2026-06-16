@@ -2,6 +2,8 @@
 // Handles all API calls to Django backend
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const SELECTED_DB_KEY = 'selected_certificate_database';
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
 
 // Types for API responses
 export interface ApiResponse<T> {
@@ -276,8 +278,26 @@ class ApiClient {
         this.baseUrl = baseUrl;
     }
 
+    private getCurrentScope(): string {
+        if (typeof window === 'undefined') return 'all';
+        const params = new URLSearchParams(window.location.search);
+        const db = params.get('db') || localStorage.getItem(SELECTED_DB_KEY) || 'global';
+        if (db === 'pakistani') return 'pk';
+        if (db === 'indian') return 'in';
+        const storedScope = localStorage.getItem(SELECTED_SCOPE_KEY);
+        if (storedScope) return storedScope;
+        return 'all';
+    }
+
+    private endpointWithScope(endpoint: string): string {
+        const scope = this.getCurrentScope();
+        const separator = endpoint.includes('?') ? '&' : '?';
+        return `${endpoint}${separator}scope=${encodeURIComponent(scope)}`;
+    }
+
     private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-        const url = `${this.baseUrl}${endpoint}`;
+        const scopedEndpoint = this.endpointWithScope(endpoint);
+        const url = `${this.baseUrl}${scopedEndpoint}`;
 
         try {
             const response = await fetch(url, {
@@ -589,7 +609,8 @@ class ApiClient {
         if (params?.encryption_type) queryParams.append('encryption_type', params.encryption_type);
 
         const query = queryParams.toString();
-        const url = `${this.baseUrl}/certificates/export/${query ? `?${query}` : ''}`;
+        const scopedEndpoint = this.endpointWithScope(`/certificates/export/${query ? `?${query}` : ''}`);
+        const url = `${this.baseUrl}${scopedEndpoint}`;
 
         // Trigger download
         const link = document.createElement('a');

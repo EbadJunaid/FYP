@@ -41,6 +41,16 @@ interface SharedKeyListItem {
 }
 
 const STORAGE_KEY = 'shared-keys-state';
+const SELECTED_DB_KEY = 'selected_certificate_database';
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
+
+const getStoredScope = () => {
+    if (typeof window === 'undefined') return 'all';
+    const db = localStorage.getItem(SELECTED_DB_KEY) || 'global';
+    if (db === 'pakistani') return 'pk';
+    if (db === 'indian') return 'in';
+    return localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
+};
 
 // Card info tooltips
 const cardInfoTooltips: Record<string, string> = {
@@ -65,7 +75,8 @@ const sharedKeysListFetcher = async (key: string) => {
     const sortBy = parts[3] || 'certificate_count';
     const sortOrder = parts[4] || 'desc';
     
-    const response = await fetch(`http://localhost:8000/api/shared-keys/list/?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`);
+    const scope = getStoredScope();
+    const response = await fetch(`http://localhost:8000/api/shared-keys/list/?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}&scope=${encodeURIComponent(scope)}`);
     const json = await response.json();
     if (json.success && json.data) {
         return json.data;

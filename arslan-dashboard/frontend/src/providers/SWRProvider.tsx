@@ -7,10 +7,26 @@ interface SWRProviderProps {
     children: ReactNode;
 }
 
+const SELECTED_DB_KEY = 'selected_certificate_database';
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
+
+const getCurrentScope = () => {
+    if (typeof window === 'undefined') return 'all';
+    const db = localStorage.getItem(SELECTED_DB_KEY) || 'global';
+    if (db === 'pakistani') return 'pk';
+    if (db === 'indian') return 'in';
+    return localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
+};
+
+const appendScope = (url: string) => {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}scope=${encodeURIComponent(getCurrentScope())}`;
+};
+
 // Global fetcher function
 const fetcher = async (url: string) => {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
-    const fullUrl = url.startsWith('http') ? url : `${apiBase}${url}`;
+    const fullUrl = appendScope(url.startsWith('http') ? url : `${apiBase}${url}`);
 
     const res = await fetch(fullUrl);
     if (!res.ok) {

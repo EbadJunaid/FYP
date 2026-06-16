@@ -208,8 +208,7 @@ class CAModel:
 
     @classmethod
     def _get_ca_analysis_doc(cls) -> Optional[Dict]:
-        collection = MongoDBClient.get_results_db()['ca-analysis']
-        return collection.find_one({'_id': 'ca_analysis'})
+        return MongoDBClient.find_scoped_result_doc('ca-analysis', fallback_id='ca_analysis')
 
     @classmethod
     def get_ca_stats_fast(cls) -> Dict:

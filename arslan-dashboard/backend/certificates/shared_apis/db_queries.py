@@ -535,9 +535,46 @@ class SharedModels:
         try:
             # Read from pre-computed collection
             geo_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
+            scope_filter = MongoDBClient.get_precomputed_scope_filter()
+            scoped_doc = geo_collection.find_one(scope_filter)
+            if scoped_doc and scoped_doc.get('countries') is not None:
+                countries = [
+                    item for item in scoped_doc.get('countries', [])
+                    if item.get('name') and item.get('name') != 'Others'
+                ]
+                countries = sorted(countries, key=lambda item: item.get('rank', 999999))[:limit]
+                if not countries:
+                    print("[WARNING] Geographic Distribution: Empty scoped countries array, falling back to slow method")
+                    return cls.get_geographic_distribution(limit=limit, base_filter=None)
+
+                last_computed = scoped_doc.get('last_computed') or scoped_doc.get('computed_at')
+                if last_computed and isinstance(last_computed, datetime):
+                    now_utc = datetime.now(timezone.utc)
+                    if last_computed.tzinfo is None:
+                        last_computed = last_computed.replace(tzinfo=timezone.utc)
+                    age_hours = (now_utc - last_computed).total_seconds() / 3600
+                    if age_hours > 24:
+                        print(f"[WARNING] Geographic Distribution: Pre-computed data is {age_hours:.1f} hours old")
+
+                total_count = sum(record.get('count', 0) for record in countries)
+                max_count = countries[0].get('count', 1) if countries else 1
+                return [
+                    {
+                        'id': record.get('geo_id', f"geo-{index}"),
+                        'country': record.get('name'),
+                        'count': record.get('count', 0),
+                        'maxCount': max_count,
+                        'percentage': round((record.get('count', 0) / total_count * 100), 2) if total_count else 0,
+                        'color': record.get('color', '#6b7280'),
+                        'certificate_ids': []
+                    }
+                    for index, record in enumerate(countries)
+                ]
             
             # Get metadata to check freshness
-            metadata = geo_collection.find_one({'_id': 'metadata'})
+            metadata = geo_collection.find_one({'$and': [{'_id': 'metadata'}, scope_filter]})
+            if not metadata and MongoDBClient.get_precomputed_scope() == 'all':
+                metadata = geo_collection.find_one({'_id': 'metadata'})
             if not metadata:
                 print("[WARNING] Geographic Distribution: No pre-computed data found, falling back to slow method")
                 return cls.get_geographic_distribution(limit=limit, base_filter=None)
@@ -559,10 +596,11 @@ class SharedModels:
             # Fetch top N countries (excluding 'Others' category - it's for internal use only)
             geo_records = list(
                 geo_collection
-                .find({
-                    '_id': {'$nin': ['metadata', 'Others']},  # Exclude metadata and Others
-                    'country': {'$ne': 'Others'}  # Double-check country field
-                })
+                .find({'$and': [
+                    {'_id': {'$nin': ['metadata', 'Others']}},
+                    {'country': {'$ne': 'Others'}},
+                    scope_filter,
+                ]})
                 .sort('rank', 1)  # Sort by rank ascending
                 .limit(limit)
             )
@@ -1059,8 +1097,7 @@ class SharedModels:
     @classmethod
     def _get_validity_analysis_doc(cls) -> Optional[Dict[str, Any]]:
         try:
-            results_collection = MongoDBClient.get_results_db()['validity-analysis']
-            return results_collection.find_one({'_id': 'validity_analysis'})
+            return MongoDBClient.find_scoped_result_doc('validity-analysis', fallback_id='validity_analysis')
         except Exception as e:
             print(f"[VALIDITY FILTER] Error reading pre-computed validity analysis: {e}")
             return None
@@ -1220,7 +1257,7 @@ class SharedModels:
         if country:
             scope_tld = cls.country_name_to_tld(country)
             print(f"[COUNTRY FILTER] Querying parsed.scope for {country} -> {scope_tld}")
-            filters.append({'scope': scope_tld})
+            filters.append({'$or': [{'parsed.scope': scope_tld}, {'scope': scope_tld}]})
 
         if encryption_type:
             parts = encryption_type.split()
@@ -1349,11 +1386,21 @@ class SharedModels:
 
         if shared_key:
             try:
-                shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-groups']
-                shared_fingerprints = [
-                    doc['_id']
-                    for doc in shared_groups_collection.find({'_id': {'$ne': 'metadata'}}, {'_id': 1})
-                ]
+                shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+                shared_fingerprints = shared_groups_collection.distinct(
+                    'public_key_hash',
+                    {
+                        '$and': [
+                            MongoDBClient.get_precomputed_scope_filter(),
+                            {
+                                '$or': [
+                                    {'doc_type': 'shared_key_group'},
+                                    {'doc_type': {'$exists': False}, '_id': {'$ne': 'metadata'}},
+                                ]
+                            }
+                        ]
+                    }
+                )
             except Exception:
                 shared_keys_pipeline = [
                     {'$match': {
@@ -1905,13 +1952,13 @@ class SharedModels:
             if not has_additional_filters:
                 # Safe to use pre-computed count (issuer-only filter)
                 try:
-                    ca_analysis = MongoDBClient.get_results_db()['ca-analysis']
-                    ca_doc = ca_analysis.find_one(
-                        {'_id': 'ca_analysis', 'ca-list.name': issuer},
-                        {'ca-list.$': 1}
-                    )
-                    if ca_doc and ca_doc.get('ca-list'):
-                        total = ca_doc['ca-list'][0].get('count', 0)
+                    ca_doc = MongoDBClient.find_scoped_result_doc('ca-analysis', fallback_id='ca_analysis')
+                    ca_record = next(
+                        (item for item in ca_doc.get('ca-list', []) if item.get('name') == issuer),
+                        None
+                    ) if ca_doc else None
+                    if ca_record:
+                        total = ca_record.get('count', 0)
                     else:
                         # Fallback to live count if not in pre-computed data
                         total = cls.collection.count_documents(query)
@@ -1950,7 +1997,7 @@ class SharedModels:
             'certificates': certificates,
             'pagination': {
                 'page': page,
-                'pageSize': page_size,
+                'pageSize': page_size,  
                 'total': total,
                 'totalPages': max(1, (total + page_size - 1) // page_size)
             }
@@ -1987,8 +2034,7 @@ class SharedModels:
             return cls.get_ca_distribution(limit=limit, base_filter=base_filter)
 
         try:
-            analysis_collection = MongoDBClient.get_results_db()['ca-analysis']
-            analysis_doc = analysis_collection.find_one({'_id': 'ca_analysis'})
+            analysis_doc = MongoDBClient.find_scoped_result_doc('ca-analysis', fallback_id='ca_analysis')
             if not analysis_doc:
                 print("[WARNING] CA Analytics: No ca-analysis data found, falling back to slow method")
                 return cls.get_ca_distribution(limit=limit, base_filter=None)

@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
 from pymongo import MongoClient
+from scope_utils import add_scope_match, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -42,18 +43,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -66,17 +56,17 @@ def resolve_targets(db_names, entries):
         if name in lookup:
             targets.append(lookup[name])
         else:
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
-def compute_validity_analytics(client, main_db, results_db, months=12, verify=False):
+def compute_validity_analytics(client, main_db, results_db, months=12, verify=False, scope="all"):
     from datetime import datetime as _dt
     
     source_collection = client[main_db]["certificates"]
     target_collection = client[results_db]["validity-analysis"]
 
-    log(f"Validity analytics: {main_db} -> {results_db}")
+    log(f"Validity analytics: {main_db} -> {results_db} scope={scope}")
     start_time = datetime.now(timezone.utc)
 
     # Step 1: Compute validity stats
@@ -95,7 +85,7 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
             }
         }
     ]
-    stats_result = list(source_collection.aggregate(stats_pipeline, allowDiskUse=True))
+    stats_result = list(source_collection.aggregate(add_scope_match(stats_pipeline, scope), allowDiskUse=True))
     stats = stats_result[0] if stats_result else {}
     total = stats.get("total", 0)
     compliant = stats.get("compliantCount", 0)
@@ -110,7 +100,7 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
 
     # Scan certificates to count and collect sample IDs
     for doc in source_collection.find(
-        {"parsed.validity.start": {"$exists": True}, "parsed.validity.end": {"$exists": True}},
+        merge_scope_query({"parsed.validity.start": {"$exists": True}, "parsed.validity.end": {"$exists": True}}, scope),
         {"_id": 1, "parsed.validity.start": 1, "parsed.validity.end": 1},
     ).batch_size(10000):
         try:
@@ -169,7 +159,7 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
         {"$group": {"_id": {"year": {"$year": "$validFromDate"}, "month": {"$month": "$validFromDate"}}, "count": {"$sum": 1}}},
         {"$sort": {"_id.year": 1, "_id.month": 1}},
     ]
-    issued_results = list(source_collection.aggregate(issued_pipeline, allowDiskUse=True))
+    issued_results = list(source_collection.aggregate(add_scope_match(issued_pipeline, scope), allowDiskUse=True))
     issued_lookup = {f"{r['_id']['year']}-{r['_id']['month']}": r["count"] for r in issued_results}
 
     # Get expiring counts
@@ -180,13 +170,13 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
         {"$group": {"_id": {"year": {"$year": "$validToDate"}, "month": {"$month": "$validToDate"}}, "count": {"$sum": 1}}},
         {"$sort": {"_id.year": 1, "_id.month": 1}},
     ]
-    expiring_results = list(source_collection.aggregate(expiring_pipeline, allowDiskUse=True))
+    expiring_results = list(source_collection.aggregate(add_scope_match(expiring_pipeline, scope), allowDiskUse=True))
     expiring_lookup = {f"{r['_id']['year']}-{r['_id']['month']}": r["count"] for r in expiring_results}
 
     # Collect issued sample IDs
     issued_ids_map = {}
     for doc in source_collection.find(
-        {"parsed.validity.start": {"$gte": start_str, "$lte": end_str}},
+        merge_scope_query({"parsed.validity.start": {"$gte": start_str, "$lte": end_str}}, scope),
         {"_id": 1, "parsed.validity.start": 1},
     ).batch_size(10000):
         try:
@@ -205,7 +195,7 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
     # Collect expiring sample IDs
     expiring_ids_map = {}
     for doc in source_collection.find(
-        {"parsed.validity.end": {"$gte": start_str, "$lte": end_str}},
+        merge_scope_query({"parsed.validity.end": {"$gte": start_str, "$lte": end_str}}, scope),
         {"_id": 1, "parsed.validity.end": 1},
     ).batch_size(10000):
         try:
@@ -250,8 +240,8 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
     # Step 4: Build and write single document
     log("Step 4/4: Writing validity-analysis document")
     validity_analysis_doc = {
-        "_id": "validity_analysis",
-        "scope": "all",
+        "_id": scoped_doc_id("validity_analysis", scope),
+        "scope": scope,
         "averageValidityDays": round(stats.get("avgDuration", 0) or 0),
         "shortestValidityDays": round(stats.get("minDuration", 0) or 0),
         "longestValidityDays": round(stats.get("maxDuration", 0) or 0),
@@ -263,10 +253,11 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
         "issuance_timeline": timeline_entries,
     }
 
-    target_collection.replace_one({"_id": "validity_analysis"}, validity_analysis_doc, upsert=True)
+    target_collection.replace_one({"scope": scope}, validity_analysis_doc, upsert=True)
+    target_collection.create_index("scope")
 
     if verify:
-        stored_doc = target_collection.find_one({"_id": "validity_analysis"})
+        stored_doc = target_collection.find_one({"scope": scope})
         if not stored_doc:
             raise RuntimeError("Verification failed: validity-analysis document missing")
         if stored_doc.get("totalCertificates") != total:
@@ -289,13 +280,15 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_validity_analytics(
-            client,
-            target["main"],
-            target["results"],
-            months=args.months,
-            verify=args.verify,
-        )
+        for scope, _country in get_scopes_for_entry(target):
+            compute_validity_analytics(
+                client,
+                target["main"],
+                target["results"],
+                months=args.months,
+                verify=args.verify,
+                scope=scope,
+            )
     client.close()
 
 
