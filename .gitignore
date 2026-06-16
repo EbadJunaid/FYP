@@ -76,4 +76,5 @@ arslan-dashboard/frontend/next-env.d.ts
 
 
 arslan-dashboard/data-sample.json
-crawler-expr
+temp-saving/
+crawler-expr/__pycache__
