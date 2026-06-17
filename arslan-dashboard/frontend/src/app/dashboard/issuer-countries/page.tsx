@@ -22,18 +22,36 @@ export default function IssuerCountriesPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCerts, setTotalCerts] = useState(0);
+    const [windowStart, setWindowStart] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [hasRestoredState, setHasRestoredState] = useState(false);
     const itemsPerPage = 10;
+    const WINDOW_SIZE = 20;
+    const isOnlyOnePage = geoData.length <= WINDOW_SIZE;
+    const maxWindowStart = Math.max(0, geoData.length - WINDOW_SIZE);
+    const isFirstPage = windowStart === 0;
+    const isLastPage = windowStart >= maxWindowStart;
     const tableRef = React.useRef<HTMLDivElement>(null); // Ref for scrolling to table
     const pageSearchRef = React.useRef<HTMLInputElement>(null);
     const { searchQuery: globalSearchQuery } = useSearch();
-    const savedStateRef = React.useRef<{ selectedCountryName?: string; currentPage?: number; searchQuery?: string; scrollY?: number } | null>(null);
+    const savedStateRef = React.useRef<{
+        selectedCountryName?: string;
+        currentPage?: number;
+        windowStart?: number;
+        searchQuery?: string;
+        scrollY?: number;
+    } | null>(null);
     const normalizeSearch = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
     const normalizedSearch = normalizeSearch(searchQuery);
-    const displayedGeoData = normalizedSearch
+    const searchedGeoData = normalizedSearch
         ? geoData.filter((geo) => normalizeSearch(geo.country).includes(normalizedSearch))
-        : geoData;
+        : [];
+    const hasSearch = normalizedSearch.length > 0;
+    const pagedGeoData = hasSearch
+        ? searchedGeoData
+        : geoData.slice(windowStart, Math.min(windowStart + WINDOW_SIZE, geoData.length));
+    const displayedGeoData = pagedGeoData;
+    const totalVisibleCountries = displayedGeoData.length;
 
     useEffect(() => {
         try {
@@ -68,6 +86,7 @@ export default function IssuerCountriesPage() {
                     const restoredCountry = geoDistribution.find((geo) => geo.country === savedState.selectedCountryName) || geoDistribution[0];
                     setSelectedCountry(restoredCountry);
                     setCurrentPage(savedState.currentPage || 1);
+                    setWindowStart(savedState.windowStart ?? 0);
                     setSearchQuery(savedState.searchQuery || '');
                     if (savedState.scrollY !== undefined && savedState.scrollY !== null) {
                         setTimeout(() => {
@@ -85,6 +104,10 @@ export default function IssuerCountriesPage() {
         };
         loadGeoData();
     }, []); // Empty dependency - run only once on mount
+
+    useEffect(() => {
+        setWindowStart(0);
+    }, [geoData.length]);
 
     // Load certificates when country selection or page changes
     useEffect(() => {
@@ -106,7 +129,9 @@ export default function IssuerCountriesPage() {
             }
             setIsLoading(false);
         };
-        loadCertificates();
+        if (selectedCountry) {
+            loadCertificates();
+        }
     }, [selectedCountry, currentPage, globalSearchQuery]);
 
     // When global header search changes, reset to first page
@@ -144,12 +169,30 @@ export default function IssuerCountriesPage() {
             sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
                 selectedCountryName: selectedCountry?.country,
                 currentPage,
+                windowStart,
                 searchQuery,
                 scrollY: window.scrollY,
             }));
         } catch (error) {
             console.error('Error saving issuer countries page state:', error);
         }
+    };
+
+    const handleMoveToStart = () => {
+        setWindowStart(0);
+    };
+
+    const handlePrevious20 = () => {
+        setWindowStart((prev) => Math.max(prev - WINDOW_SIZE, 0));
+    };
+
+    const handleNext20 = () => {
+        const maxStart = Math.max(0, geoData.length - WINDOW_SIZE);
+        setWindowStart((prev) => Math.min(prev + WINDOW_SIZE, maxStart));
+    };
+
+    const handleTablePageChange = (page: number) => {
+        setCurrentPage(page);
     };
 
     // Clear country filter - go back to top country
@@ -207,7 +250,7 @@ export default function IssuerCountriesPage() {
             {/* Geographic Distribution */}
             <Card
                 title="Issuer Countries Heat Map"
-                subtitle={`Click on a country to filter certificates · Showing ${displayedGeoData.length} of ${geoData.length} countries${normalizedSearch ? ` matching "${searchQuery}"` : ''}`}
+                subtitle={`Click on a country to filter certificates · Showing ${totalVisibleCountries} of ${geoData.length} countries${hasSearch ? ` matching "${searchQuery}"` : ''}`}
                 headerAction={
                     <SmallSearchInput
                         ref={pageSearchRef}
@@ -230,8 +273,6 @@ export default function IssuerCountriesPage() {
                                 'bg-accent-orange',
                                 'bg-text-muted',
                             ];
-                            const isSelected = selectedCountry?.country === geo.country;
-                            
                             return (
                                 <div 
                                     key={geo.id}
@@ -252,6 +293,32 @@ export default function IssuerCountriesPage() {
                     ) : (
                         <div className="py-10 text-center text-text-muted">No country found.</div>
                     )}
+                </div>
+
+                <div className="mt-4 border-t border-border pt-4">
+                    <div className="flex flex-wrap justify-center gap-4 w-full">
+                        <button
+                            onClick={handleMoveToStart}
+                            disabled={hasSearch || isFirstPage || isOnlyOnePage}
+                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || isFirstPage || isOnlyOnePage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
+                        >
+                            Move to Start
+                        </button>
+                        <button
+                            onClick={handlePrevious20}
+                            disabled={hasSearch || isFirstPage || isOnlyOnePage}
+                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || isFirstPage || isOnlyOnePage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
+                        >
+                            Previous 20
+                        </button>
+                        <button
+                            onClick={handleNext20}
+                            disabled={hasSearch || isOnlyOnePage || isLastPage}
+                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || isOnlyOnePage || isLastPage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
+                        >
+                            Next 20
+                        </button>
+                    </div>
                 </div>
             </Card>
 
@@ -275,7 +342,7 @@ export default function IssuerCountriesPage() {
                     data={tableData}
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    onPageChange={setCurrentPage}
+                    onPageChange={handleTablePageChange}
                     onRowClick={handleTableRowClick}
                 />
                 </Card>

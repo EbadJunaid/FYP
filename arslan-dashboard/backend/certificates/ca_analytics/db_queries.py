@@ -2,7 +2,7 @@
 # CA (Certificate Authority) analytics model utilities extracted from CertificateModel for page separation.
 
 from datetime import datetime, timezone
-from tkinter.font import names
+#from tkinter.font import names
 from typing import List, Dict, Any, Optional
 from ..db import db, MongoDBClient
 

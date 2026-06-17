@@ -46,7 +46,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 <Header
                     onMenuClick={() => setMobileMenuOpen(true)}
                     onSearch={handleSearch}
-                    onFilterClick={() => setFilterModalOpen(true)}
                 />
 
                 {/* Page Content */}

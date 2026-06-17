@@ -20,39 +20,33 @@ export default function CAsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCerts, setTotalCerts] = useState(0);
-    const [extraPageIndex, setExtraPageIndex] = useState(0);
-    const [showAll, setShowAll] = useState(false);
+    const [windowStart, setWindowStart] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [hasRestoredState, setHasRestoredState] = useState(false);
     const savedStateRef = useRef<{
         selectedCAName?: string;
         currentPage?: number;
-        extraPageIndex?: number;
-        showAll?: boolean;
+        windowStart?: number;
         searchQuery?: string;
         scrollY?: number;
     } | null>(null);
     const itemsPerPage = 10;
-    const CA_LEADING = 100;
-    const CA_CHUNK_SIZE = 100;
-    const extraCAData = caData.length > CA_LEADING ? caData.slice(CA_LEADING) : [];
-    const totalExtraPages = Math.max(0, Math.ceil(extraCAData.length / CA_CHUNK_SIZE));
-    const isOnlyOnePage = caData.length <= CA_LEADING;
-    const isFirstPage = !showAll && extraPageIndex === 0;
-    const isLastPage = !showAll && extraPageIndex === totalExtraPages;
+    const WINDOW_SIZE = 20;
+    const isOnlyOnePage = caData.length <= WINDOW_SIZE;
+    const maxWindowStart = Math.max(0, caData.length - WINDOW_SIZE);
+    const isFirstPage = windowStart === 0;
+    const isLastPage = windowStart >= maxWindowStart;
     const normalizeSearch = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
     const normalizedSearch = normalizeSearch(searchQuery);
     const searchedCAData = normalizedSearch
         ? caData.filter((ca) => normalizeSearch(ca.name).includes(normalizedSearch))
         : [];
     const hasSearch = normalizedSearch.length > 0;
-    const pagedCAData = showAll
-        ? caData
-        : caData.slice(0, CA_LEADING).concat(
-            extraCAData.slice((extraPageIndex - 1) * CA_CHUNK_SIZE, extraPageIndex * CA_CHUNK_SIZE)
-        );
-    const displayedCAData = hasSearch ? searchedCAData : pagedCAData;
+    const pagedCAData = hasSearch
+        ? searchedCAData
+        : caData.slice(windowStart, Math.min(windowStart + WINDOW_SIZE, caData.length));
+    const displayedCAData = pagedCAData;
     const totalVisibleCAs = displayedCAData.length;
     const tableRef = React.useRef<HTMLDivElement>(null);
     const caSearchRef = React.useRef<HTMLInputElement>(null);
@@ -92,8 +86,7 @@ export default function CAsPage() {
                     const restoredCA = caDistribution.find((ca) => ca.name === savedState.selectedCAName) || caDistribution[0];
                     setSelectedCA(restoredCA);
                     setCurrentPage(savedState.currentPage || 1);
-                    setExtraPageIndex(savedState.extraPageIndex ?? 0);
-                    setShowAll(savedState.showAll ?? false);
+                    setWindowStart(savedState.windowStart ?? 0);
                     setSearchQuery(savedState.searchQuery ?? '');
                     if (savedState.scrollY !== undefined && savedState.scrollY !== null) {
                         setTimeout(() => {
@@ -113,8 +106,7 @@ export default function CAsPage() {
     }, []);
 
     useEffect(() => {
-        setExtraPageIndex(0);
-        setShowAll(false);
+        setWindowStart(0);
     }, [caData.length]);
 
     // Load certificates when CA selection or page changes
@@ -176,8 +168,7 @@ export default function CAsPage() {
             const stateToSave = {
                 selectedCAName: selectedCA?.name,
                 currentPage,
-                extraPageIndex,
-                showAll,
+                windowStart,
                 searchQuery,
                 scrollY: window.scrollY,
             };
@@ -188,26 +179,16 @@ export default function CAsPage() {
     };
 
     const handleHideAllCAs = () => {
-        setShowAll(false);
-        setExtraPageIndex(0);
+        setWindowStart(0);
     };
 
     const handleHide100CAs = () => {
-        if (showAll) {
-            setShowAll(false);
-            setExtraPageIndex(totalExtraPages);
-        } else {
-            setExtraPageIndex((prev) => Math.max(prev - 1, 0));
-        }
+        setWindowStart((prev) => Math.max(prev - WINDOW_SIZE, 0));
     };
 
     const handleShow100CAs = () => {
-        setShowAll(false);
-        setExtraPageIndex((prev) => Math.min(prev + 1, totalExtraPages));
-    };
-
-    const handleShowAllCAs = () => {
-        setShowAll(true);
+        const maxStart = Math.max(0, caData.length - WINDOW_SIZE);
+        setWindowStart((prev) => Math.min(prev + WINDOW_SIZE, maxStart));
     };
 
     const handleTablePageChange = (page: number) => {
@@ -322,28 +303,21 @@ export default function CAsPage() {
                             disabled={hasSearch || isFirstPage || isOnlyOnePage}
                             className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || isFirstPage || isOnlyOnePage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
                         >
-                            Hide all
+                            Move to Start
                         </button>
                         <button
                             onClick={handleHide100CAs}
-                            disabled={hasSearch || ((isFirstPage && !showAll) || isOnlyOnePage)}
-                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || ((isFirstPage && !showAll) || isOnlyOnePage) ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
+                            disabled={hasSearch || isFirstPage || isOnlyOnePage}
+                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || isFirstPage || isOnlyOnePage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
                         >
-                            Hide previous 100
+                            Previous 20
                         </button>
                         <button
                             onClick={handleShow100CAs}
-                            disabled={hasSearch || showAll || extraPageIndex >= totalExtraPages || isOnlyOnePage}
-                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || showAll || extraPageIndex >= totalExtraPages || isOnlyOnePage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
+                            disabled={hasSearch || isOnlyOnePage || isLastPage}
+                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || isOnlyOnePage || isLastPage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
                         >
-                            Show next100
-                        </button>
-                        <button
-                            onClick={handleShowAllCAs}
-                            disabled={hasSearch || showAll || isOnlyOnePage}
-                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${hasSearch || showAll || isOnlyOnePage ? 'border-border bg-surface text-text-muted cursor-not-allowed' : 'border-border bg-background text-text-primary hover:bg-background/80'}`}
-                        >
-                            Show all
+                            Next 20
                         </button>
                     </div>
                 </div>

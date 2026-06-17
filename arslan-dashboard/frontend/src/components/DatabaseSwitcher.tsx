@@ -36,14 +36,6 @@ const AVAILABLE_DATABASES: Database[] = [
         mainDb: 'tranco-latest-8-lakh',
         resultsDb: 'tranco-latest-8-lakh-results',
         scope: 'in'
-    },
-    {
-        id: 'united-states',
-        name: 'United States Domains',
-        description: 'United States scope',
-        mainDb: 'tranco-latest-8-lakh',
-        resultsDb: 'tranco-latest-8-lakh-results',
-        scope: 'us'
     }
 ];
 

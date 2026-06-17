@@ -17,8 +17,8 @@ from django.conf import settings
 # Global variables for current database (can be changed at runtime)
 # _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
 # _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
-_BASE_MAIN_DB = 'hugging-face-792k'
-_BASE_RESULTS_DB = 'hugging-face-792k-results'
+_BASE_MAIN_DB = 'hugging-face-4-lakh'
+_BASE_RESULTS_DB = 'hugging-face-4-lakh-results'
 _CURRENT_MAIN_DB = _BASE_MAIN_DB
 _CURRENT_RESULTS_DB = _BASE_RESULTS_DB
 _CURRENT_SCOPE = 'all'
