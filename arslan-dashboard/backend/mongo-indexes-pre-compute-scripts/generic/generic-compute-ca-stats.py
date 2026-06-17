@@ -14,7 +14,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
-from scope_utils import add_scope_match, get_scope_filter, get_scopes_for_entry, normalize_db_entries, scoped_doc_id
+from scope_utils import add_scope_match, create_index_if_missing, get_scope_filter, get_scopes_for_entry, normalize_db_entries, scoped_doc_id
 
 
 def get_default_config_path():
@@ -201,9 +201,10 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
     }
 
     target_collection.replace_one({"scope": scope}, analysis_document, upsert=True)
-    target_collection.create_index("scope")
-    target_collection.create_index("computed_at")
-    target_collection.create_index("ca-list.rank")
+    create_index_if_missing(target_collection, "scope", name="idx_ca_analysis_scope", background=True)
+    create_index_if_missing(target_collection, "computed_at", name="idx_ca_analysis_computed_at", background=True)
+    create_index_if_missing(target_collection, "ca-list.rank", name="idx_ca_analysis_ca_rank", background=True)
+    create_index_if_missing(target_collection, "ca-list.name", name="idx_ca_analysis_ca_name", background=True)
 
     if verify:
         stored = target_collection.find_one({"scope": scope})

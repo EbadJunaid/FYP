@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
-from scope_utils import add_scope_match, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries
+from scope_utils import add_scope_match, create_index_if_missing, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries
 
 
 def log(message):
@@ -373,16 +373,16 @@ def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
 
     log("Step 4/4: Creating indexes")
 
-    detailed_collection.create_index([("certificate_count", -1)])
-    detailed_collection.create_index([("scope", 1), ("doc_type", 1)])
-    detailed_collection.create_index([("scope", 1), ("public_key_hash", 1)])
-    detailed_collection.create_index([("total_sans", -1)])
-    detailed_collection.create_index([("risk_level", 1)])
-    detailed_collection.create_index([("key_type", 1)])
-    detailed_collection.create_index([("issuer_count", 1)])
-    detailed_collection.create_index([("certificates.domain", 1)])
-    detailed_collection.create_index([("issuers.organization", 1)])
-    detailed_collection.create_index([("computed_at", -1)])
+    create_index_if_missing(detailed_collection, [("scope", 1), ("doc_type", 1)], name="idx_shared_keys_scope_doc_type", background=True)
+    create_index_if_missing(detailed_collection, [("scope", 1), ("public_key_hash", 1)], name="idx_shared_keys_scope_public_key_hash", background=True)
+    create_index_if_missing(detailed_collection, [("certificate_count", -1)], name="idx_shared_keys_certificate_count", background=True)
+    create_index_if_missing(detailed_collection, [("total_sans", -1)], name="idx_shared_keys_total_sans", background=True)
+    create_index_if_missing(detailed_collection, [("risk_level", 1)], name="idx_shared_keys_risk_level", background=True)
+    create_index_if_missing(detailed_collection, [("key_type", 1)], name="idx_shared_keys_key_type", background=True)
+    create_index_if_missing(detailed_collection, [("issuer_count", 1)], name="idx_shared_keys_issuer_count", background=True)
+    create_index_if_missing(detailed_collection, [("certificates.domain", 1)], name="idx_shared_keys_cert_domain", background=True)
+    create_index_if_missing(detailed_collection, [("issuers.organization", 1)], name="idx_shared_keys_issuer_org", background=True)
+    create_index_if_missing(detailed_collection, [("computed_at", -1)], name="idx_shared_keys_computed_at", background=True)
 
     total_public_keys = total_docs - total_certs_at_risk + processed_count
     unique_public_keys = total_docs - total_certs_at_risk

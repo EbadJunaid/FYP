@@ -11,7 +11,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient, ASCENDING
-from scope_utils import get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
+from scope_utils import create_index_if_missing, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -341,8 +341,10 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False,
 
     log("Step 4/4: Writing san-analysis document")
     target_collection.replace_one({"scope": scope}, san_analysis_doc, upsert=True)
-    target_collection.create_index([("scope", ASCENDING)])
-    target_collection.create_index([("computed_at", ASCENDING)])
+    create_index_if_missing(target_collection, [("scope", ASCENDING)], name="idx_san_analysis_scope", background=True)
+    create_index_if_missing(target_collection, [("computed_at", ASCENDING)], name="idx_san_analysis_computed_at", background=True)
+    create_index_if_missing(target_collection, [("bucket_groups.bucket", ASCENDING)], name="idx_san_analysis_bucket", background=True)
+    create_index_if_missing(target_collection, [("tlds.tld", ASCENDING)], name="idx_san_analysis_tld", background=True)
 
     if verify:
         stored_doc = target_collection.find_one({"scope": scope})

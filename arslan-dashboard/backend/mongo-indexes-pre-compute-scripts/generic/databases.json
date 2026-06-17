@@ -3,10 +3,10 @@
   "databases": [
     {
     
-      "id": "tranco-60k",
-      "main": "tranco-60k",
-      "results": "tranco-60k-results",
-      "countries": ["Pakistan","India","Russia"]
+      "id": "hugging-face-792k",
+      "main": "hugging-face-792k",
+      "results": "hugging-face-792k-results",
+      "countries": ["Pakistan","India","Russia","United States"]
     }
   ]
 }

@@ -12,7 +12,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
 from pymongo import MongoClient
-from scope_utils import add_scope_match, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
+from scope_utils import add_scope_match, create_index_if_missing, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -254,7 +254,8 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
     }
 
     target_collection.replace_one({"scope": scope}, validity_analysis_doc, upsert=True)
-    target_collection.create_index("scope")
+    create_index_if_missing(target_collection, "scope", name="idx_validity_analysis_scope", background=True)
+    create_index_if_missing(target_collection, "computedAt", name="idx_validity_analysis_computedAt", background=True)
 
     if verify:
         stored_doc = target_collection.find_one({"scope": scope})

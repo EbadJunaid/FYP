@@ -17,7 +17,7 @@ import os
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 from pymongo import MongoClient
-from scope_utils import add_scope_match, get_scope_filter, get_scopes_for_entry, normalize_db_entries, scoped_doc_id
+from scope_utils import add_scope_match, create_index_if_missing, get_scope_filter, get_scopes_for_entry, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -447,11 +447,12 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
     }
 
     results_collection.replace_one({"scope": scope}, result_doc, upsert=True)
-    results_collection.create_index("scope")
-    results_collection.create_index("computed_at")
-    results_collection.create_index("hash_trends_granularity")
-    results_collection.create_index("hash_trends_months")
-    results_collection.create_index("issuer-algo-matrix.issuer")
+    create_index_if_missing(results_collection, "scope", name="idx_signature_hash_scope", background=True)
+    create_index_if_missing(results_collection, "computed_at", name="idx_signature_hash_computed_at", background=True)
+    create_index_if_missing(results_collection, "computedAt", name="idx_signature_hash_computedAt", background=True)
+    create_index_if_missing(results_collection, "hash_trends_granularity", name="idx_signature_hash_trend_granularity", background=True)
+    create_index_if_missing(results_collection, "hash_trends_months", name="idx_signature_hash_trend_months", background=True)
+    create_index_if_missing(results_collection, "issuer-algo-matrix.issuer", name="idx_signature_hash_issuer", background=True)
 
     if verify:
         stored_doc = results_collection.find_one({"scope": scope})

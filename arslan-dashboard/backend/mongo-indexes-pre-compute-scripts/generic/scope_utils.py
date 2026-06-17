@@ -1,5 +1,7 @@
 """Shared helpers for generic pre-compute scripts."""
 
+from pymongo.errors import OperationFailure
+
 
 TLD_TO_COUNTRY = {
     "us": "United States", "ca": "Canada", "mx": "Mexico",
@@ -90,3 +92,37 @@ def merge_scope_query(query, scope):
     if not query:
         return scope_filter
     return {"$and": [query, scope_filter]}
+
+
+def normalize_index_keys(keys):
+    if isinstance(keys, str):
+        return [(keys, 1)]
+    return [(field, direction) for field, direction in keys]
+
+
+def create_index_if_missing(collection, keys, name, **options):
+    normalized_keys = normalize_index_keys(keys)
+    for existing in collection.list_indexes():
+        existing_keys = list(existing.get("key", {}).items())
+        if existing.get("name") == name:
+            if existing_keys != normalized_keys:
+                print(
+                    f"  Reusing existing index {name} on {collection.full_name}; "
+                    f"existing keys {existing_keys}, requested keys {normalized_keys}"
+                )
+            return existing.get("name")
+        if existing_keys == normalized_keys:
+            if existing.get("name") != name:
+                print(
+                    f"  Reusing existing index {existing.get('name')} for {name} "
+                    f"on {collection.full_name}"
+                )
+            return existing.get("name")
+
+    try:
+        return collection.create_index(normalized_keys, name=name, **options)
+    except OperationFailure as exc:
+        if getattr(exc, "code", None) in (85, 86):
+            print(f"  Index conflict for {name} on {collection.full_name}; equivalent index already exists")
+            return None
+        raise

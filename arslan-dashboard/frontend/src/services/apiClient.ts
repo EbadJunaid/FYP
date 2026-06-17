@@ -284,6 +284,7 @@ class ApiClient {
         const db = params.get('db') || localStorage.getItem(SELECTED_DB_KEY) || 'global';
         if (db === 'pakistani') return 'pk';
         if (db === 'indian') return 'in';
+        if (db === 'united-states') return 'us';
         const storedScope = localStorage.getItem(SELECTED_SCOPE_KEY);
         if (storedScope) return storedScope;
         return 'all';

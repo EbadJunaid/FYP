@@ -10,7 +10,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
-from scope_utils import get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
+from scope_utils import create_index_if_missing, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 GENERIC_TLDS = {
@@ -233,10 +233,11 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
 
     target_collection.replace_one({"scope": scope}, geo_doc, upsert=True)
 
-    target_collection.create_index("scope")
-    target_collection.create_index("countries.rank")
-    target_collection.create_index("countries.count")
-    target_collection.create_index("computed_at")
+    create_index_if_missing(target_collection, "scope", name="idx_geo_distribution_scope", background=True)
+    create_index_if_missing(target_collection, "computed_at", name="idx_geo_distribution_computed_at", background=True)
+    create_index_if_missing(target_collection, "countries.rank", name="idx_geo_distribution_country_rank", background=True)
+    create_index_if_missing(target_collection, "countries.count", name="idx_geo_distribution_country_count", background=True)
+    create_index_if_missing(target_collection, "countries.name", name="idx_geo_distribution_country_name", background=True)
 
     if verify:
         stored_doc = target_collection.find_one({"scope": scope})

@@ -8,6 +8,25 @@ class OverviewModels:
 
     collection = db['certificates']
 
+    @staticmethod
+    def get_tld_country(domain: str) -> str:
+        try:
+            from certificates.shared_apis.db_queries import TLD_TO_COUNTRY
+        except Exception:
+            TLD_TO_COUNTRY = {}
+
+        if not domain or not isinstance(domain, str):
+            return 'Unknown'
+
+        parts = domain.lower().strip('.').split('.')
+        if len(parts) >= 2:
+            two_part = '.'.join(parts[-2:])
+            if two_part in TLD_TO_COUNTRY:
+                return TLD_TO_COUNTRY[two_part]
+            tld = parts[-1]
+            return TLD_TO_COUNTRY.get(tld, 'Unknown')
+        return 'Unknown'
+
     @classmethod
     def get_encryption_strength(cls, base_filter: Optional[Dict] = None) -> List[Dict]:
         """Get encryption algorithm distribution with EXACT counts using compound indexes
@@ -41,21 +60,22 @@ class OverviewModels:
         
         # Prepare base filter for all queries
         base_query = base_filter.copy() if base_filter else {}
+        scoped_encryption = MongoDBClient.get_current_scope() not in ('', 'all', 'global')
         
         # Define all algorithm + key length combinations we want to count
         # Each has its specific compound index for MAXIMUM speed!
         algorithms_to_count = [
             # RSA variants - use idx_algo_rsa_length
-            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 2048, 'display': 'RSA 2048', 'hint': 'idx_algo_rsa_length'},
-            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 4096, 'display': 'RSA 4096', 'hint': 'idx_algo_rsa_length'},
-            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 3072, 'display': 'RSA 3072', 'hint': 'idx_algo_rsa_length'},
-            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 1024, 'display': 'RSA 1024', 'hint': 'idx_algo_rsa_length'},
-            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 8192, 'display': 'RSA 8192', 'hint': 'idx_algo_rsa_length'},
+            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 2048, 'display': 'RSA 2048', 'hint': 'idx_scope_algo_rsa_length' if scoped_encryption else 'idx_algo_rsa_length'},
+            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 4096, 'display': 'RSA 4096', 'hint': 'idx_scope_algo_rsa_length' if scoped_encryption else 'idx_algo_rsa_length'},
+            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 3072, 'display': 'RSA 3072', 'hint': 'idx_scope_algo_rsa_length' if scoped_encryption else 'idx_algo_rsa_length'},
+            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 1024, 'display': 'RSA 1024', 'hint': 'idx_scope_algo_rsa_length' if scoped_encryption else 'idx_algo_rsa_length'},
+            {'algo': 'RSA', 'field': 'rsa_public_key.length', 'length': 8192, 'display': 'RSA 8192', 'hint': 'idx_scope_algo_rsa_length' if scoped_encryption else 'idx_algo_rsa_length'},
             
             # ECDSA variants - use idx_algo_ecdsa_length
-            {'algo': 'ECDSA', 'field': 'ecdsa_public_key.length', 'length': 256, 'display': 'ECDSA 256', 'hint': 'idx_algo_ecdsa_length'},
-            {'algo': 'ECDSA', 'field': 'ecdsa_public_key.length', 'length': 384, 'display': 'ECDSA 384', 'hint': 'idx_algo_ecdsa_length'},
-            {'algo': 'ECDSA', 'field': 'ecdsa_public_key.length', 'length': 521, 'display': 'ECDSA 521', 'hint': 'idx_algo_ecdsa_length'},
+            {'algo': 'ECDSA', 'field': 'ecdsa_public_key.length', 'length': 256, 'display': 'ECDSA 256', 'hint': 'idx_scope_algo_ecdsa_length' if scoped_encryption else 'idx_algo_ecdsa_length'},
+            {'algo': 'ECDSA', 'field': 'ecdsa_public_key.length', 'length': 384, 'display': 'ECDSA 384', 'hint': 'idx_scope_algo_ecdsa_length' if scoped_encryption else 'idx_algo_ecdsa_length'},
+            {'algo': 'ECDSA', 'field': 'ecdsa_public_key.length', 'length': 521, 'display': 'ECDSA 521', 'hint': 'idx_scope_algo_ecdsa_length' if scoped_encryption else 'idx_algo_ecdsa_length'},
         ]
         
         # Execute count queries with compound index hints
@@ -132,8 +152,7 @@ class OverviewModels:
         
         # Get unique countries from domains (TLDs)
         domain_pipeline = [
-            {'$unwind': '$parsed.subject.common_name'},
-            {'$group': {'_id': '$parsed.subject.common_name'}},
+            {'$group': {'_id': '$domain'}},
             {'$limit': 1000}
         ]
         domains = [doc['_id'] for doc in cls.collection.aggregate(domain_pipeline)]

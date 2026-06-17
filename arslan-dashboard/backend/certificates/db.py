@@ -17,8 +17,8 @@ from django.conf import settings
 # Global variables for current database (can be changed at runtime)
 # _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
 # _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
-_BASE_MAIN_DB = 'tranco-60k'
-_BASE_RESULTS_DB = 'tranco-60k-results'
+_BASE_MAIN_DB = 'hugging-face-792k'
+_BASE_RESULTS_DB = 'hugging-face-792k-results'
 _CURRENT_MAIN_DB = _BASE_MAIN_DB
 _CURRENT_RESULTS_DB = _BASE_RESULTS_DB
 _CURRENT_SCOPE = 'all'
@@ -46,21 +46,35 @@ AVAILABLE_DATABASES = {
         'results': _BASE_RESULTS_DB,
         'scope': 'all',
         'name': 'Global',
-        'description': '1lakh certificates'
+        # 'description': '1lakh certificates'
     },
     'pakistani': {
         'main': _BASE_MAIN_DB,
         'results': _BASE_RESULTS_DB,
         'scope': 'pk',
         'name': 'Pakistani Domains',
-        'description': '7,724 certificates'
+        # 'description': '7,724 certificates'
     },
     'indian': {
         'main': _BASE_MAIN_DB,
         'results': _BASE_RESULTS_DB,
         'scope': 'in',
         'name': 'Indian Domains',
-        'description': '7,724 certificates'
+        # 'description': '7,724 certificates'
+    },
+    'united states': {
+        'main': _BASE_MAIN_DB,
+        'results': _BASE_RESULTS_DB,
+        'scope': 'us',
+        'name': 'United States Domains',
+        # 'description': '7,724 certificates'
+    },
+    'russia': {
+        'main': _BASE_MAIN_DB,
+        'results': _BASE_RESULTS_DB,
+        'scope': 'ru',
+        'name': 'Russia Domains',
+        # 'description': '7,724 certificates'
     }
 }
 # ============================================================================
@@ -232,12 +246,16 @@ class MongoDBClient:
         if normalized_scope == _CURRENT_SCOPE:
             return
         _CURRENT_SCOPE = normalized_scope
-        if _CURRENT_SCOPE == 'pk':
-            cls._current_db_id = 'pakistani'
-        elif _CURRENT_SCOPE == 'in':
-            cls._current_db_id = 'indian'
-        elif _CURRENT_SCOPE == 'all':
-            cls._current_db_id = 'global'
+        matching_db = next(
+            (
+                db_id
+                for db_id, config in AVAILABLE_DATABASES.items()
+                if config.get('scope', 'all') == _CURRENT_SCOPE
+            ),
+            None,
+        )
+        if matching_db:
+            cls._current_db_id = matching_db
         cls.refresh_model_collections()
 
     @classmethod
@@ -290,7 +308,7 @@ class MongoDBClient:
         scope = cls.get_current_scope()
         if scope in ('', 'all', 'global'):
             return {}
-        return {'$or': [{'parsed.scope': scope}, {'scope': scope}]}
+        return {'scope': scope}
     
     @classmethod
     def get_available_databases(cls):

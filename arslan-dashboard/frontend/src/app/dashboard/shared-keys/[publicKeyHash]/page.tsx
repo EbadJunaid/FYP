@@ -81,6 +81,7 @@ const getStoredScope = () => {
     const db = localStorage.getItem(SELECTED_DB_KEY) || 'global';
     if (db === 'pakistani') return 'pk';
     if (db === 'indian') return 'in';
+    if (db === 'united-states') return 'us';
     return localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
 };
 

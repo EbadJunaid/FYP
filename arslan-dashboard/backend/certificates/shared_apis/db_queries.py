@@ -315,6 +315,8 @@ class SharedModels:
         
         trends = []
         now = datetime.now(timezone.utc)
+        scoped_trends = MongoDBClient.get_current_scope() not in ('', 'all', 'global')
+        validity_hint = 'idx_scope_validity_end' if scoped_trends else 'idx_validity_end'
         
         if granularity == 'weekly':
             # Weekly granularity: show last N weeks and next M weeks
@@ -338,7 +340,7 @@ class SharedModels:
                         '$gte': start_str,
                         '$lte': end_str
                     }
-                })
+                }, hint=validity_hint)
                 
                 # Week label: "Jan 6-12"
                 week_label = f"{week_start.strftime('%b %d')}-{week_end.strftime('%d')}"
@@ -380,7 +382,7 @@ class SharedModels:
                         '$gte': start_str,
                         '$lte': end_str
                     }
-                })
+                }, hint=validity_hint)
                 
                 # Include year with month name for clarity (e.g., "Jan 2026")
                 month_label = month_start.strftime('%b %Y')
@@ -409,6 +411,9 @@ class SharedModels:
         
         now = cls.get_current_time_iso()
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        scoped_metrics = MongoDBClient.get_current_scope() not in ('', 'all', 'global')
+        validity_hint = 'idx_scope_validity_end' if scoped_metrics else 'idx_validity_end'
+        zlint_hint = 'idx_scope_zlint_errors' if scoped_metrics else 'idx_zlint_errors'
         
         print(f"[METRICS] Starting ultra-optimized queries at {cls.get_current_time_iso()}")
         
@@ -438,7 +443,7 @@ class SharedModels:
         t2 = time.time()
         expired_count = cls.collection.count_documents(
             {'parsed.validity.end': {'$lt': now}},
-            hint='idx_validity_end'  # Force use of index
+            hint=validity_hint
         )
         print(f"[METRICS] Expired count: {expired_count} ({time.time()-t2:.3f}s)")
         
@@ -447,7 +452,7 @@ class SharedModels:
         t3 = time.time()
         expiring_count = cls.collection.count_documents(
             {'parsed.validity.end': {'$gte': now, '$lte': now_plus_30}},
-            hint='idx_validity_end'  # Force use of index
+            hint=validity_hint
         )
         print(f"[METRICS] Expiring count: {expiring_count} ({time.time()-t3:.3f}s)")
         
@@ -456,7 +461,7 @@ class SharedModels:
         t4 = time.time()
         critical_vulns = cls.collection.count_documents(
             {'zlint.errors_present': True},
-            hint='idx_zlint_errors'  # Force use of index
+            hint=zlint_hint
         )
         print(f"[METRICS] Vulnerability count: {critical_vulns} ({time.time()-t4:.3f}s)")
         
@@ -1256,8 +1261,8 @@ class SharedModels:
 
         if country:
             scope_tld = cls.country_name_to_tld(country)
-            print(f"[COUNTRY FILTER] Querying parsed.scope for {country} -> {scope_tld}")
-            filters.append({'$or': [{'parsed.scope': scope_tld}, {'scope': scope_tld}]})
+            print(f"[COUNTRY FILTER] Querying scope for {country} -> {scope_tld}")
+            filters.append({'scope': scope_tld})
 
         if encryption_type:
             parts = encryption_type.split()
@@ -1442,7 +1447,10 @@ class SharedModels:
         if not issuer:
             find_cursor = find_cursor.sort('_id', 1)
             if not query:
-                find_cursor = find_cursor.hint('_id_')
+                if MongoDBClient.get_current_scope() in ('', 'all', 'global'):
+                    find_cursor = find_cursor.hint('_id_')
+                else:
+                    find_cursor = find_cursor.hint('idx_scope_id')
         cursor = find_cursor.skip(skip).limit(page_size)
 
         certificates = [cls.serialize_certificate(doc) for doc in cursor]
@@ -1461,547 +1469,547 @@ class SharedModels:
         # Legacy get_all implementation is kept below for reference only.
         # Runtime returns from the normalized single-query flow above.
         
-        now = cls.get_current_time_iso()
-        now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # now = cls.get_current_time_iso()
+        # now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
-        # Build query based on filters
-        query = {}
+        # # Build query based on filters
+        # query = {}
         
-        # Apply base filter from global filters (date range, etc)
-        if base_filter:
-            query = base_filter.copy()
+        # # Apply base filter from global filters (date range, etc)
+        # if base_filter:
+        #     query = base_filter.copy()
         
-        if search:
-            # Prefix search on domain (index-friendly with idx_domain).
-            prefix = re.escape(search)
-            query['domain'] = {'$regex': f'^{prefix}'}
+        # if search:
+        #     # Prefix search on domain (index-friendly with idx_domain).
+        #     prefix = re.escape(search)
+        #     query['domain'] = {'$regex': f'^{prefix}'}
         
-        if issuer:
-            if issuer.lower() == 'others':
-                # Get top 10 CAs and exclude them using $nin
-                top_ca_pipeline = [
-                    {'$project': {
-                        'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}
-                    }},
-                    {'$match': {'issuer_org': {'$exists': True, '$ne': None}}},
-                    {'$group': {
-                        '_id': '$issuer_org',
-                        'count': {'$sum': 1}
-                    }},
-                    {'$sort': {'count': -1}},
-                    {'$limit': 10}
-                ]
-                top_cas = [r['_id'] for r in cls.collection.aggregate(top_ca_pipeline)]
-                # Match certificates where issuer is NOT in top 10
-                query['$and'] = query.get('$and', [])
-                query['$and'].append({
-                    '$or': [
-                        {'parsed.issuer.organization': {'$nin': top_cas}},
-                        {'parsed.issuer.organization': {'$exists': False}}
-                    ]
-                })
-            else:
-                # FIX: Use the actual issuer.organization field that exists in the database
-                # parsed.issuer.organization is an array, so we use $in to match any element
-                query['parsed.issuer.organization'] = {'$in': [issuer]}
+        # if issuer:
+        #     if issuer.lower() == 'others':
+        #         # Get top 10 CAs and exclude them using $nin
+        #         top_ca_pipeline = [
+        #             {'$project': {
+        #                 'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}
+        #             }},
+        #             {'$match': {'issuer_org': {'$exists': True, '$ne': None}}},
+        #             {'$group': {
+        #                 '_id': '$issuer_org',
+        #                 'count': {'$sum': 1}
+        #             }},
+        #             {'$sort': {'count': -1}},
+        #             {'$limit': 10}
+        #         ]
+        #         top_cas = [r['_id'] for r in cls.collection.aggregate(top_ca_pipeline)]
+        #         # Match certificates where issuer is NOT in top 10
+        #         query['$and'] = query.get('$and', [])
+        #         query['$and'].append({
+        #             '$or': [
+        #                 {'parsed.issuer.organization': {'$nin': top_cas}},
+        #                 {'parsed.issuer.organization': {'$exists': False}}
+        #             ]
+        #         })
+        #     else:
+        #         # FIX: Use the actual issuer.organization field that exists in the database
+        #         # parsed.issuer.organization is an array, so we use $in to match any element
+        #         query['parsed.issuer.organization'] = {'$in': [issuer]}
         
-        # Apply status filter - VALID includes ALL non-expired certificates
-        if status:
-            status_upper = status.upper()
-            if status_upper == 'EXPIRED':
-                query['parsed.validity.end'] = {'$lt': now}
-            elif status_upper == 'EXPIRING_SOON':
-                query['parsed.validity.end'] = {'$gte': now, '$lte': now_plus_30}
-            elif status_upper == 'VALID':
-                # VALID = ALL non-expired certificates (includes expiring_soon)
-                query['parsed.validity.end'] = {'$gt': now}
+        # # Apply status filter - VALID includes ALL non-expired certificates
+        # if status:
+        #     status_upper = status.upper()
+        #     if status_upper == 'EXPIRED':
+        #         query['parsed.validity.end'] = {'$lt': now}
+        #     elif status_upper == 'EXPIRING_SOON':
+        #         query['parsed.validity.end'] = {'$gte': now, '$lte': now_plus_30}
+        #     elif status_upper == 'VALID':
+        #         # VALID = ALL non-expired certificates (includes expiring_soon)
+        #         query['parsed.validity.end'] = {'$gt': now}
         
-        # Filter by encryption type (e.g., "RSA 2048", "ECDSA 256")
-        if encryption_type:
-            parts = encryption_type.split()
-            if len(parts) >= 1:
-                algo_name = parts[0]
-                query['parsed.subject_key_info.key_algorithm.name'] = algo_name
-                if len(parts) >= 2:
-                    try:
-                        key_length = int(parts[1])
-                        # Check both RSA and ECDSA key length fields
-                        if algo_name.upper() == 'RSA':
-                            query['parsed.subject_key_info.rsa_public_key.length'] = key_length
-                        elif algo_name.upper() in ['ECDSA', 'EC']:
-                            query['parsed.subject_key_info.ecdsa_public_key.length'] = key_length
-                    except ValueError:
-                        pass
+        # # Filter by encryption type (e.g., "RSA 2048", "ECDSA 256")
+        # if encryption_type:
+        #     parts = encryption_type.split()
+        #     if len(parts) >= 1:
+        #         algo_name = parts[0]
+        #         query['parsed.subject_key_info.key_algorithm.name'] = algo_name
+        #         if len(parts) >= 2:
+        #             try:
+        #                 key_length = int(parts[1])
+        #                 # Check both RSA and ECDSA key length fields
+        #                 if algo_name.upper() == 'RSA':
+        #                     query['parsed.subject_key_info.rsa_public_key.length'] = key_length
+        #                 elif algo_name.upper() in ['ECDSA', 'EC']:
+        #                     query['parsed.subject_key_info.ecdsa_public_key.length'] = key_length
+        #             except ValueError:
+        #                 pass
         
-        # Filter by exact signature algorithm (e.g., "SHA256-RSA", "ECDSA-SHA256")
-        if signature_algorithm:
-            query['parsed.signature_algorithm.name'] = signature_algorithm
+        # # Filter by exact signature algorithm (e.g., "SHA256-RSA", "ECDSA-SHA256")
+        # if signature_algorithm:
+        #     query['parsed.signature_algorithm.name'] = signature_algorithm
         
-        # Filter by weak hash (SHA-1, MD5) - for Weak Hash Alert card
-        if weak_hash:
-            query['$or'] = query.get('$or', [])
-            if not query['$or']:
-                query['$or'] = [
-                    {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
-                    {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
-                ]
+        # # Filter by weak hash (SHA-1, MD5) - for Weak Hash Alert card
+        # if weak_hash:
+        #     query['$or'] = query.get('$or', [])
+        #     if not query['$or']:
+        #         query['$or'] = [
+        #             {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
+        #             {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
+        #         ]
         
-        # Filter by self-signed certificates
-        if self_signed:
-            query['parsed.signature.self_signed'] = True
+        # # Filter by self-signed certificates
+        # if self_signed:
+        #     query['parsed.signature.self_signed'] = True
         
-        # Filter by exact key size (e.g., 2048, 4096)
-        if key_size:
+        # # Filter by exact key size (e.g., 2048, 4096)
+        # if key_size:
 
-            print(f"Applying key size filter: {key_size} bits")
+        #     print(f"Applying key size filter: {key_size} bits")
 
-            query['$or'] = query.get('$or', [])
-            if not query['$or']:
-                query['$or'] = [
-                    {'parsed.subject_key_info.rsa_public_key.length': key_size},
-                    {'parsed.subject_key_info.ecdsa_public_key.length': key_size}
-                ]
+        #     query['$or'] = query.get('$or', [])
+        #     if not query['$or']:
+        #         query['$or'] = [
+        #             {'parsed.subject_key_info.rsa_public_key.length': key_size},
+        #             {'parsed.subject_key_info.ecdsa_public_key.length': key_size}
+        #         ]
         
-        # Filter by hash type (e.g., "SHA-256", "SHA-1")
-        if hash_type:
-            # Map hash type to regex pattern for signature_algorithm.name
-            print(f"Applying hash type filter: {hash_type}")
-            hash_patterns = {
-                'SHA-256': '^SHA256',
-                'SHA-384': '^SHA384',
-                'SHA-512': '^SHA512',
-                'SHA-1': '^SHA1|^SHA-1',
-                'MD5': '^MD5'
-            }
-            pattern = hash_patterns.get(hash_type, f'^{hash_type.replace("-", "")}')
-            query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
+        # # Filter by hash type (e.g., "SHA-256", "SHA-1")
+        # if hash_type:
+        #     # Map hash type to regex pattern for signature_algorithm.name
+        #     print(f"Applying hash type filter: {hash_type}")
+        #     hash_patterns = {
+        #         'SHA-256': '^SHA256',
+        #         'SHA-384': '^SHA384',
+        #         'SHA-512': '^SHA512',
+        #         'SHA-1': '^SHA1|^SHA-1',
+        #         'MD5': '^MD5'
+        #     }
+        #     pattern = hash_patterns.get(hash_type, f'^{hash_type.replace("-", "")}')
+        #     query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
         
-        # Filter by expiring month/year - get certs that expire/expired in that month
-        if expiring_month and expiring_year:
-            from calendar import monthrange
-            # Get first and last day of the month
-            _, last_day = monthrange(expiring_year, expiring_month)
-            month_start = f"{expiring_year}-{expiring_month:02d}-01T00:00:00Z"
-            month_end = f"{expiring_year}-{expiring_month:02d}-{last_day:02d}T23:59:59Z"
-            query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
+        # # Filter by expiring month/year - get certs that expire/expired in that month
+        # if expiring_month and expiring_year:
+        #     from calendar import monthrange
+        #     # Get first and last day of the month
+        #     _, last_day = monthrange(expiring_year, expiring_month)
+        #     month_start = f"{expiring_year}-{expiring_month:02d}-01T00:00:00Z"
+        #     month_end = f"{expiring_year}-{expiring_month:02d}-{last_day:02d}T23:59:59Z"
+        #     query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
         
-        # Filter by custom expiration range (e.g. for weekly view)
-        if expiring_start and expiring_end:
-            print(f"Applying custom expiration range filter: {expiring_start} to {expiring_end}")
-            # If both month filter and range filter are present, range takes precedence
-            # or we could combine them, but range is usually more specific
-            query['parsed.validity.end'] = {'$gte': expiring_start, '$lte': expiring_end}
+        # # Filter by custom expiration range (e.g. for weekly view)
+        # if expiring_start and expiring_end:
+        #     print(f"Applying custom expiration range filter: {expiring_start} to {expiring_end}")
+        #     # If both month filter and range filter are present, range takes precedence
+        #     # or we could combine them, but range is usually more specific
+        #     query['parsed.validity.end'] = {'$gte': expiring_start, '$lte': expiring_end}
         
-        # Filter by issued month/year - get certs that were issued (validFrom) in that month
-        if issued_month and issued_year:
-            from calendar import monthrange
-            # Get first and last day of the month
-            _, last_day = monthrange(issued_year, issued_month)
-            month_start = f"{issued_year}-{issued_month:02d}-01T00:00:00Z"
-            month_end = f"{issued_year}-{issued_month:02d}-{last_day:02d}T23:59:59Z"
-            query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
+        # # Filter by issued month/year - get certs that were issued (validFrom) in that month
+        # if issued_month and issued_year:
+        #     from calendar import monthrange
+        #     # Get first and last day of the month
+        #     _, last_day = monthrange(issued_year, issued_month)
+        #     month_start = f"{issued_year}-{issued_month:02d}-01T00:00:00Z"
+        #     month_end = f"{issued_year}-{issued_month:02d}-{last_day:02d}T23:59:59Z"
+        #     query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
         
-        # Filter by issued within N days (for "Issued (30d)" card click)
-        if issued_within_days:
-            print(f"Applying issued within last {issued_within_days} days filter")
-            now_dt = datetime.now(timezone.utc)
-            past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            # Certificates with validity start date within the last N days
-            query['parsed.validity.start'] = {
-                '$gte': past_date,  # Issued within last N days
-                '$lte': now  # Up to now
-            }
+        # # Filter by issued within N days (for "Issued (30d)" card click)
+        # if issued_within_days:
+        #     print(f"Applying issued within last {issued_within_days} days filter")
+        #     now_dt = datetime.now(timezone.utc)
+        #     past_date = (now_dt - timedelta(days=issued_within_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        #     # Certificates with validity start date within the last N days
+        #     query['parsed.validity.start'] = {
+        #         '$gte': past_date,  # Issued within last N days
+        #         '$lte': now  # Up to now
+        #     }
         
-        # Filter by expiring within N days (distinct from 30-day expiring_soon status)
-        if expiring_days:
-            now_dt = datetime.now(timezone.utc)
-            target_date = (now_dt + timedelta(days=expiring_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            # Override any existing validity.end filter
-            query['parsed.validity.end'] = {
-                '$gt': now,  # Not yet expired
-                '$lte': target_date  # Within expiring_days window
-            }
+        # # Filter by expiring within N days (distinct from 30-day expiring_soon status)
+        # if expiring_days:
+        #     now_dt = datetime.now(timezone.utc)
+        #     target_date = (now_dt + timedelta(days=expiring_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        #     # Override any existing validity.end filter
+        #     query['parsed.validity.end'] = {
+        #         '$gt': now,  # Not yet expired
+        #         '$lte': target_date  # Within expiring_days window
+        #     }
 
-        # Filter by validation level (DV, OV, EV)
-        if validation_levels and len(validation_levels) > 0:
-            validation_queries = []
-            for level in validation_levels:
-                normalized_level = level.strip().upper()
-                if normalized_level in ['DV', 'OV', 'EV']:
-                    validation_queries.append({'parsed.validation_level': normalized_level})
-            if validation_queries:
-                validation_filter = validation_queries[0] if len(validation_queries) == 1 else {'$or': validation_queries}
-                if not query:
-                    query = validation_filter
-                else:
-                    if '$and' in query:
-                        query['$and'].append(validation_filter)
-                    else:
-                        query = {'$and': [query, validation_filter]}
+        # # Filter by validation level (DV, OV, EV)
+        # if validation_levels and len(validation_levels) > 0:
+        #     validation_queries = []
+        #     for level in validation_levels:
+        #         normalized_level = level.strip().upper()
+        #         if normalized_level in ['DV', 'OV', 'EV']:
+        #             validation_queries.append({'parsed.validation_level': normalized_level})
+        #     if validation_queries:
+        #         validation_filter = validation_queries[0] if len(validation_queries) == 1 else {'$or': validation_queries}
+        #         if not query:
+        #             query = validation_filter
+        #         else:
+        #             if '$and' in query:
+        #                 query['$and'].append(validation_filter)
+        #             else:
+        #                 query = {'$and': [query, validation_filter]}
 
-        # Filter by validity period bucket (duration in days)
-        # ✅ OPTIMIZED: Use pre-computed validity.length field instead of date parsing
-        if validity_bucket:
-            # Extract min/max days from bucket string
-            # Buckets: "0-90", "90-365", "365-730", "730+"
-            bucket_ranges = {
-                '0-90': (0, 90),
-                '90-365': (90, 365),
-                '365-730': (365, 730),
-                '730+': (730, 100000)
-            }
-            if validity_bucket in bucket_ranges:
-                min_days, max_days = bucket_ranges[validity_bucket]
-                # Convert days to seconds (validity.length is in seconds)
-                min_seconds = min_days * 86400
-                max_seconds = max_days * 86400
+        # # Filter by validity period bucket (duration in days)
+        # # ✅ OPTIMIZED: Use pre-computed validity.length field instead of date parsing
+        # if validity_bucket:
+        #     # Extract min/max days from bucket string
+        #     # Buckets: "0-90", "90-365", "365-730", "730+"
+        #     bucket_ranges = {
+        #         '0-90': (0, 90),
+        #         '90-365': (90, 365),
+        #         '365-730': (365, 730),
+        #         '730+': (730, 100000)
+        #     }
+        #     if validity_bucket in bucket_ranges:
+        #         min_days, max_days = bucket_ranges[validity_bucket]
+        #         # Convert days to seconds (validity.length is in seconds)
+        #         min_seconds = min_days * 86400
+        #         max_seconds = max_days * 86400
                 
-                # Use direct query on validity.length field (pre-computed in DB)
-                # This is MUCH faster than date parsing aggregation
-                query['parsed.validity.length'] = {
-                    '$gte': min_seconds,
-                    '$lt': max_seconds
-                }
+        #         # Use direct query on validity.length field (pre-computed in DB)
+        #         # This is MUCH faster than date parsing aggregation
+        #         query['parsed.validity.length'] = {
+        #             '$gte': min_seconds,
+        #             '$lt': max_seconds
+        #         }
         
-        # Handle has_vulnerabilities with OPTIMIZED query using boolean flag
-        if has_vulnerabilities:
-            # Use the zlint.errors_present boolean flag for fast indexed lookup
-            # This is the same approach as Global Health / Active Certs - FAST
-            vuln_query = {'zlint.errors_present': True}
+        # # Handle has_vulnerabilities with OPTIMIZED query using boolean flag
+        # if has_vulnerabilities:
+        #     # Use the zlint.errors_present boolean flag for fast indexed lookup
+        #     # This is the same approach as Global Health / Active Certs - FAST
+        #     vuln_query = {'zlint.errors_present': True}
             
-            # Get total count - simple indexed query
-            total = cls.collection.count_documents(vuln_query)
+        #     # Get total count - simple indexed query
+        #     total = cls.collection.count_documents(vuln_query)
             
-            # Get paginated results - simple find with skip/limit
-            skip = (page - 1) * page_size
-            cursor = cls.collection.find(vuln_query).skip(skip).limit(page_size)
+        #     # Get paginated results - simple find with skip/limit
+        #     skip = (page - 1) * page_size
+        #     cursor = cls.collection.find(vuln_query).skip(skip).limit(page_size)
             
-            certificates = []
-            for doc in cursor:
-                cert = cls.serialize_certificate(doc)
-                certificates.append(cert)
+        #     certificates = []
+        #     for doc in cursor:
+        #         cert = cls.serialize_certificate(doc)
+        #         certificates.append(cert)
             
-            return {
-                'certificates': certificates,
-                'pagination': {
-                    'page': page,
-                    'pageSize': page_size,
-                    'total': total,
-                    'totalPages': max(1, (total + page_size - 1) // page_size)
-                }
-            }
+        #     return {
+        #         'certificates': certificates,
+        #         'pagination': {
+        #             'page': page,
+        #             'pageSize': page_size,
+        #             'total': total,
+        #             'totalPages': max(1, (total + page_size - 1) // page_size)
+        #         }
+        #     }
         
-        # ⚡ OPTIMIZED: Handle country filter using pre-computed certificate IDs
-        # PERFORMANCE: 110 seconds → 0.1 seconds (1,100x faster!)
-        if country:
-            print(f"[COUNTRY FILTER] Using pre-computed IDs for: {country}")
-            try:
-                # Get certificate IDs from pre-computed collection
-                country_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
-                country_doc = country_collection.find_one({'_id': country})
+        # # ⚡ OPTIMIZED: Handle country filter using pre-computed certificate IDs
+        # # PERFORMANCE: 110 seconds → 0.1 seconds (1,100x faster!)
+        # if country:
+        #     print(f"[COUNTRY FILTER] Using pre-computed IDs for: {country}")
+        #     try:
+        #         # Get certificate IDs from pre-computed collection
+        #         country_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
+        #         country_doc = country_collection.find_one({'_id': country})
                 
-                if not country_doc:
-                    print(f"[COUNTRY FILTER] No pre-computed data for: {country}")
-                    # Fall back to empty result
-                    return {
-                        'certificates': [],
-                        'pagination': {
-                            'page': page,
-                            'pageSize': page_size,
-                            'total': 0,
-                            'totalPages': 0
-                        }
-                    }
+        #         if not country_doc:
+        #             print(f"[COUNTRY FILTER] No pre-computed data for: {country}")
+        #             # Fall back to empty result
+        #             return {
+        #                 'certificates': [],
+        #                 'pagination': {
+        #                     'page': page,
+        #                     'pageSize': page_size,
+        #                     'total': 0,
+        #                     'totalPages': 0
+        #                 }
+        #             }
                 
-                # Get all certificate IDs for this country
-                cert_ids = country_doc.get('certificate_ids', [])
-                total = country_doc.get('count', len(cert_ids))
-                has_more = country_doc.get('has_more', total > len(cert_ids))
+        #         # Get all certificate IDs for this country
+        #         cert_ids = country_doc.get('certificate_ids', [])
+        #         total = country_doc.get('count', len(cert_ids))
+        #         has_more = country_doc.get('has_more', total > len(cert_ids))
                 
-                print(f"[COUNTRY FILTER] Found {total} certificates for {country}")
+        #         print(f"[COUNTRY FILTER] Found {total} certificates for {country}")
                 
-                # Paginate certificate IDs
-                skip = (page - 1) * page_size
-                page_ids = cert_ids[skip:skip + page_size]
+        #         # Paginate certificate IDs
+        #         skip = (page - 1) * page_size
+        #         page_ids = cert_ids[skip:skip + page_size]
                 
-                docs_by_id = {
-                    doc['_id']: doc
-                    for doc in cls.collection.find({'_id': {'$in': page_ids}})
-                }
-                certificates = []
-                for cert_id in page_ids:
-                    doc = docs_by_id.get(cert_id)
-                    if doc:
-                        certificates.append(cls.serialize_certificate(doc))
+        #         docs_by_id = {
+        #             doc['_id']: doc
+        #             for doc in cls.collection.find({'_id': {'$in': page_ids}})
+        #         }
+        #         certificates = []
+        #         for cert_id in page_ids:
+        #             doc = docs_by_id.get(cert_id)
+        #             if doc:
+        #                 certificates.append(cls.serialize_certificate(doc))
                 
-                return {
-                    'certificates': certificates,
-                    'pagination': {
-                        'page': page,
-                        'pageSize': page_size,
-                        'total': total,
-                        'totalPages': max(1, (total + page_size - 1) // page_size),
-                        'has_more': has_more and (skip + len(certificates) < min(total, len(cert_ids)))
-                    }
-                }
+        #         return {
+        #             'certificates': certificates,
+        #             'pagination': {
+        #                 'page': page,
+        #                 'pageSize': page_size,
+        #                 'total': total,
+        #                 'totalPages': max(1, (total + page_size - 1) // page_size),
+        #                 'has_more': has_more and (skip + len(certificates) < min(total, len(cert_ids)))
+        #             }
+        #         }
                 
-            except Exception as e:
-                print(f"[COUNTRY FILTER] Error accessing pre-computed data: {e}")
-                # Fall back to empty result rather than slow regex
-                return {
-                    'certificates': [],
-                    'pagination': {
-                        'page': page,
-                        'pageSize': page_size,
-                        'total': 0,
-                        'totalPages': 0
-                    }
-                }
+        #     except Exception as e:
+        #         print(f"[COUNTRY FILTER] Error accessing pre-computed data: {e}")
+        #         # Fall back to empty result rather than slow regex
+        #         return {
+        #             'certificates': [],
+        #             'pagination': {
+        #                 'page': page,
+        #                 'pageSize': page_size,
+        #                 'total': 0,
+        #                 'totalPages': 0
+        #             }
+        #         }
         
-        # ⚡ OPTIMIZED: Handle validity filters using pre-computed IDs from validity-analysis
-        if validity_bucket or (expiring_month and expiring_year) or (issued_month and issued_year):
-            print("[VALIDITY FILTER] Using pre-computed IDs for validity filter")
-            if search or issuer or encryption_type or has_vulnerabilities or expiring_days or san_tld or san_type or san_count_min is not None or san_count_max is not None or expiring_start or expiring_end or signature_algorithm or weak_hash or self_signed or key_size or hash_type or shared_key or base_filter:
-                print("[VALIDITY FILTER] Additional filters detected, falling back to query path")
-            else:
-                ids_data = cls._get_validity_filter_ids(
-                    validity_bucket=validity_bucket,
-                    expiring_month=expiring_month,
-                    expiring_year=expiring_year,
-                    issued_month=issued_month,
-                    issued_year=issued_year,
-                )
-                if ids_data is None:
-                    print("[VALIDITY FILTER] No pre-computed results for this filter. Falling back to live query.")
-                else:
-                    certificate_ids = ids_data.get('certificate_ids', [])
-                    total = ids_data.get('total', 0)
-                    has_more = ids_data.get('has_more', total > len(certificate_ids))
+        # # ⚡ OPTIMIZED: Handle validity filters using pre-computed IDs from validity-analysis
+        # if validity_bucket or (expiring_month and expiring_year) or (issued_month and issued_year):
+        #     print("[VALIDITY FILTER] Using pre-computed IDs for validity filter")
+        #     if search or issuer or encryption_type or has_vulnerabilities or expiring_days or san_tld or san_type or san_count_min is not None or san_count_max is not None or expiring_start or expiring_end or signature_algorithm or weak_hash or self_signed or key_size or hash_type or shared_key or base_filter:
+        #         print("[VALIDITY FILTER] Additional filters detected, falling back to query path")
+        #     else:
+        #         ids_data = cls._get_validity_filter_ids(
+        #             validity_bucket=validity_bucket,
+        #             expiring_month=expiring_month,
+        #             expiring_year=expiring_year,
+        #             issued_month=issued_month,
+        #             issued_year=issued_year,
+        #         )
+        #         if ids_data is None:
+        #             print("[VALIDITY FILTER] No pre-computed results for this filter. Falling back to live query.")
+        #         else:
+        #             certificate_ids = ids_data.get('certificate_ids', [])
+        #             total = ids_data.get('total', 0)
+        #             has_more = ids_data.get('has_more', total > len(certificate_ids))
 
-                    certificates = cls._hydrate_certificate_ids(certificate_ids, page, page_size)
-                    skip = (page - 1) * page_size
+        #             certificates = cls._hydrate_certificate_ids(certificate_ids, page, page_size)
+        #             skip = (page - 1) * page_size
 
-                    return {
-                        'certificates': certificates,
-                        'pagination': {
-                            'page': page,
-                            'pageSize': page_size,
-                            'total': total,
-                            'totalPages': max(1, (total + page_size - 1) // page_size),
-                            'has_more': has_more and (skip + len(certificates) < min(total, len(certificate_ids)))
-                        }
-                    }
+        #             return {
+        #                 'certificates': certificates,
+        #                 'pagination': {
+        #                     'page': page,
+        #                     'pageSize': page_size,
+        #                     'total': total,
+        #                     'totalPages': max(1, (total + page_size - 1) // page_size),
+        #                     'has_more': has_more and (skip + len(certificates) < min(total, len(certificate_ids)))
+        #                 }
+        #             }
 
-        # SAN TLD filter - filter certs where any dns_name ends with the TLD
-        if san_tld:
-            # Remove leading dot if present for regex
-            tld_pattern = san_tld.lstrip('.')
-            # Match dns_names ending with the TLD
-            query['parsed.extensions.subject_alt_name.dns_names'] = {
-                '$regex': f'\\.{tld_pattern}$',
-                '$options': 'i'
-            }
+        # # SAN TLD filter - filter certs where any dns_name ends with the TLD
+        # if san_tld:
+        #     # Remove leading dot if present for regex
+        #     tld_pattern = san_tld.lstrip('.')
+        #     # Match dns_names ending with the TLD
+        #     query['parsed.extensions.subject_alt_name.dns_names'] = {
+        #         '$regex': f'\\.{tld_pattern}$',
+        #         '$options': 'i'
+        #     }
         
-        # SAN type filter - filter by wildcard or standard SANs
-        if san_type:
-            if san_type.lower() == 'wildcard':
-                # Match certs with at least one wildcard SAN (starts with *.)
-                query['parsed.extensions.subject_alt_name.dns_names'] = {
-                    '$regex': '^\\*\\.',
-                    '$options': 'i'
-                }
-            elif san_type.lower() == 'standard':
-                # Match certs where no SAN starts with *. 
-                # This is trickier - we'll use $not to exclude wildcards
-                query['$and'] = query.get('$and', [])
-                query['$and'].append({
-                    'parsed.extensions.subject_alt_name.dns_names': {
-                        '$exists': True,
-                        '$ne': []
-                    }
-                })
-                query['$and'].append({
-                    'parsed.extensions.subject_alt_name.dns_names': {
-                        '$not': {'$regex': '^\\*\\.'}
-                    }
+        # # SAN type filter - filter by wildcard or standard SANs
+        # if san_type:
+        #     if san_type.lower() == 'wildcard':
+        #         # Match certs with at least one wildcard SAN (starts with *.)
+        #         query['parsed.extensions.subject_alt_name.dns_names'] = {
+        #             '$regex': '^\\*\\.',
+        #             '$options': 'i'
+        #         }
+        #     elif san_type.lower() == 'standard':
+        #         # Match certs where no SAN starts with *. 
+        #         # This is trickier - we'll use $not to exclude wildcards
+        #         query['$and'] = query.get('$and', [])
+        #         query['$and'].append({
+        #             'parsed.extensions.subject_alt_name.dns_names': {
+        #                 '$exists': True,
+        #                 '$ne': []
+        #             }
+        #         })
+        #         query['$and'].append({
+        #             'parsed.extensions.subject_alt_name.dns_names': {
+        #                 '$not': {'$regex': '^\\*\\.'}
+        #             }
                     
-                    })
+        #             })
         
-        # ⚡ OPTIMIZED: Shared key filter - use pre-computed materialized view
-        # Previously this ran a 2-minute aggregation on every request
-        if shared_key:
-            try:
-                # Get shared key fingerprints from pre-computed materialized view
-                shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-groups']
+        # # ⚡ OPTIMIZED: Shared key filter - use pre-computed materialized view
+        # # Previously this ran a 2-minute aggregation on every request
+        # if shared_key:
+        #     try:
+        #         # Get shared key fingerprints from pre-computed materialized view
+        #         shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-groups']
                 
-                # Get all shared key fingerprints (excluding metadata doc)
-                shared_fingerprints = list(shared_groups_collection.find(
-                    {'_id': {'$ne': 'metadata'}},
-                    {'_id': 1}
-                ))
+        #         # Get all shared key fingerprints (excluding metadata doc)
+        #         shared_fingerprints = list(shared_groups_collection.find(
+        #             {'_id': {'$ne': 'metadata'}},
+        #             {'_id': 1}
+        #         ))
                 
-                shared_fingerprints = [doc['_id'] for doc in shared_fingerprints]
-            except Exception:
-                # Fallback to original slow method if materialized view not available
-                # (This should only happen if compute_shared_keys.py hasn't been run)
-                shared_keys_pipeline = [
-                    {'$match': {
-                        'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                        'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-                    }},
-                    {'$group': {
-                        '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                        'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-                    }},
-                    {'$addFields': {
-                        'distinct_certs': {'$size': '$cert_fingerprints'}
-                    }},
-                    {'$match': {'distinct_certs': {'$gt': 1}}},
-                    {'$project': {'_id': 1}}
-                ]
+        #         shared_fingerprints = [doc['_id'] for doc in shared_fingerprints]
+        #     except Exception:
+        #         # Fallback to original slow method if materialized view not available
+        #         # (This should only happen if compute_shared_keys.py hasn't been run)
+        #         shared_keys_pipeline = [
+        #             {'$match': {
+        #                 'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+        #                 'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+        #             }},
+        #             {'$group': {
+        #                 '_id': '$parsed.subject_key_info.fingerprint_sha256',
+        #                 'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+        #             }},
+        #             {'$addFields': {
+        #                 'distinct_certs': {'$size': '$cert_fingerprints'}
+        #             }},
+        #             {'$match': {'distinct_certs': {'$gt': 1}}},
+        #             {'$project': {'_id': 1}}
+        #         ]
                 
-                shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
+        #         shared_fingerprints = [r['_id'] for r in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)]
             
-            if shared_fingerprints:
-                # Filter certs to only those with shared public keys
-                if '$and' not in query:
-                    query['$and'] = []
-                query['$and'].append({
-                    'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
-                })
-            else:
-                # No shared keys found, return empty result
-                return {
-                    'certificates': [],
-                    'pagination': {
-                        'page': page,
-                        'pageSize': page_size,
-                        'total': 0,
-                        'totalPages': 0
-                    }
-                }
+        #     if shared_fingerprints:
+        #         # Filter certs to only those with shared public keys
+        #         if '$and' not in query:
+        #             query['$and'] = []
+        #         query['$and'].append({
+        #             'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints}
+        #         })
+        #     else:
+        #         # No shared keys found, return empty result
+        #         return {
+        #             'certificates': [],
+        #             'pagination': {
+        #                 'page': page,
+        #                 'pageSize': page_size,
+        #                 'total': 0,
+        #                 'totalPages': 0
+        #             }
+        #         }
         
-        # SAN count filter - filter by number of SANs (dns_names array size)
-        if san_count_min is not None or san_count_max is not None:
-            # Use aggregation pipeline for array size filtering
-            pipeline = [
-                {'$match': query if query else {}},
-                # Add a field for the count of dns_names
-                {'$addFields': {
-                    'sanCount': {
-                        '$size': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]}
-                    }
-                }},
-            ]
+        # # SAN count filter - filter by number of SANs (dns_names array size)
+        # if san_count_min is not None or san_count_max is not None:
+        #     # Use aggregation pipeline for array size filtering
+        #     pipeline = [
+        #         {'$match': query if query else {}},
+        #         # Add a field for the count of dns_names
+        #         {'$addFields': {
+        #             'sanCount': {
+        #                 '$size': {'$ifNull': ['$parsed.extensions.subject_alt_name.dns_names', []]}
+        #             }
+        #         }},
+        #     ]
             
-            # Build match condition for san count
-            san_count_match = {}
-            if san_count_min is not None:
-                san_count_match['$gte'] = san_count_min
-            if san_count_max is not None:
-                san_count_match['$lte'] = san_count_max
+        #     # Build match condition for san count
+        #     san_count_match = {}
+        #     if san_count_min is not None:
+        #         san_count_match['$gte'] = san_count_min
+        #     if san_count_max is not None:
+        #         san_count_match['$lte'] = san_count_max
             
-            if san_count_match:
-                pipeline.append({'$match': {'sanCount': san_count_match}})
+        #     if san_count_match:
+        #         pipeline.append({'$match': {'sanCount': san_count_match}})
             
-            # Get total count first
-            count_pipeline = pipeline + [{'$count': 'total'}]
-            count_result = list(cls.collection.aggregate(count_pipeline, allowDiskUse=True))
-            total = count_result[0]['total'] if count_result else 0
+        #     # Get total count first
+        #     count_pipeline = pipeline + [{'$count': 'total'}]
+        #     count_result = list(cls.collection.aggregate(count_pipeline, allowDiskUse=True))
+        #     total = count_result[0]['total'] if count_result else 0
             
-            # Get paginated results
-            skip = (page - 1) * page_size
-            result_pipeline = pipeline + [
-                {'$skip': skip},
-                {'$limit': page_size}
-            ]
+        #     # Get paginated results
+        #     skip = (page - 1) * page_size
+        #     result_pipeline = pipeline + [
+        #         {'$skip': skip},
+        #         {'$limit': page_size}
+        #     ]
             
-            certificates = []
-            for doc in cls.collection.aggregate(result_pipeline, allowDiskUse=True):
-                cert = cls.serialize_certificate(doc)
-                certificates.append(cert)
+        #     certificates = []
+        #     for doc in cls.collection.aggregate(result_pipeline, allowDiskUse=True):
+        #         cert = cls.serialize_certificate(doc)
+        #         certificates.append(cert)
             
-            return {
-                'certificates': certificates,
-                'pagination': {
-                    'page': page,
-                    'pageSize': page_size,
-                    'total': total,
-                    'totalPages': max(1, (total + page_size - 1) // page_size)
-                }
-            }
+        #     return {
+        #         'certificates': certificates,
+        #         'pagination': {
+        #             'page': page,
+        #             'pageSize': page_size,
+        #             'total': total,
+        #             'totalPages': max(1, (total + page_size - 1) // page_size)
+        #         }
+        #     }
         
-        # Get total count with filters applied
-        # ✅ OPTIMIZATION: Use estimated_document_count() when query is empty (878K docs)
-        if not query or query == {}:
-            total = cls.collection.estimated_document_count()
-        elif issuer and not search and issuer.lower() != 'others':
-            # ULTRA-FAST: Get count from pre-computed CA analytics for exact issuer matches
-            # ⚠️ CRITICAL: Only use pre-computed count if NO other filters are present!
-            # If any additional filters are applied, fall back to live count_documents()
-            # to ensure accurate pagination
-            has_additional_filters = (
-                status or encryption_type or signature_algorithm or weak_hash or 
-                self_signed or key_size or hash_type or expiring_days or validity_bucket or
-                (issued_month and issued_year) or issued_within_days or 
-                validation_levels or san_tld or san_type or 
-                (san_count_min is not None or san_count_max is not None) or
-                (expiring_start or expiring_end) or shared_key or base_filter
-            )
+        # # Get total count with filters applied
+        # # ✅ OPTIMIZATION: Use estimated_document_count() when query is empty (878K docs)
+        # if not query or query == {}:
+        #     total = cls.collection.estimated_document_count()
+        # elif issuer and not search and issuer.lower() != 'others':
+        #     # ULTRA-FAST: Get count from pre-computed CA analytics for exact issuer matches
+        #     # ⚠️ CRITICAL: Only use pre-computed count if NO other filters are present!
+        #     # If any additional filters are applied, fall back to live count_documents()
+        #     # to ensure accurate pagination
+        #     has_additional_filters = (
+        #         status or encryption_type or signature_algorithm or weak_hash or 
+        #         self_signed or key_size or hash_type or expiring_days or validity_bucket or
+        #         (issued_month and issued_year) or issued_within_days or 
+        #         validation_levels or san_tld or san_type or 
+        #         (san_count_min is not None or san_count_max is not None) or
+        #         (expiring_start or expiring_end) or shared_key or base_filter
+        #     )
             
-            if not has_additional_filters:
-                # Safe to use pre-computed count (issuer-only filter)
-                try:
-                    ca_doc = MongoDBClient.find_scoped_result_doc('ca-analysis', fallback_id='ca_analysis')
-                    ca_record = next(
-                        (item for item in ca_doc.get('ca-list', []) if item.get('name') == issuer),
-                        None
-                    ) if ca_doc else None
-                    if ca_record:
-                        total = ca_record.get('count', 0)
-                    else:
-                        # Fallback to live count if not in pre-computed data
-                        total = cls.collection.count_documents(query)
-                except Exception as e:
-                    # Fallback to standard count on error
-                    total = cls.collection.count_documents(query)
-            else:
-                # Additional filters present: use live count for accurate pagination
-                print(f"[PAGINATION] Issuer + additional filters detected, using live count")
-                total = cls.collection.count_documents(query)
-        else:
-            total = cls.collection.count_documents(query)
+        #     if not has_additional_filters:
+        #         # Safe to use pre-computed count (issuer-only filter)
+        #         try:
+        #             ca_doc = MongoDBClient.find_scoped_result_doc('ca-analysis', fallback_id='ca_analysis')
+        #             ca_record = next(
+        #                 (item for item in ca_doc.get('ca-list', []) if item.get('name') == issuer),
+        #                 None
+        #             ) if ca_doc else None
+        #             if ca_record:
+        #                 total = ca_record.get('count', 0)
+        #             else:
+        #                 # Fallback to live count if not in pre-computed data
+        #                 total = cls.collection.count_documents(query)
+        #         except Exception as e:
+        #             # Fallback to standard count on error
+        #             total = cls.collection.count_documents(query)
+        #     else:
+        #         # Additional filters present: use live count for accurate pagination
+        #         print(f"[PAGINATION] Issuer + additional filters detected, using live count")
+        #         total = cls.collection.count_documents(query)
+        # else:
+        #     total = cls.collection.count_documents(query)
         
-        # Get paginated results
-        # ✅ OPTIMIZATION: Sort by _id (indexed) for fast pagination
-        # When using issuer filter, skip sort to avoid expensive in-memory sort operation
-        skip = (page - 1) * page_size
-        if search:
-            # Prefix search: use indexed domain filter and stable _id sort.
-            cursor = cls.collection.find(query).sort('_id', 1).skip(skip).limit(page_size)
-        elif issuer:
-            # Issuer filter: Return results in natural order to avoid expensive in-memory sort
-            # MongoDB would have to sort 339K+ documents if we add sort here
-            # Better to return results in natural order (insertion order)
-            cursor = cls.collection.find(query).skip(skip).limit(page_size)
-        else:
-            # Regular query: Use hint to optimize with _id index
-            cursor = cls.collection.find(query).sort('_id', 1).hint('_id_').skip(skip).limit(page_size)
+        # # Get paginated results
+        # # ✅ OPTIMIZATION: Sort by _id (indexed) for fast pagination
+        # # When using issuer filter, skip sort to avoid expensive in-memory sort operation
+        # skip = (page - 1) * page_size
+        # if search:
+        #     # Prefix search: use indexed domain filter and stable _id sort.
+        #     cursor = cls.collection.find(query).sort('_id', 1).skip(skip).limit(page_size)
+        # elif issuer:
+        #     # Issuer filter: Return results in natural order to avoid expensive in-memory sort
+        #     # MongoDB would have to sort 339K+ documents if we add sort here
+        #     # Better to return results in natural order (insertion order)
+        #     cursor = cls.collection.find(query).skip(skip).limit(page_size)
+        # else:
+        #     # Regular query: Use hint to optimize with _id index
+        #     cursor = cls.collection.find(query).sort('_id', 1).hint('_id_').skip(skip).limit(page_size)
         
-        certificates = []
-        for doc in cursor:
-            cert = cls.serialize_certificate(doc)
-            certificates.append(cert)
+        # certificates = []
+        # for doc in cursor:
+        #     cert = cls.serialize_certificate(doc)
+        #     certificates.append(cert)
         
-        return {
-            'certificates': certificates,
-            'pagination': {
-                'page': page,
-                'pageSize': page_size,  
-                'total': total,
-                'totalPages': max(1, (total + page_size - 1) // page_size)
-            }
-        }    
+        # return {
+        #     'certificates': certificates,
+        #     'pagination': {
+        #         'page': page,
+        #         'pageSize': page_size,  
+        #         'total': total,
+        #         'totalPages': max(1, (total + page_size - 1) // page_size)
+        #     }
+        # }    
     
 
     @classmethod
