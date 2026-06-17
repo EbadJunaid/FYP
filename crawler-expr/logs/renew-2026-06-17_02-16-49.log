@@ -1,0 +1,14 @@
+[2026-06-17 02:16:50] Processing wefabstainlesssteel.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 02:16:50] PERMANENTLY FAILED: wefabstainlesssteel.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 02:17:00] Processing conservapedia.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 02:17:00] PERMANENTLY FAILED: conservapedia.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+

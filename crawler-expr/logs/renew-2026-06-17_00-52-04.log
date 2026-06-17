@@ -1,0 +1,21 @@
+[2026-06-17 00:52:06] Processing ati.ru
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 00:52:06] PERMANENTLY FAILED: ati.ru
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 00:52:06] Processing lunar778hebat.site
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 00:52:06] PERMANENTLY FAILED: lunar778hebat.site
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 00:52:16] Processing broadaspect.net
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 00:52:16] PERMANENTLY FAILED: broadaspect.net
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
