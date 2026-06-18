@@ -63,3 +63,14 @@ class OverviewController:
         cache.set('future_risk', cache_params, result)
         return result
 
+    @staticmethod
+    def get_vulnerabilities(page: int = 1, page_size: int = 10) -> Dict:
+        """Get certificate vulnerability details for the overview vulnerabilities page"""
+        cache_params = {}
+        
+        cached = cache.get('vulnerabilities', cache_params)
+        if cached:
+            return cached
+        results = OverviewModels.get_vulnearablities(page=page, page_size=page_size)
+        cache.set('vulnerabilities', cache_params, results)
+    

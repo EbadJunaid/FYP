@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+# from ./shared_apis/db_queries import SharedModels
 from ..db import db, MongoDBClient
 
 
@@ -169,6 +170,14 @@ class OverviewModels:
             'validationLevels': ['DV', 'OV', 'EV']
         }
     
+    @classmethod
+    def get_vulnearablities(cls, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
+       pass
+       return {
+            'vulnerabilities': "none"
+            
+    }
+
     @classmethod
     def get_future_risk(cls) -> List[Dict]:
         

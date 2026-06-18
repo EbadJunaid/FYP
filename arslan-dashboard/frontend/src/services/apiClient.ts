@@ -504,7 +504,7 @@ class ApiClient {
         summary: { critical: number; warning: number; total: number };
         pagination: PaginationInfo;
     }> {
-        return this.fetch(`/vulnerabilities/?page=${page}&page_size=${pageSize}`);
+        return this.fetch(`/overview/vulnerabilities/`);
     }
 
     async getNotifications(): Promise<NotificationResponse> {

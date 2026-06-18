@@ -64,12 +64,7 @@ SCOPE_OPTIONS = [
         'name': 'Russia Domains',
         'description': 'Russia scope',
     },
-     {
-        'id': 'japan',
-        'scope': 'jp',
-        'name': 'Japan Domains',
-        'description': 'Japan scope',
-    },
+    
 ]
 
 # Available logical databases configuration
