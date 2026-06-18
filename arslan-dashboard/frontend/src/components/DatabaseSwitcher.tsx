@@ -6,42 +6,38 @@ import { ChevronDownIcon } from '@heroicons/react/24/outline';
 interface Database {
     id: string;
     name: string;
-    description: string;
-    mainDb: string;
-    resultsDb: string;
+    description?: string;
+    mainDb?: string;
+    resultsDb?: string;
+    main?: string;
+    results?: string;
+    main_db?: string;
+    results_db?: string;
     scope: string;
 }
 
-const AVAILABLE_DATABASES: Database[] = [
-    {
-        id: 'global',
-        name: 'Global',
-        description: '797k certificates',
-        mainDb: 'tranco-latest-8-lakh',
-        resultsDb: 'tranco-latest-8-lakh-results',
-        scope: 'all'
-    },
-    {
-        id: 'pakistani',
-        name: 'Pakistani Domains',
-        description: 'Pakistani scope',
-        mainDb: 'tranco-latest-8-lakh',
-        resultsDb: 'tranco-latest-8-lakh-results',
-        scope: 'pk'
-    },
-    {
-        id: 'indian',
-        name: 'Indian Domains',
-        description: 'Indian scope',
-        mainDb: 'tranco-latest-8-lakh',
-        resultsDb: 'tranco-latest-8-lakh-results',
-        scope: 'in'
-    }
-];
+const DEFAULT_DATABASE: Database = {
+    id: 'global',
+    name: 'Global',
+    description: 'All certificates',
+    scope: 'all'
+};
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 const SELECTED_DB_KEY = 'selected_certificate_database';
 const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
+
+const normalizeDatabases = (data: Record<string, Omit<Database, 'id'> & { id?: string }>): Database[] => {
+    const databases = Object.entries(data || {}).map(([id, config]) => ({
+        id: config.id || id,
+        name: config.name || id,
+        description: config.description || `${config.scope || 'all'} scope`,
+        mainDb: config.mainDb || config.main || config.main_db,
+        resultsDb: config.resultsDb || config.results || config.results_db,
+        scope: config.scope || 'all',
+    }));
+    return databases.length ? databases : [DEFAULT_DATABASE];
+};
 
 /**
  * Database Switcher Component
@@ -49,7 +45,8 @@ const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
  */
 export default function DatabaseSwitcher() {
     const [isOpen, setIsOpen] = useState(false);
-    const [currentDb, setCurrentDb] = useState<Database>(AVAILABLE_DATABASES[0]);
+    const [availableDatabases, setAvailableDatabases] = useState<Database[]>([DEFAULT_DATABASE]);
+    const [currentDb, setCurrentDb] = useState<Database>(DEFAULT_DATABASE);
     const [isSwitching, setIsSwitching] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -59,22 +56,34 @@ export default function DatabaseSwitcher() {
             try {
                 const params = new URLSearchParams(window.location.search);
                 const dbFromUrl = params.get('db');
+                const scopeFromUrl = params.get('scope');
                 const storedDb = localStorage.getItem(SELECTED_DB_KEY);
+                const storedScope = localStorage.getItem(SELECTED_SCOPE_KEY);
                 const preferredDbId = dbFromUrl || storedDb;
-                const preferredDb = AVAILABLE_DATABASES.find(d => d.id === preferredDbId);
-                if (preferredDb) {
-                    setCurrentDb(preferredDb);
-                }
 
-                const response = await fetch(`${API_BASE_URL}/databases/current/?scope=${encodeURIComponent(preferredDb?.scope || 'all')}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    const db = preferredDb || AVAILABLE_DATABASES.find(d => d.id === data.id);
-                    if (db) {
-                        setCurrentDb(db);
-                        localStorage.setItem(SELECTED_DB_KEY, db.id);
-                        localStorage.setItem(SELECTED_SCOPE_KEY, db.scope);
-                    }
+                const availableResponse = await fetch(`${API_BASE_URL}/databases/available/`);
+                const availableData = availableResponse.ok ? await availableResponse.json() : {};
+                const databases = normalizeDatabases(availableData);
+                setAvailableDatabases(databases);
+
+                const preferredDb = databases.find(d => d.id === preferredDbId);
+                const preferredScope = scopeFromUrl || preferredDb?.scope || storedScope || 'all';
+                const currentResponse = await fetch(`${API_BASE_URL}/databases/current/?scope=${encodeURIComponent(preferredScope)}`);
+                const currentData = currentResponse.ok ? await currentResponse.json() : null;
+                const db = preferredDb
+                    || databases.find(d => d.scope === preferredScope)
+                    || databases.find(d => d.id === currentData?.id)
+                    || DEFAULT_DATABASE;
+
+                setCurrentDb(db);
+                localStorage.setItem(SELECTED_DB_KEY, db.id);
+                localStorage.setItem(SELECTED_SCOPE_KEY, db.scope);
+
+                if (scopeFromUrl !== db.scope) {
+                    const nextParams = new URLSearchParams(window.location.search);
+                    nextParams.set('db', db.id);
+                    nextParams.set('scope', db.scope);
+                    window.history.replaceState(null, '', `${window.location.pathname}?${nextParams.toString()}`);
                 }
             } catch (error) {
                 console.error('Error fetching current database:', error);
@@ -149,7 +158,10 @@ export default function DatabaseSwitcher() {
             sessionStorage.setItem('switched_db', database.id);
             
             // Force hard reload with cache bypass
-            window.location.href = window.location.href.split('?')[0] + '?db=' + database.id + '&t=' + Date.now();
+            window.location.href = window.location.href.split('?')[0]
+                + '?db=' + encodeURIComponent(database.id)
+                + '&scope=' + encodeURIComponent(database.scope)
+                + '&t=' + Date.now();
             
         } catch (error) {
             console.error('Error switching database:', error);
@@ -177,7 +189,7 @@ export default function DatabaseSwitcher() {
 
             {isOpen && (
                 <div className="absolute right-0 top-full mt-2 w-64 bg-card-bg border border-card-border rounded-lg shadow-lg z-50">
-                    {AVAILABLE_DATABASES.map((db) => (
+                    {availableDatabases.map((db) => (
                         <button
                             key={db.id}
                             onClick={() => handleDatabaseChange(db)}

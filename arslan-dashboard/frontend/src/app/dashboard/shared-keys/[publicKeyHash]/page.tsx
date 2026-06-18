@@ -73,15 +73,13 @@ interface SharedKeyDetailResponse {
     data: SharedKeyDetail;
 }
 
-const SELECTED_DB_KEY = 'selected_certificate_database';
 const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
 
 const getStoredScope = () => {
     if (typeof window === 'undefined') return 'all';
-    const db = localStorage.getItem(SELECTED_DB_KEY) || 'global';
-    if (db === 'pakistani') return 'pk';
-    if (db === 'indian') return 'in';
-    if (db === 'united-states') return 'us';
+    const params = new URLSearchParams(window.location.search);
+    const urlScope = params.get('scope');
+    if (urlScope) return urlScope;
     return localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
 };
 

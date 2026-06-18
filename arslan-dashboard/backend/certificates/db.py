@@ -17,15 +17,62 @@ from django.conf import settings
 # Global variables for current database (can be changed at runtime)
 # _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
 # _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
-_BASE_MAIN_DB = 'hugging-face-4-lakh'
-_BASE_RESULTS_DB = 'hugging-face-4-lakh-results'
+_BASE_MAIN_DB = 'hugging-face-792k'
+_BASE_RESULTS_DB = 'hugging-face-792k-results'
 _CURRENT_MAIN_DB = _BASE_MAIN_DB
 _CURRENT_RESULTS_DB = _BASE_RESULTS_DB
 _CURRENT_SCOPE = 'all'
 MAIN_DB = _CURRENT_MAIN_DB
 RESULTS_DB = _CURRENT_RESULTS_DB
 
-# Available databases configuration
+# Logical scope options.
+#
+# To add a country/scope everywhere in the dashboard, add one object here.
+# Example:
+#     {'id': 'japan', 'scope': 'jp', 'name': 'Japan Domains', 'description': 'Japan scope'}
+#
+# The frontend dropdown reads these options from /api/databases/available/,
+# and every API request uses the selected scope with the single physical DB pair above.
+SCOPE_OPTIONS = [
+    {
+        'id': 'global',
+        'scope': 'all',
+        'name': 'Global',
+        'description': 'All certificates',
+    },
+    {
+        'id': 'pakistani',
+        'scope': 'pk',
+        'name': 'Pakistani Domains',
+        'description': 'Pakistan scope',
+    },
+    {
+        'id': 'indian',
+        'scope': 'in',
+        'name': 'Indian Domains',
+        'description': 'India scope',
+    },
+    {
+        'id': 'united-states',
+        'scope': 'us',
+        'name': 'United States Domains',
+        'description': 'United States scope',
+    },
+    {
+        'id': 'russia',
+        'scope': 'ru',
+        'name': 'Russia Domains',
+        'description': 'Russia scope',
+    },
+     {
+        'id': 'japan',
+        'scope': 'jp',
+        'name': 'Japan Domains',
+        'description': 'Japan scope',
+    },
+]
+
+# Available logical databases configuration
 # AVAILABLE_DATABASES = {
 #     'global': {
 #         'main': 'tranco-latest-8-lakh',
@@ -41,41 +88,12 @@ RESULTS_DB = _CURRENT_RESULTS_DB
 #     }
 # }
 AVAILABLE_DATABASES = {
-    'global': {
+    option['id']: {
         'main': _BASE_MAIN_DB,
         'results': _BASE_RESULTS_DB,
-        'scope': 'all',
-        'name': 'Global',
-        # 'description': '1lakh certificates'
-    },
-    'pakistani': {
-        'main': _BASE_MAIN_DB,
-        'results': _BASE_RESULTS_DB,
-        'scope': 'pk',
-        'name': 'Pakistani Domains',
-        # 'description': '7,724 certificates'
-    },
-    'indian': {
-        'main': _BASE_MAIN_DB,
-        'results': _BASE_RESULTS_DB,
-        'scope': 'in',
-        'name': 'Indian Domains',
-        # 'description': '7,724 certificates'
-    },
-    'united states': {
-        'main': _BASE_MAIN_DB,
-        'results': _BASE_RESULTS_DB,
-        'scope': 'us',
-        'name': 'United States Domains',
-        # 'description': '7,724 certificates'
-    },
-    'russia': {
-        'main': _BASE_MAIN_DB,
-        'results': _BASE_RESULTS_DB,
-        'scope': 'ru',
-        'name': 'Russia Domains',
-        # 'description': '7,724 certificates'
+        **option,
     }
+    for option in SCOPE_OPTIONS
 }
 # ============================================================================
 
@@ -159,7 +177,7 @@ class MongoDBClient:
         Switch to a different database configuration
         
         Args:
-            db_id: Database ID from AVAILABLE_DATABASES ('global' or 'pakistani')
+            db_id: Database ID from AVAILABLE_DATABASES (for example 'global' or 'pakistani')
             
         Returns:
             bool: True if successful, False otherwise
@@ -235,8 +253,9 @@ class MongoDBClient:
         normalized = (scope or 'all').strip().lower()
         if normalized in ('', 'all', 'global', 'none', 'default'):
             return 'all'
-        if normalized == 'pakistani':
-            return 'pk'
+        for db_id, config in AVAILABLE_DATABASES.items():
+            if normalized == db_id.lower():
+                return config.get('scope', normalized)
         return normalized
 
     @classmethod

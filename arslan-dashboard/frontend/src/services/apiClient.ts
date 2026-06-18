@@ -2,7 +2,6 @@
 // Handles all API calls to Django backend
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-const SELECTED_DB_KEY = 'selected_certificate_database';
 const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
 
 // Types for API responses
@@ -281,10 +280,8 @@ class ApiClient {
     private getCurrentScope(): string {
         if (typeof window === 'undefined') return 'all';
         const params = new URLSearchParams(window.location.search);
-        const db = params.get('db') || localStorage.getItem(SELECTED_DB_KEY) || 'global';
-        if (db === 'pakistani') return 'pk';
-        if (db === 'indian') return 'in';
-        if (db === 'united-states') return 'us';
+        const urlScope = params.get('scope');
+        if (urlScope) return urlScope;
         const storedScope = localStorage.getItem(SELECTED_SCOPE_KEY);
         if (storedScope) return storedScope;
         return 'all';

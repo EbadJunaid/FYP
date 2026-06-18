@@ -20,7 +20,7 @@ export function useDatabaseKey(baseKey: string): string {
         }
         const params = new URLSearchParams(window.location.search);
         const db = params.get('db') || localStorage.getItem(SELECTED_DB_KEY) || 'default';
-        const scope = localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
+        const scope = params.get('scope') || localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
         const timestamp = params.get('t') || '';
         return `${baseKey}|db:${db}|scope:${scope}|t:${timestamp}`;
     });
@@ -31,7 +31,7 @@ export function useDatabaseKey(baseKey: string): string {
             if (typeof window !== 'undefined') {
                 const params = new URLSearchParams(window.location.search);
                 const db = params.get('db') || localStorage.getItem(SELECTED_DB_KEY) || 'default';
-                const scope = localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
+                const scope = params.get('scope') || localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
                 const timestamp = params.get('t') || '';
                 setKey(`${baseKey}|db:${db}|scope:${scope}|t:${timestamp}`);
             }
