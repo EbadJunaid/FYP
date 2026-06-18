@@ -78,3 +78,5 @@ arslan-dashboard/frontend/next-env.d.ts
 ## arslan-dashboard/data-sample.json
 temp-saving/
 crawler-expr/__pycache__
+
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
