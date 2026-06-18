@@ -80,3 +80,9 @@ temp-saving/
 crawler-expr/__pycache__
 
 arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
+Things to discuss.txt
+arslan-dashboard/backend/Details.md
+arslan-dashboard/backend/Pre-Computed.md
+
+arslan-dashboard/data-sample.json
+crawler-expr

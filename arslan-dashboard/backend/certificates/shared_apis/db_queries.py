@@ -399,7 +399,9 @@ class SharedModels:
                 },
                 'activeCertificates': {'count': 0, 'total': 0},
                 'expiringSoon': {'count': 0, 'daysThreshold': 30, 'actionNeeded': False},
-                'criticalVulnerabilities': {'count': 0, 'new': 0}
+                'criticalVulnerabilities': {'count': 0, 'new': 0},
+                'expiredCertificates': {'count': 0, 'total': 0}
+
             }
         
         # Query 2: Expired count - INDEXED query on validity.end
@@ -452,7 +454,7 @@ class SharedModels:
         return {
             'globalHealth': {
                 'score': health_score,
-                'maxScore': 100,
+                'maxScore': 100,    
                 'status': health_status,
                 'lastUpdated': datetime.now(timezone.utc).strftime('%H:%M')
             },
@@ -467,7 +469,7 @@ class SharedModels:
             },
             'criticalVulnerabilities': {
                 'count': critical_vulns,
-                'new': max(0, critical_vulns // 10)
+                'new': max(0, critical_vulns // 10) #needs attention as this will alwasys take modulus and return the value as new vulnerablities 
             },
             'expiredCertificates': {
                 'count': expired_count
@@ -778,7 +780,7 @@ class SharedModels:
         if issuers and len(issuers) > 0:
             # Use the simpler indexed field for fast lookups
             filters.append({
-                'parsed.issuer_org_primary': {'$in': issuers}
+                'parsed.issuer_organization': {'$in': issuers}
             })
         
         # Grade filter - needs to be computed, handled in specific methods
