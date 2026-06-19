@@ -366,10 +366,14 @@ class ApiClient {
         const queryParams = new URLSearchParams();
         if (params?.page) queryParams.append('page', params.page.toString());
         if (params?.pageSize) queryParams.append('page_size', params.pageSize.toString());
+        if (params?.search?.trim()) {
+            queryParams.append('search', params.search.trim());
+            const query = queryParams.toString();
+            return this.fetch<CertificateListResponse>(`/shared/certificates/${query ? `?${query}` : ''}`);
+        }
         if (params?.status) queryParams.append('status', params.status);
         if (params?.country) queryParams.append('country', params.country);
         if (params?.issuer) queryParams.append('issuer', params.issuer);
-        if (params?.search) queryParams.append('search', params.search);
         if (params?.encryptionType) queryParams.append('encryption_type', params.encryptionType);
         if (params?.encryption_type) queryParams.append('encryption_type', params.encryption_type);
         if (params?.hasVulnerabilities) queryParams.append('has_vulnerabilities', 'true');

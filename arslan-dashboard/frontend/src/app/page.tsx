@@ -165,7 +165,7 @@ function DashboardContent() {
                 value={metrics.criticalVulnerabilities.count}
                 label="Critical Vulnerabilities"
                 onClick={() => handleCardClickWithScroll('vulnerabilities')}
-                detailsLink="/dashboard/vulnerabilities"
+                // detailsLink="/dashboard/vulnerabilities"
                 infoTooltip="Certificates with security issues detected by ZLint analysis"
               />
             )}

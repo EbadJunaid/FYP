@@ -44,6 +44,14 @@ const certificatesFetcher = async (key: string) => {
     const page = parseInt(parts[3]) || 1;
     const search = parts[4] || undefined;
 
+    if (search) {
+        return fetchCertificates({
+            page,
+            pageSize: 10,
+            search,
+        });
+    }
+
     let issuer: string | undefined;
     let selfSigned: string | undefined;
     let validationLevel: string | undefined;

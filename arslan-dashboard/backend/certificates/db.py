@@ -18,7 +18,9 @@ from django.conf import settings
 # _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
 # _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
 _BASE_MAIN_DB = 'hugging-face-792k'
-_BASE_RESULTS_DB = 'hugging-face-792k-results'
+_BASE_RESULTS_DB = 'hugging-face-792k-results-2'
+# _BASE_RESULTS_DB = 'temp-7-lakh-results'
+
 _CURRENT_MAIN_DB = _BASE_MAIN_DB
 _CURRENT_RESULTS_DB = _BASE_RESULTS_DB
 _CURRENT_SCOPE = 'all'

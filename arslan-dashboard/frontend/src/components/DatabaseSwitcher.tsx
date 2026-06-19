@@ -26,6 +26,7 @@ const DEFAULT_DATABASE: Database = {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 const SELECTED_DB_KEY = 'selected_certificate_database';
 const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
+const THEME_KEY = 'ssl-guardian-theme';
 
 const normalizeDatabases = (data: Record<string, Omit<Database, 'id'> & { id?: string }>): Database[] => {
     const databases = Object.entries(data || {}).map(([id, config]) => ({
@@ -147,10 +148,10 @@ export default function DatabaseSwitcher() {
             }
             
             // Clear localStorage and sessionStorage (except theme preferences)
-            const theme = localStorage.getItem('theme');
+            const theme = localStorage.getItem(THEME_KEY);
             localStorage.clear();
             sessionStorage.clear();
-            if (theme) localStorage.setItem('theme', theme);
+            if (theme) localStorage.setItem(THEME_KEY, theme);
             localStorage.setItem(SELECTED_DB_KEY, database.id);
             localStorage.setItem(SELECTED_SCOPE_KEY, database.scope);
             

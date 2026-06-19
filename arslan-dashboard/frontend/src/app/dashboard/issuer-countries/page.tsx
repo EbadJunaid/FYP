@@ -117,7 +117,7 @@ export default function IssuerCountriesPage() {
                 const result = await fetchCertificates({
                     page: currentPage,
                     pageSize: itemsPerPage,
-                    country: selectedCountry?.country,  // ⚡ Uses pre-computed IDs!
+                    country: globalSearchQuery ? undefined : selectedCountry?.country,
                     search: globalSearchQuery || undefined,
                 });
 

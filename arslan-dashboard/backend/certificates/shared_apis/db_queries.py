@@ -1228,7 +1228,7 @@ class SharedModels:
 
         if search:
             prefix = re.escape(search)
-            filters.append({'domain': {'$regex': f'^{prefix}', '$options': 'i'}})
+            filters.append({'domain': {'$regex': f'^{prefix}'}})
 
         if issuer:
             if issuer.lower() == 'others':
@@ -1440,11 +1440,26 @@ class SharedModels:
 
         print(f"[CERTIFICATES QUERY] {query}")
 
-        total = cls.collection.estimated_document_count() if not query else cls.collection.count_documents(query)
+        search_hint = None
+        if search:
+            search_hint = (
+                'idx_domain'
+                if MongoDBClient.get_current_scope() in ('', 'all', 'global')
+                else 'idx_scope_domain'
+            )
+
+        if not query:
+            total = cls.collection.estimated_document_count()
+        elif search_hint:
+            total = cls.collection.count_documents(query, hint=search_hint)
+        else:
+            total = cls.collection.count_documents(query)
 
         skip = (page - 1) * page_size
         find_cursor = cls.collection.find(query)
-        if not issuer:
+        if search_hint:
+            find_cursor = find_cursor.hint(search_hint)
+        elif not issuer:
             find_cursor = find_cursor.sort('_id', 1)
             if not query:
                 if MongoDBClient.get_current_scope() in ('', 'all', 'global'):
