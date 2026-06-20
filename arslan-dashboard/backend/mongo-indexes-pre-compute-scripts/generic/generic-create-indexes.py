@@ -58,6 +58,7 @@ def build_source_indexes():
         {"name": "idx_ecdsa_public_key_length", "keys": [("parsed.subject_key_info.ecdsa_public_key.length", ASCENDING)], "options": {"background": True}},
         {"name": "idx_signature_algo", "keys": [("parsed.signature_algorithm.name", ASCENDING)], "options": {"background": True}},
         {"name": "idx_zlint_errors", "keys": [("zlint.errors_present", ASCENDING)], "options": {"background": True}},
+        {"name": "idx_zlint_warnings", "keys": [("zlint.warnings_present", ASCENDING)], "options": {"background": True}},
         {"name": "idx_self_signed", "keys": [("parsed.signature.self_signed", ASCENDING)], "options": {"background": True}},
         {"name": "idx_scope", "keys": [("scope", ASCENDING)], "options": {"background": True}},
         {"name": "idx_validation_level", "keys": [("parsed.validation_level", ASCENDING)], "options": {"background": True}},
@@ -67,6 +68,17 @@ def build_source_indexes():
         {"name": "idx_issuer_country", "keys": [("parsed.issuer.country", ASCENDING)], "options": {"background": True}},
         {"name": "idx_issuer_org", "keys": [("parsed.issuer.organization", ASCENDING)], "options": {"background": True}},
         {"name": "idx_san_dns_names", "keys": [("parsed.extensions.subject_alt_name.dns_names", ASCENDING)], "options": {"background": True}},
+        {"name": "idx_san_dns_names_50", "keys": [("parsed.extensions.subject_alt_name.dns_names.50", ASCENDING)], "options": {"background": True}},
+        {
+            "name": "idx_large_san_partial_domain",
+            "keys": [("domain", ASCENDING)],
+            "options": {
+                "background": True,
+                "partialFilterExpression": {
+                    "parsed.extensions.subject_alt_name.dns_names.50": {"$exists": True}
+                },
+            },
+        },
         {
             "name": "idx_algo_rsa_length",
             "keys": [
@@ -116,6 +128,14 @@ def build_source_indexes():
             "options": {"background": True},
         },
         {
+            "name": "idx_scope_zlint_warnings",
+            "keys": [
+                ("scope", ASCENDING),
+                ("zlint.warnings_present", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
             "name": "idx_scope_id",
             "keys": [
                 ("scope", ASCENDING),
@@ -149,10 +169,26 @@ def build_source_indexes():
             "options": {"background": True},
         },
         {
+            "name": "idx_scope_rsa_public_key_length",
+            "keys": [
+                ("scope", ASCENDING),
+                ("parsed.subject_key_info.rsa_public_key.length", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
             "name": "idx_scope_algo_ecdsa_length",
             "keys": [
                 ("scope", ASCENDING),
                 ("parsed.subject_key_info.key_algorithm.name", ASCENDING),
+                ("parsed.subject_key_info.ecdsa_public_key.length", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_scope_ecdsa_public_key_length",
+            "keys": [
+                ("scope", ASCENDING),
                 ("parsed.subject_key_info.ecdsa_public_key.length", ASCENDING),
             ],
             "options": {"background": True},
@@ -205,6 +241,27 @@ def build_source_indexes():
                 ("domain", ASCENDING),
             ],
             "options": {"background": True},
+        },
+        {
+            "name": "idx_scope_san_dns_names_50",
+            "keys": [
+                ("scope", ASCENDING),
+                ("parsed.extensions.subject_alt_name.dns_names.50", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_scope_large_san_partial_id",
+            "keys": [
+                ("scope", ASCENDING),
+                ("_id", ASCENDING),
+            ],
+            "options": {
+                "background": True,
+                "partialFilterExpression": {
+                    "parsed.extensions.subject_alt_name.dns_names.50": {"$exists": True}
+                },
+            },
         },
          {
             "name": "idx_issuer_org_algo_rsa_length",

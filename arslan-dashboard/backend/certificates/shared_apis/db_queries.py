@@ -1026,6 +1026,11 @@ class SharedModels:
             public_key = key_info['ecdsa_public_key'].get('public_key', '')
             
         spki_fingerprint = key_info.get('fingerprint_sha256', '')
+        san_names = (
+            extensions.get('subject_alt_name', {}).get('dns_names')
+            or parsed.get('names', [])
+            or []
+        )
         
         return {
             'id': str(doc.get('_id', '')),
@@ -1041,7 +1046,7 @@ class SharedModels:
             'signatureAlgorithm': parsed.get('signature_algorithm', {}).get('name', 'Unknown'),
             'vulnerabilities': SharedModels.format_vulnerabilities(zlint),
             'vulnerabilityCount': SharedModels.count_vulnerabilities(zlint),
-            'san': parsed.get('names', []),
+            'san': san_names,
             'country': SharedModels.get_tld_country(domain),
             'scanDate': validity.get('start', ''),
             'validationLevel': validation_level,
@@ -1061,9 +1066,159 @@ class SharedModels:
             'crlDistributionPoints': extensions.get('crl_distribution_points', []),
             'authorityInfoAccess': extensions.get('authority_info_access', {}).get('issuer_urls', []),
             'publicKey': public_key,
+            'publicKeyHash': spki_fingerprint,
+            'sanCount': len(san_names),
             'spkiFingerprint': spki_fingerprint,
             'spkiSubjectFingerprint': doc.get('spki_subject_fingerprint', ''),
         }
+
+    @classmethod
+    def _get_shared_key_fingerprints(cls) -> List[str]:
+        try:
+            shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+            return list(shared_groups_collection.distinct(
+                'public_key_hash',
+                {
+                    '$and': [
+                        MongoDBClient.get_precomputed_scope_filter(),
+                        {
+                            '$or': [
+                                {'doc_type': 'shared_key_group'},
+                                {'doc_type': {'$exists': False}, '_id': {'$ne': 'metadata'}},
+                            ]
+                        }
+                    ]
+                }
+            ))
+        except Exception:
+            shared_keys_pipeline = [
+                {'$match': {
+                    'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
+                    'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
+                }},
+                {'$group': {
+                    '_id': '$parsed.subject_key_info.fingerprint_sha256',
+                    'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
+                }},
+                {'$addFields': {'distinct_certs': {'$size': '$cert_fingerprints'}}},
+                {'$match': {'distinct_certs': {'$gt': 1}}},
+                {'$project': {'_id': 1}}
+            ]
+            return [
+                row['_id']
+                for row in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)
+            ]
+
+    @classmethod
+    def _get_shared_key_context(cls, public_key_hashes: List[str]) -> Dict[str, Dict[str, Any]]:
+        hashes = [item for item in public_key_hashes if item]
+        if not hashes:
+            return {}
+        try:
+            collection = MongoDBClient.get_results_db()['shared-keys-detailed']
+            docs = collection.find({
+                '$and': [
+                    MongoDBClient.get_precomputed_scope_filter(),
+                    {'public_key_hash': {'$in': hashes}},
+                    {
+                        '$or': [
+                            {'doc_type': 'shared_key_group'},
+                            {'doc_type': {'$exists': False}, '_id': {'$ne': 'metadata'}},
+                        ]
+                    }
+                ]
+            }, {
+                'public_key_hash': 1,
+                'public_key_hash_short': 1,
+                'certificate_count': 1,
+                'sample_domains': 1,
+                'key_type': 1,
+                'issuers': 1,
+                'risk_level': 1,
+            })
+            return {
+                doc.get('public_key_hash'): {
+                    'publicKeyHash': doc.get('public_key_hash', ''),
+                    'publicKeyHashShort': doc.get('public_key_hash_short', ''),
+                    'certificateCount': doc.get('certificate_count', 0),
+                    'sampleDomains': doc.get('sample_domains', []),
+                    'keyType': doc.get('key_type', 'Unknown'),
+                    'issuers': doc.get('issuers', []),
+                    'riskLevel': doc.get('risk_level', 'UNKNOWN'),
+                }
+                for doc in docs
+                if doc.get('public_key_hash')
+            }
+        except Exception as exc:
+            print(f"[SHARED CERTIFICATES] Shared-key context unavailable: {exc}")
+            return {}
+
+    @staticmethod
+    def _risk_level(score: int) -> str:
+        if score >= 85:
+            return 'Critical'
+        if score >= 70:
+            return 'High'
+        if score >= 40:
+            return 'Medium'
+        return 'Low'
+
+    @classmethod
+    def _add_risk_fields(cls, cert: Dict[str, Any]) -> Dict[str, Any]:
+        score = 0
+        factors = []
+        positives = []
+
+        if cert.get('status') == 'EXPIRED':
+            score += 30
+            factors.append({'label': 'Expired certificate', 'points': 30})
+        elif cert.get('status') == 'VALID':
+            score -= 5
+            positives.append({'label': 'Certificate is currently valid', 'points': -5})
+
+        if cert.get('sharedKeyDetails'):
+            score += 30
+            factors.append({'label': 'Shared public key', 'points': 30})
+
+        encryption = cert.get('encryptionType') or ''
+        if encryption.upper().startswith('RSA') and (cert.get('keyLength') or 0) < 2048:
+            score += 20
+            factors.append({'label': f"Weak encryption ({encryption})", 'points': 20})
+        elif (cert.get('keyLength') or 0) >= 2048 or encryption.upper().startswith(('ECDSA', 'EC')):
+            score -= 10
+            positives.append({'label': f"Strong key ({encryption})", 'points': -10})
+
+        validity_days = int((cert.get('validityLength') or 0) / 86400)
+        cert['validityDays'] = validity_days
+        if validity_days > 398:
+            score += 10
+            factors.append({'label': f'Long validity ({validity_days} days)', 'points': 10})
+        elif 0 < validity_days <= 398:
+            score -= 5
+            positives.append({'label': 'Modern validity period', 'points': -5})
+
+        zlint_counts = cert.get('vulnerabilityCount') or {}
+        errors = zlint_counts.get('errors', 0)
+        warnings = zlint_counts.get('warnings', 0)
+        zlint_penalty = 0
+        if errors or warnings:
+            zlint_penalty = min(10, errors + ((warnings + 1) // 2))
+        if zlint_penalty:
+            score += zlint_penalty
+            factors.append({'label': f'ZLint issues ({errors} errors, {warnings} warnings)', 'points': zlint_penalty})
+        else:
+            score -= 5
+            positives.append({'label': 'No ZLint errors or warnings', 'points': -5})
+
+        score = max(0, min(100, score))
+        cert.update({
+            'riskScore': score,
+            'riskLevel': cls._risk_level(score),
+            'riskFactors': factors,
+            'positiveSignals': positives,
+            'sharedPublicKey': bool(cert.get('sharedKeyDetails')),
+        })
+        return cert
     
     @classmethod
     def _hydrate_certificate_ids(cls, certificate_ids: List[Any], page: int, page_size: int) -> List[Dict[str, Any]]:
@@ -1192,6 +1347,8 @@ class SharedModels:
                 # Shared Keys page filter
 
                 shared_key: Optional[bool] = None,
+                # Vulnerabilities page filter
+                risk_filter: Optional[str] = None,
                 # Validation level filter
                 validation_levels: Optional[List[str]] = None,
                 base_filter: Optional[Dict] = None) -> Dict:
@@ -1215,6 +1372,7 @@ class SharedModels:
             expiring_start: Filter by exact expiration start date (ISO string)
             expiring_end: Filter by exact expiration end date (ISO string)
             shared_key: Filter for certs involved in true key reuse (different certs sharing same public key)
+            risk_filter: Vulnerability-page filter: all, expired, shared-key, weak-encryption, long-validity, zlint
             base_filter: Global filter query from build_filter_query() - merged with specific filters
         """
         now = cls.get_current_time_iso()
@@ -1281,6 +1439,27 @@ class SharedModels:
 
         if has_vulnerabilities:
             filters.append({'zlint.errors_present': True})
+
+        normalized_risk_filter = (risk_filter or '').strip().lower()
+        if normalized_risk_filter:
+            risk_conditions = {
+                'expired': {'parsed.validity.end': {'$lt': now}},
+                'weak-encryption': {'parsed.subject_key_info.rsa_public_key.length': {'$lt': 2048}},
+                'long-validity': {'parsed.validity.length': {'$gt': 398 * 86400}},
+                'zlint': {'$or': [{'zlint.errors_present': True}, {'zlint.warnings_present': True}]},
+            }
+            if normalized_risk_filter == 'shared-key':
+                shared_key = True
+            elif normalized_risk_filter == 'all':
+                all_conditions = list(risk_conditions.values())
+                shared_fingerprints_for_risk = cls._get_shared_key_fingerprints()
+                if shared_fingerprints_for_risk:
+                    all_conditions.append({
+                        'parsed.subject_key_info.fingerprint_sha256': {'$in': shared_fingerprints_for_risk[:10000]}
+                    })
+                filters.append({'$or': all_conditions})
+            elif normalized_risk_filter in risk_conditions:
+                filters.append(risk_conditions[normalized_risk_filter])
 
         if signature_algorithm:
             filters.append({'parsed.signature_algorithm.name': signature_algorithm})
@@ -1390,41 +1569,7 @@ class SharedModels:
         #     san count requires aggregation with $size and is handled by SAN-specific code.
 
         if shared_key:
-            try:
-                shared_groups_collection = MongoDBClient.get_results_db()['shared-keys-detailed']
-                shared_fingerprints = shared_groups_collection.distinct(
-                    'public_key_hash',
-                    {
-                        '$and': [
-                            MongoDBClient.get_precomputed_scope_filter(),
-                            {
-                                '$or': [
-                                    {'doc_type': 'shared_key_group'},
-                                    {'doc_type': {'$exists': False}, '_id': {'$ne': 'metadata'}},
-                                ]
-                            }
-                        ]
-                    }
-                )
-            except Exception:
-                shared_keys_pipeline = [
-                    {'$match': {
-                        'parsed.subject_key_info.fingerprint_sha256': {'$exists': True, '$ne': None},
-                        'parsed.fingerprint_sha256': {'$exists': True, '$ne': None}
-                    }},
-                    {'$group': {
-                        '_id': '$parsed.subject_key_info.fingerprint_sha256',
-                        'cert_fingerprints': {'$addToSet': '$parsed.fingerprint_sha256'}
-                    }},
-                    {'$addFields': {'distinct_certs': {'$size': '$cert_fingerprints'}}},
-                    {'$match': {'distinct_certs': {'$gt': 1}}},
-                    {'$project': {'_id': 1}}
-                ]
-                shared_fingerprints = [
-                    row['_id']
-                    for row in cls.collection.aggregate(shared_keys_pipeline, allowDiskUse=True)
-                ]
-
+            shared_fingerprints = cls._get_shared_key_fingerprints()
             filters.append({
                 'parsed.subject_key_info.fingerprint_sha256': {
                     '$in': shared_fingerprints if shared_fingerprints else []
@@ -1438,7 +1583,7 @@ class SharedModels:
         else:
             query = {'$and': filters}
 
-        print(f"[CERTIFICATES QUERY] {query}")
+        print(f"[CERTIFICATES QUERY] filters={len(filters)} risk_filter={normalized_risk_filter or 'none'}")
 
         search_hint = None
         if search:
@@ -1448,10 +1593,23 @@ class SharedModels:
                 else 'idx_scope_domain'
             )
 
+        risk_hint = None
+        scoped_query = MongoDBClient.get_current_scope() not in ('', 'all', 'global')
+        if normalized_risk_filter == 'expired':
+            risk_hint = 'idx_scope_validity_end' if scoped_query else 'idx_validity_end'
+        elif normalized_risk_filter == 'weak-encryption':
+            risk_hint = 'idx_scope_rsa_public_key_length' if scoped_query else 'idx_rsa_public_key_length'
+        elif normalized_risk_filter == 'long-validity':
+            risk_hint = 'idx_scope_validity_length' if scoped_query else 'idx_validity_length'
+        elif normalized_risk_filter == 'shared-key':
+            risk_hint = 'idx_scope_public_key_fingerprint' if scoped_query else 'idx_public_key_fingerprint'
+
         if not query:
             total = cls.collection.estimated_document_count()
         elif search_hint:
             total = cls.collection.count_documents(query, hint=search_hint)
+        elif risk_hint:
+            total = cls.collection.count_documents(query, hint=risk_hint)
         else:
             total = cls.collection.count_documents(query)
 
@@ -1459,6 +1617,8 @@ class SharedModels:
         find_cursor = cls.collection.find(query)
         if search_hint:
             find_cursor = find_cursor.hint(search_hint)
+        elif risk_hint:
+            find_cursor = find_cursor.hint(risk_hint)
         elif not issuer:
             find_cursor = find_cursor.sort('_id', 1)
             if not query:
@@ -1469,6 +1629,15 @@ class SharedModels:
         cursor = find_cursor.skip(skip).limit(page_size)
 
         certificates = [cls.serialize_certificate(doc) for doc in cursor]
+        shared_context = cls._get_shared_key_context([
+            cert.get('publicKeyHash') for cert in certificates
+        ])
+        for cert in certificates:
+            public_key_hash = cert.get('publicKeyHash')
+            if public_key_hash and public_key_hash in shared_context:
+                cert['sharedKeyDetails'] = shared_context[public_key_hash]
+            if normalized_risk_filter:
+                cls._add_risk_fields(cert)
 
         pagination = {
             'page': page,

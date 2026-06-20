@@ -91,7 +91,14 @@ class VulnerabilitiesView(View):
     """
     def get(self, request):
         try:
-            data = OverviewController.get_vulnerabilities()
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+            risk_level = request.GET.get('risk_level')
+            data = OverviewController.get_vulnerabilities(
+                page=page,
+                page_size=page_size,
+                risk_level=risk_level,
+            )
             return json_response(data)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)

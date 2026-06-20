@@ -92,6 +92,8 @@ export async function fetchCertificates(params?: {
     san_count_max?: number;
     // Shared Keys page filter
     shared_key?: boolean;
+    // Vulnerabilities page filter
+    risk_filter?: string;
 } & GlobalFilterParams): Promise<{ certificates: ScanEntry[]; pagination: { page: number; total: number; totalPages: number } }> {
     try {
         const result = await apiClient.getCertificates(params);
@@ -184,12 +186,16 @@ export async function fetchFutureRisk(): Promise<FutureRisk> {
 }
 
 // Fetch vulnerabilities
-export async function fetchVulnerabilities(page: number = 1, pageSize: number = 10) {
+export async function fetchVulnerabilities(page: number = 1, pageSize: number = 10, riskLevel?: string) {
     try {
-        return await apiClient.getVulnerabilities(page, pageSize);
+        return await apiClient.getVulnerabilities(page, pageSize, riskLevel);
     } catch (error) {
         console.error('Error fetching vulnerabilities:', error);
-        return { certificates: [], summary: { critical: 0, warning: 0, total: 0 }, pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 } };
+        return {
+            certificates: [],
+            summary: { critical: 0, high: 0, medium: 0, low: 0, warning: 0, total: 0 },
+            pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
+        };
     }
 }
 

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { SearchIcon } from '@/components/icons/Icons';
 
 interface Database {
     id: string;
@@ -49,7 +50,24 @@ export default function DatabaseSwitcher() {
     const [availableDatabases, setAvailableDatabases] = useState<Database[]>([DEFAULT_DATABASE]);
     const [currentDb, setCurrentDb] = useState<Database>(DEFAULT_DATABASE);
     const [isSwitching, setIsSwitching] = useState(false);
+    const [countrySearch, setCountrySearch] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    const filteredDatabases = useMemo(() => {
+        const query = countrySearch.trim().toLowerCase();
+        if (!query) return availableDatabases;
+
+        return availableDatabases.filter((db) => {
+            const searchable = [
+                db.name,
+                db.description || '',
+                db.scope,
+                db.id,
+            ].join(' ').toLowerCase();
+            return searchable.includes(query);
+        });
+    }, [availableDatabases, countrySearch]);
 
     // On mount, fetch the actual current database from backend
     useEffect(() => {
@@ -110,8 +128,30 @@ export default function DatabaseSwitcher() {
         };
     }, [isOpen]);
 
+    useEffect(() => {
+        const handleShortcut = (event: KeyboardEvent) => {
+            if (event.altKey && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                setIsOpen(true);
+                setTimeout(() => searchInputRef.current?.focus(), 0);
+            }
+        };
+
+        window.addEventListener('keydown', handleShortcut);
+        return () => window.removeEventListener('keydown', handleShortcut);
+    }, []);
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => searchInputRef.current?.focus(), 0);
+        }
+    }, [isOpen]);
+
     const handleDatabaseChange = async (database: Database) => {
-        if (isSwitching || database.id === currentDb.id) return;
+        if (isSwitching || database.id === currentDb.id) {
+            setIsOpen(false);
+            return;
+        }
         
         setIsSwitching(true);
         setIsOpen(false);
@@ -189,26 +229,51 @@ export default function DatabaseSwitcher() {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-card-bg border border-card-border rounded-lg shadow-lg z-50">
-                    {availableDatabases.map((db) => (
-                        <button
-                            key={db.id}
-                            onClick={() => handleDatabaseChange(db)}
-                            className={`w-full px-4 py-3 text-left hover:bg-card-bg-hover transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                                currentDb.id === db.id ? 'bg-primary-blue/10' : ''
-                            }`}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm font-medium text-text-primary">{db.name}</div>
-                                    <div className="text-xs text-text-muted mt-0.5">{db.description}</div>
-                                </div>
-                                {currentDb.id === db.id && (
-                                    <div className="w-2 h-2 rounded-full bg-accent-green"></div>
-                                )}
+                <div className="absolute right-0 top-full mt-2 w-72 bg-card-bg border border-card-border rounded-lg shadow-lg z-50">
+                    <div className="p-3 border-b border-card-border">
+                        <div className="relative">
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                        <input
+                            ref={searchInputRef}
+                            value={countrySearch}
+                            onChange={(event) => setCountrySearch(event.target.value)}
+                            placeholder="Search country"
+                            className="w-full h-9 rounded-full border border-border bg-background pl-9 pr-16 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
+                        />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1">
+                                <kbd className="px-1.5 py-0.5 text-[10px] text-text-muted bg-background border border-card-border rounded">Alt</kbd>
+                                <kbd className="px-1.5 py-0.5 text-[10px] text-text-muted bg-background border border-card-border rounded">K</kbd>
                             </div>
-                        </button>
-                    ))}
+                        </div>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto overscroll-contain">
+                        {filteredDatabases.length > 0 ? (
+                            filteredDatabases.map((db) => (
+                                <button
+                                    key={db.id}
+                                    onClick={() => handleDatabaseChange(db)}
+                                    className={`w-full px-4 py-3 text-left hover:bg-card-bg-hover transition-colors ${
+                                        currentDb.id === db.id ? 'bg-primary-blue/10' : ''
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-medium text-text-primary">{db.name}</div>
+                                            <div className="mt-0.5 truncate text-xs text-text-muted">{db.description}</div>
+                                        </div>
+                                        {currentDb.id === db.id && (
+                                            <div className="h-2 w-2 shrink-0 rounded-full bg-accent-green"></div>
+                                        )}
+                                    </div>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="px-4 py-6 text-center text-sm text-text-muted">
+                                No such country available
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

@@ -239,6 +239,9 @@ class CertificateListView(View):
             
             # Shared Keys page specific filter
             shared_key = request.GET.get('shared_key', '').lower() == 'true'
+
+            # Vulnerabilities page specific filter
+            risk_filter = request.GET.get('risk_filter')
             
             result = SharedApisController.get_certificates(
                 page=page,
@@ -268,6 +271,7 @@ class CertificateListView(View):
                 expiring_start=expiring_start,
                 expiring_end=expiring_end,
                 shared_key=shared_key if shared_key else None,
+                risk_filter=risk_filter,
                 global_filters=global_filters
             )
             return json_response(result)

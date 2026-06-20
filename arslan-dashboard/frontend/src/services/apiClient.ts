@@ -70,6 +70,22 @@ export interface Certificate {
     publicKey?: string;
     spkiFingerprint?: string;
     spkiSubjectFingerprint?: string;
+    publicKeyHash?: string;
+    validityDays?: number;
+    riskScore?: number;
+    riskLevel?: 'Critical' | 'High' | 'Medium' | 'Low';
+    riskFactors?: Array<{ label: string; points: number }>;
+    positiveSignals?: Array<{ label: string; points: number }>;
+    sharedPublicKey?: boolean;
+    sharedKeyDetails?: {
+        publicKeyHash: string;
+        publicKeyHashShort: string;
+        certificateCount: number;
+        sampleDomains: string[];
+        keyType: string;
+        issuers: Array<{ organization: string; certificate_count?: number; common_name?: string }>;
+        riskLevel: string;
+    };
 }
 
 export interface DashboardMetrics {
@@ -355,6 +371,8 @@ class ApiClient {
         san_count_max?: number;
         // Shared Keys page filter
         shared_key?: boolean;
+        // Vulnerabilities page filter
+        risk_filter?: string;
         // Global filter params
         startDate?: string;
         endDate?: string;
@@ -399,6 +417,8 @@ class ApiClient {
         if (params?.san_count_max !== undefined) queryParams.append('san_count_max', params.san_count_max.toString());
         // Shared Keys filter
         if (params?.shared_key) queryParams.append('shared_key', 'true');
+        // Vulnerabilities page filters
+        if (params?.risk_filter) queryParams.append('risk_filter', params.risk_filter);
         // Global filter params
         if (params?.startDate) queryParams.append('start_date', params.startDate);
         if (params?.endDate) queryParams.append('end_date', params.endDate);
@@ -503,12 +523,16 @@ class ApiClient {
         return this.fetch<FutureRisk>('/overview/future-risk/');
     }
 
-    async getVulnerabilities(page: number = 1, pageSize: number = 10): Promise<{
+    async getVulnerabilities(page: number = 1, pageSize: number = 10, riskLevel?: string): Promise<{
         certificates: Certificate[];
-        summary: { critical: number; warning: number; total: number };
+        summary: { critical: number; high?: number; medium?: number; low?: number; warning: number; total: number };
         pagination: PaginationInfo;
     }> {
-        return this.fetch(`/overview/vulnerabilities/`);
+        const params = new URLSearchParams();
+        params.append('page', page.toString());
+        params.append('page_size', pageSize.toString());
+        if (riskLevel) params.append('risk_level', riskLevel);
+        return this.fetch(`/overview/vulnerablities/?${params.toString()}`);
     }
 
     async getNotifications(): Promise<NotificationResponse> {

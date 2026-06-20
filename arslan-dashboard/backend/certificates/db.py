@@ -1,4 +1,8 @@
 # backend/certificates/db.py
+import json
+import re
+from pathlib import Path
+
 from pymongo import MongoClient
 from django.conf import settings
 
@@ -29,45 +33,88 @@ RESULTS_DB = _CURRENT_RESULTS_DB
 
 # Logical scope options.
 #
-# To add a country/scope everywhere in the dashboard, add one object here.
-# Example:
-#     {'id': 'japan', 'scope': 'jp', 'name': 'Japan Domains', 'description': 'Japan scope'}
+# To add countries/scopes everywhere in the dashboard, edit only:
+#     backend/certificates/Scopes.json
+#
+# Add one compact entry there, for example:
+#     "jp": "Japan"
 #
 # The frontend dropdown reads these options from /api/databases/available/,
 # and every API request uses the selected scope with the single physical DB pair above.
-SCOPE_OPTIONS = [
-    {
-        'id': 'global',
-        'scope': 'all',
-        'name': 'Global',
-        'description': 'All certificates',
-    },
-    {
-        'id': 'pakistani',
-        'scope': 'pk',
-        'name': 'Pakistani Domains',
-        'description': 'Pakistan scope',
-    },
-    {
-        'id': 'indian',
-        'scope': 'in',
-        'name': 'Indian Domains',
-        'description': 'India scope',
-    },
-    {
-        'id': 'united-states',
-        'scope': 'us',
-        'name': 'United States Domains',
-        'description': 'United States scope',
-    },
-    {
-        'id': 'russia',
-        'scope': 'ru',
-        'name': 'Russia Domains',
-        'description': 'Russia scope',
-    },
-    
-]
+SCOPES_FILE = Path(__file__).with_name('Scopes.json')
+LEGACY_SCOPE_IDS = {
+    'pk': 'pakistani',
+    'in': 'indian',
+    'us': 'united-states',
+}
+
+
+def _slugify_scope_id(name):
+    slug = re.sub(r'[^a-z0-9]+', '-', name.strip().lower()).strip('-')
+    return slug or 'scope'
+
+
+def _load_scope_config():
+    fallback = {
+        'all': {
+            'id': 'global',
+            'name': 'Global',
+            'description': 'All certificates',
+        },
+        'countries': {
+            'pk': 'Pakistan',
+            'in': 'India',
+            'us': 'United States',
+        },
+    }
+    try:
+        with SCOPES_FILE.open('r', encoding='utf-8') as scopes_file:
+            loaded = json.load(scopes_file)
+            return loaded if isinstance(loaded, dict) else fallback
+    except (OSError, json.JSONDecodeError):
+        return fallback
+
+
+def _build_scope_options():
+    scope_config = _load_scope_config()
+    all_config = scope_config.get('all') or {}
+    options = [
+        {
+            'id': all_config.get('id', 'global'),
+            'scope': 'all',
+            'name': all_config.get('name', 'Global'),
+            'description': all_config.get('description', 'All certificates'),
+        }
+    ]
+
+    countries = scope_config.get('countries') or {}
+    for scope, country in sorted(countries.items()):
+        scope_code = str(scope).strip().lower()
+        if not scope_code or scope_code == 'all':
+            continue
+
+        if isinstance(country, dict):
+            country_name = country.get('name') or scope_code.upper()
+            scope_id = country.get('id') or LEGACY_SCOPE_IDS.get(scope_code) or _slugify_scope_id(country_name)
+            display_name = country.get('display_name') or f'{country_name} Domains'
+            description = country.get('description') or f'{country_name} scope'
+        else:
+            country_name = str(country).strip() or scope_code.upper()
+            scope_id = LEGACY_SCOPE_IDS.get(scope_code) or _slugify_scope_id(country_name)
+            display_name = f'{country_name} Domains'
+            description = f'{country_name} scope'
+
+        options.append({
+            'id': scope_id,
+            'scope': scope_code,
+            'name': display_name,
+            'description': description,
+        })
+
+    return options
+
+
+SCOPE_OPTIONS = _build_scope_options()
 
 # Available logical databases configuration
 # AVAILABLE_DATABASES = {
