@@ -90,7 +90,8 @@ ssl-certificates-crawler/domain-based-crawler/common-crawler-dataset/*
 
 
 ##ip-based-crawler
-ssl-certificates-crawler/ip-based-crawler/
+ssl-certificates-crawler/ip-based-crawler/temp
+ssl-certificates-crawler/ip-based-crawler/zcertificate
 
 
 dashboard/frontend/.next

@@ -1,0 +1,78 @@
+## Checking IPs
+14.1.104.0/22 [failed 0 exists there]
+14.192.128.0/19 [just 12-15 certificates] [for Claude 60 certificates come]
+27.0.184.0/22 [0 certificates ]
+27.54.120.0/22
+27.96.92.0/22
+36.50.72.0/23
+36.50.76.0/24
+
+45.249.8.0/22 [Using because this is owned TransWorld and chances are higher that they have hosted more domains]
+
+
+
+
+
+WITH-SNI field : 
+
+📊 FINAL RESULTS SUMMARY:
+   ┌────────────────────────────────────────────┐
+   │ ✓ SSL Certificates Found:           28 │
+   │ ✗ No Service (Port 443):           112 │
+   │ ⏱ TCP Timeouts (Dead IPs):       3,578 │
+   │ ⏱ TLS Timeouts:                      2 │
+   │ ⚠ SSL Handshake Errors:              5 │
+   │ ⚠ ZCertificate Errors:               0 │
+   │ ❌ Other Errors:                    105 │
+
+
+Without-SNI field : 
+
+📊 FINAL RESULTS SUMMARY:
+   ┌────────────────────────────────────────────┐
+   │ ✓ SSL Certificates Found:           22 │
+   │ ✗ No Service (Port 443):           118 │
+   │ ⏱ TCP Timeouts (Dead IPs):       3,574 │
+   │ ⏱ TLS Timeouts:                      1 │
+   │ ⚠ SSL Handshake Errors:              3 │
+   │ ⚠ ZCertificate Errors:               0 │
+   │ ❌ Other Errors:                    112 │
+   └────────────────────────────────────────────┘
+
+
+### Final checking which runs on more IP ranges :
+
+
+WITH N0-SNI : 
+
+📊 FINAL RESULTS SUMMARY:
+   ┌────────────────────────────────────────────┐
+   │ ✓ SSL Certificates Found:          383 │
+   │ ✗ No Service (Port 443):           404 │
+   │ ⏱ TCP Timeouts (Dead IPs):      34,347 │
+   │ ⏱ TLS Timeouts:                      5 │
+   │ ⚠ SSL Handshake Errors:             22 │
+   │ ⚠ ZCertificate Errors:               0 │
+   │ ❌ Other Errors:                    397 │
+   └────────────────────────────────────────────┘
+================================================================================
+
+
+With SNI :
+
+📊 FINAL RESULTS SUMMARY:
+   ┌────────────────────────────────────────────┐
+   │ ✓ SSL Certificates Found:          554 │
+   │ ✗ No Service (Port 443):           558 │
+   │ ⏱ TCP Timeouts (Dead IPs):      33,724 │
+   │ ⏱ TLS Timeouts:                     26 │
+   │ ⚠ SSL Handshake Errors:             31 │
+   │ ⚠ ZCertificate Errors:               0 │
+   │ ❌ Other Errors:                    665 │
+   └────────────────────────────────────────────┘
+================================================================================
+
+
+
+
+
