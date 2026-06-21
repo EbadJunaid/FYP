@@ -1,0 +1,350 @@
+[2026-06-17 05:40:59] Processing metrics.companycapital.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: metrics.companycapital.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] Processing oregoncoastmags.net
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: oregoncoastmags.net
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] Processing api.app.emailsellerscale.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: api.app.emailsellerscale.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] Processing 300gt02.live
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: 300gt02.live
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] Processing auth.radlar.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: auth.radlar.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] Processing rvremote.radlar.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: rvremote.radlar.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] Processing nilayohe.innovationcast.net
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:40:59] PERMANENTLY FAILED: nilayohe.innovationcast.net
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing 38365988a806400abc5d3e481e31c787.plex.direct
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: 38365988a806400abc5d3e481e31c787.plex.direct
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing devstudio-lb.workers.dev
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: devstudio-lb.workers.dev
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing klyx7.info
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: klyx7.info
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing wensnas.direct.quickconnect.to
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: wensnas.direct.quickconnect.to
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing a1bc1d6af85b4fa9b86ae0756cc43008.plex.direct
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: a1bc1d6af85b4fa9b86ae0756cc43008.plex.direct
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing vaupelklein.direct.quickconnect.to
+  - Error on attempt 1: [Errno 61] Connection refused
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: vaupelklein.direct.quickconnect.to
+  - Attempts: 1/2
+  - Final Error: [Errno 61] Connection refused
+
+[2026-06-17 05:41:00] Processing ww7.alla-cart.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: ww7.alla-cart.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing koru.help
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: koru.help
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing dart.peisze.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: dart.peisze.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] Processing nz-trinity.help
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:00] PERMANENTLY FAILED: nz-trinity.help
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] Processing master-mages.esohost.ru
+  - Error on attempt 1: [Errno 61] Connection refused
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: master-mages.esohost.ru
+  - Attempts: 1/2
+  - Final Error: [Errno 61] Connection refused
+
+[2026-06-17 05:41:01] Processing cluster-hkwnnrpvejhsmvjghvqfjn7l7g.cloudworkstations.dev
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: cluster-hkwnnrpvejhsmvjghvqfjn7l7g.cloudworkstations.dev
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] Processing emiratesbet872.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: emiratesbet872.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] Processing galacticbussing.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: galacticbussing.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] Processing 7107bb593d995e0a825776eb.keenetic.io
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: 7107bb593d995e0a825776eb.keenetic.io
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:01] Processing api.www.hbgwcf.51.222.141.36.sslip.io
+  - Error on attempt 1: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1006)
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: api.www.hbgwcf.51.222.141.36.sslip.io
+  - Attempts: 1/2
+  - Final Error: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1006)
+
+[2026-06-17 05:41:01] Processing test.staging.dnsociety.com
+  - Error on attempt 1: [SSL: TLSV1_UNRECOGNIZED_NAME] tlsv1 unrecognized name (_ssl.c:1006)
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: test.staging.dnsociety.com
+  - Attempts: 1/2
+  - Final Error: [SSL: TLSV1_UNRECOGNIZED_NAME] tlsv1 unrecognized name (_ssl.c:1006)
+
+[2026-06-17 05:41:01] Processing custom-ssl-test-1767886652858.eu1.prod.hubspot-at-test.com
+  - Error on attempt 1: [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssl/tls alert handshake failure (_ssl.c:1006)
+
+[2026-06-17 05:41:01] PERMANENTLY FAILED: custom-ssl-test-1767886652858.eu1.prod.hubspot-at-test.com
+  - Attempts: 1/2
+  - Final Error: [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssl/tls alert handshake failure (_ssl.c:1006)
+
+[2026-06-17 05:41:02] Processing vehicle-service.ad.fda-74b7bcb8.core.build.vwn.cloud
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:02] PERMANENTLY FAILED: vehicle-service.ad.fda-74b7bcb8.core.build.vwn.cloud
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:02] Processing api.sitemap.sketchappdata.com
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:02] PERMANENTLY FAILED: api.sitemap.sketchappdata.com
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:02] Processing 8e045be5586ddb8fa05c03fb.keenetic.io
+  - Error on attempt 1: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:02] PERMANENTLY FAILED: 8e045be5586ddb8fa05c03fb.keenetic.io
+  - Attempts: 1/2
+  - Final Error: [Errno 8] nodename nor servname provided, or not known
+
+[2026-06-17 05:41:09] Processing uat.mosaic.ro
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:09] PERMANENTLY FAILED: uat.mosaic.ro
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:09] Processing web2.fortbraggproperty.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:09] PERMANENTLY FAILED: web2.fortbraggproperty.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:09] Processing explore-dev.tintadehistorieta.com.ar
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:09] PERMANENTLY FAILED: explore-dev.tintadehistorieta.com.ar
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing bill1426.direct.quickconnect.to
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: bill1426.direct.quickconnect.to
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing corpusorus.intra.airudit.net
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: corpusorus.intra.airudit.net
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing szendala.direct.quickconnect.to
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: szendala.direct.quickconnect.to
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing login.cartuccestampante.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: login.cartuccestampante.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing esus.eyemedvisioncard.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: esus.eyemedvisioncard.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing home.mellicard.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: home.mellicard.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing temp.borntraeger.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: temp.borntraeger.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing ofinovardweb.sunsetbeachhotel.com.tr
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: ofinovardweb.sunsetbeachhotel.com.tr
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing trgjyremoto.westhaferconstruction.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing securevpn.daenerys.fr
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: trgjyremoto.westhaferconstruction.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: securevpn.daenerys.fr
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing rdweb.daenerys.fr
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: rdweb.daenerys.fr
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:10] Processing remote.puremicamper.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:10] PERMANENTLY FAILED: remote.puremicamper.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:11] Processing home.carolinevej10.dk
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:11] PERMANENTLY FAILED: home.carolinevej10.dk
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:11] Processing officevpn.borntraeger.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:11] PERMANENTLY FAILED: officevpn.borntraeger.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:11] Processing blog.puremicamper.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:11] PERMANENTLY FAILED: blog.puremicamper.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:11] Processing admin.app.wwwwww.www.234cde3d.nip.io
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:11] PERMANENTLY FAILED: admin.app.wwwwww.www.234cde3d.nip.io
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:11] Processing devexpedientes.ezsoftwaretools.com
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:11] PERMANENTLY FAILED: devexpedientes.ezsoftwaretools.com
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:12] Processing supportmt2.forumeiro.net
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:12] PERMANENTLY FAILED: supportmt2.forumeiro.net
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+
+[2026-06-17 05:41:19] Processing smtp.korep.cz
+  - Error on attempt 1: Connection Timed Out
+
+[2026-06-17 05:41:19] PERMANENTLY FAILED: smtp.korep.cz
+  - Attempts: 1/2
+  - Final Error: Connection Timed Out
+

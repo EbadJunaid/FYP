@@ -2,8 +2,9 @@ FYP-Send-Code
 .DS_Store
 .vscode
 helping-material
+other-ai-setups
 
-### Dashboard 
+### archive/old-Dashboard
 
 archive/old-dashboard/.vscode
 archive/old-dashboard/backend/__pycache__
@@ -13,6 +14,10 @@ archive/old-dashboard/backend/.env
 archive/old-dashboard/backend/overview/migrations
 archive/old-dashboard/frontend/node_modules/
 archive/old-dashboard/frontend/.next/
+archive/old-dashboard/frontend/out
+archive/old-dashboard/frontend/.next/
+archive/old-dashboard/frontend/node_modules/
+archive/old-dashboard/frontend/.env.local
 
 arslan-dashboard/
 slides/
@@ -93,12 +98,77 @@ ssl-certificates-crawler/domain-based-crawler/common-crawler-dataset/*
 ssl-certificates-crawler/ip-based-crawler/temp
 ssl-certificates-crawler/ip-based-crawler/zcertificate
 
+### arslan-dashboard
+arslan-dashboard/.vscode
+arslan-dashboard/backend/__pycache__
+arslan-dashboard/backend/syntax-error
+arslan-dashboard/backend/ssl_dashboard/__pycache__
+arslan-dashboard/backend/certificates/__pycache__
+arslan-dashboard/backend/.env
+arslan-dashboard/backend/certificates/migrations
 
-dashboard/frontend/.next
-dashboard/frontend/node_modules
-dashboard/frontend/package-lock.json
-dashboard/frontend/.env.local
+arslan-dashboard/frontend/node_modules
+arslan-dashboard/frontend/.next
+arslan-dashboard/all_apis.txt
+arslan-dashboard/apis.md
+arslan-dashboard/caching_info.md
+arslan-dashboard/filters.md
+arslan-dashboard/functions.md
+arslan-dashboard/info.md
+arslan-dashboard/setup_cursor.md
+arslan-dashboard/1.json
+arslan-dashboard/unique.json
+arslan-dashboard/validity_analysis.md
+arslan-dashboard/errors_in_caching.txt
 
 
 crawler-expr/
 temp-saving
+arslan-dashboard/backend/node_modules
+
+arslan-dashboard/temp/
+arslan-dashboard/backend/CA_ANALYTICS_SETUP.md
+arslan-dashboard/backend/MULTIPLE_DATABASE_GUIDE.md
+arslan-dashboard/backend/UNDERSTANDING_INDEXES.md
+arslan-dashboard/README-old.md
+
+
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/archive-2
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/not-used-scripts
+
+helping-material
+reports
+slides
+
+.vscode
+
+
+### Adding the .pycache folder and files here :
+
+arslan-dashboard/backend/certificates/ca_analytics/__pycache__
+arslan-dashboard/backend/certificates/overview/__pycache__
+arslan-dashboard/backend/certificates/san_analytics/__pycache__
+arslan-dashboard/backend/certificates/shared_apis/__pycache__
+arslan-dashboard/backend/certificates/signature_hash/__pycache__
+arslan-dashboard/backend/certificates/trends/__pycache__
+arslan-dashboard/backend/certificates/shared_keys/__pycache__
+arslan-dashboard/backend/certificates/validity_analysis/__pycache__
+
+arslan-dashboard/frontend/next-env.d.ts
+
+
+## arslan-dashboard/data-sample.json
+temp-saving/
+crawler-expr/__pycache__
+
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
+Things to discuss.txt
+arslan-dashboard/backend/Details.md
+arslan-dashboard/backend/Pre-Computed.md
+
+arslan-dashboard/data-sample.json
+crawler-expr
+
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
+temp-saving
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/compare-precompute-results.py

@@ -101,7 +101,7 @@ DATABASES = {}  # Django requires this to be defined
 
 MONGODB_HOST = os.getenv("MONGODB_HOST", "localhost")
 MONGODB_PORT = int(os.getenv("MONGODB_PORT", "27017"))
-MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "latest-pk-domains")
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "Tranco_data_Multi_state")
 
 # MONGODB_SETTINGS = {
 #     'HOST': 'localhost',
