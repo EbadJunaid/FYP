@@ -65,7 +65,38 @@ def resolve_targets(db_names, entries):
     return targets
 
 
-def compute_signature_stats(client, main_db, results_db, months=36, granularity="quarterly", matrix_limit=50, verify=False, scope="all"):
+def aggregate_scoped(collection, pipeline, scope, hint=None, limit=None):
+    limited_pipeline = ([{"$limit": limit}] if limit else []) + list(pipeline)
+    scoped_pipeline = add_scope_match(limited_pipeline, scope)
+    if hint:
+        try:
+            return list(collection.aggregate(scoped_pipeline, hint=hint, allowDiskUse=True))
+        except Exception:
+            pass
+    return list(collection.aggregate(scoped_pipeline, allowDiskUse=True))
+
+
+def classify_hash_algorithm(signature_algorithm):
+    value = signature_algorithm or ""
+    normalized = value.upper()
+    if "SHA512" in normalized or "SHA-512" in normalized:
+        return "SHA-512"
+    if "SHA384" in normalized or "SHA-384" in normalized:
+        return "SHA-384"
+    if "SHA256" in normalized or "SHA-256" in normalized:
+        return "SHA-256"
+    if "SHA224" in normalized or "SHA-224" in normalized:
+        return "SHA-224"
+    if "SHA1" in normalized or "SHA-1" in normalized or "WITHSHA1" in normalized:
+        return "SHA-1"
+    if "MD5" in normalized:
+        return "MD5"
+    if "MD2" in normalized:
+        return "MD2"
+    return value or "Unknown"
+
+
+def compute_signature_stats(client, main_db, results_db, months=36, granularity="quarterly", matrix_limit=50, verify=False, scope="all", limit=None):
     source_collection = client[main_db]["certificates"]
     results_db_ref = client[results_db]
     results_collection = results_db_ref["signature-and-hash"]
@@ -74,7 +105,16 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
 
     start_time = datetime.now(timezone.utc)
     scope_filter = get_scope_filter(scope)
-    total = source_collection.count_documents(scope_filter)
+    scoped = bool(scope_filter)
+    if scoped:
+        try:
+            total = source_collection.count_documents(scope_filter, hint="idx_scope")
+        except Exception:
+            total = source_collection.count_documents(scope_filter)
+    else:
+        total = source_collection.estimated_document_count()
+    if limit:
+        total = min(total, limit)
 
     # Legacy split collections are cleared so stale data is not mistaken for
     # the current materialized view.
@@ -114,11 +154,15 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
             "_id": "$parsed.signature_algorithm.name",
             "count": {"$sum": 1}
         }},
-        {"$match": {"_id": {"$ne": None}}},
         {"$sort": {"count": -1}},
-        {"$limit": 10},
     ]
-    algo_results = list(source_collection.aggregate(add_scope_match(algo_pipeline, scope), allowDiskUse=True))
+    algo_results = aggregate_scoped(
+        source_collection,
+        algo_pipeline,
+        scope,
+        "idx_scope_signature_algo" if scoped else "idx_signature_algo",
+        limit=limit,
+    )
 
     algo_colors = {
         "SHA256-RSA": "#3b82f6",
@@ -132,8 +176,9 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
     }
 
     algorithm_distribution = []
-    for item in algo_results:
-        name = item.get("_id") or "Unknown"
+    valid_algo_results = [item for item in algo_results if item.get("_id")]
+    for item in valid_algo_results[:10]:
+        name = item.get("_id")
         count = item["count"]
         algorithm_distribution.append({
             "name": name,
@@ -143,29 +188,15 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         })
 
     log("Step 2/7: Computing hash algorithm distribution")
-    hash_pipeline = [
-        {"$project": {"sigAlgo": "$parsed.signature_algorithm.name"}},
-        {"$addFields": {
-            "hash": {
-                "$switch": {
-                    "branches": [
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "SHA512|SHA-512", "options": "i"}}, "then": "SHA-512"},
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "SHA384|SHA-384", "options": "i"}}, "then": "SHA-384"},
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "SHA256|SHA-256", "options": "i"}}, "then": "SHA-256"},
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "SHA224|SHA-224", "options": "i"}}, "then": "SHA-224"},
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "SHA1|SHA-1|withSHA1", "options": "i"}}, "then": "SHA-1"},
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "MD5", "options": "i"}}, "then": "MD5"},
-                        {"case": {"$regexMatch": {"input": {"$ifNull": ["$sigAlgo", ""]}, "regex": "MD2", "options": "i"}}, "then": "MD2"},
-                    ],
-                    "default": "$sigAlgo",
-                }
-            }
-        }},
-        {"$match": {"hash": {"$ne": None, "$ne": ""}}},
-        {"$group": {"_id": "$hash", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
+    hash_counts = {}
+    for item in valid_algo_results:
+        name = item.get("_id")
+        hash_name = classify_hash_algorithm(name)
+        hash_counts[hash_name] = hash_counts.get(hash_name, 0) + item["count"]
+    hash_results = [
+        {"_id": name, "count": count}
+        for name, count in sorted(hash_counts.items(), key=lambda entry: entry[1], reverse=True)
     ]
-    hash_results = list(source_collection.aggregate(add_scope_match(hash_pipeline, scope), allowDiskUse=True))
 
     hash_colors = {
         "SHA-512": "#1d4ed8",
@@ -209,25 +240,42 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
 
     log("Step 3/7: Computing key size distribution")
     keysize_pipeline = [
-        {"$project": {
-            "algo": "$parsed.subject_key_info.key_algorithm.name",
-            "rsaLen": "$parsed.subject_key_info.rsa_public_key.length",
-            "ecLen": "$parsed.subject_key_info.ecdsa_public_key.length",
-        }},
-        {"$addFields": {"keySize": {"$ifNull": ["$rsaLen", "$ecLen"]}}},
         {"$group": {
-            "_id": {"algo": "$algo", "size": "$keySize"},
+            "_id": {
+                "algo": "$parsed.subject_key_info.key_algorithm.name",
+                "size": {
+                    "$ifNull": [
+                        "$parsed.subject_key_info.rsa_public_key.length",
+                        "$parsed.subject_key_info.ecdsa_public_key.length",
+                    ]
+                },
+            },
             "count": {"$sum": 1},
         }},
-        {"$match": {"_id.size": {"$ne": None}}},
         {"$sort": {"count": -1}},
-        {"$limit": 10},
     ]
-    keysize_results = list(source_collection.aggregate(add_scope_match(keysize_pipeline, scope), allowDiskUse=True))
+    keysize_results = aggregate_scoped(
+        source_collection,
+        keysize_pipeline,
+        scope,
+        "idx_scope_algo_rsa_length" if scoped else "idx_algo_rsa_length",
+        limit=limit,
+    )
 
     keysize_distribution = []
     key_score = 0
-    for item in keysize_results:
+    encryption_type_counts = {}
+    valid_keysize_results = [
+        item for item in keysize_results
+        if item["_id"].get("algo") and item["_id"].get("size")
+    ]
+    for item in valid_keysize_results:
+        algo = item["_id"].get("algo", "Unknown")
+        size = item["_id"].get("size", 0)
+        count = item["count"]
+        encryption_type_counts[algo] = encryption_type_counts.get(algo, 0) + count
+
+    for item in valid_keysize_results[:10]:
         algo = item["_id"].get("algo", "Unknown")
         size = item["_id"].get("size", 0)
         count = item["count"]
@@ -254,9 +302,15 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
             key_score += 90 * pct
 
     log("Step 4/7: Counting self-signed certificates")
-    self_signed_count = source_collection.count_documents(
-        {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True}
-    )
+    try:
+        self_signed_count = source_collection.count_documents(
+            {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True},
+            hint="idx_scope_self_signed" if scoped else "idx_self_signed",
+        )
+    except Exception:
+        self_signed_count = source_collection.count_documents(
+            {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True}
+        )
 
     hash_compliance_rate = round((compliant_count / total) * 100, 1) if total > 0 else 0
 
@@ -271,21 +325,9 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
     strength_score = max(0, min(100, strength_score))
 
     log("Step 5/7: Computing max encryption type")
-    enc_type_pipeline = [
-        {"$group": {
-            "_id": "$parsed.subject_key_info.key_algorithm.name",
-            "count": {"$sum": 1},
-        }},
-        {"$match": {"_id": {"$ne": None}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 1},
-    ]
-    enc_type_result = list(source_collection.aggregate(add_scope_match(enc_type_pipeline, scope), allowDiskUse=True))
-
     max_encryption_type = None
-    if enc_type_result:
-        enc_name = enc_type_result[0]["_id"]
-        enc_count = enc_type_result[0]["count"]
+    if encryption_type_counts:
+        enc_name, enc_count = max(encryption_type_counts.items(), key=lambda entry: entry[1])
         max_encryption_type = {
             "name": enc_name,
             "count": enc_count,
@@ -332,7 +374,13 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         {"$group": {"_id": "$_id.period", "hashes": {"$push": {"hash": "$_id.hash", "count": "$count"}}, "total": {"$sum": "$count"}}},
         {"$sort": {"_id.year": 1, "_id.quarter": 1}},
     ]
-    trend_results = list(source_collection.aggregate(add_scope_match(trends_pipeline, scope), allowDiskUse=True))
+    trend_results = aggregate_scoped(
+        source_collection,
+        trends_pipeline,
+        scope,
+        "idx_scope_validity_start" if scoped else "idx_validity_start",
+        limit=limit,
+    )
 
     hash_trends = []
     for item in trend_results:
@@ -367,28 +415,36 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
     log("Step 7/7: Computing issuer algorithm matrix")
     issuer_algo_pipeline = [
         {
-            "$project": {
-                "issuer": {"$arrayElemAt": ["$parsed.issuer.organization", 0]},
-                "algo": "$parsed.subject_key_info.key_algorithm.name",
-                "rsaLen": "$parsed.subject_key_info.rsa_public_key.length",
-                "ecLen": "$parsed.subject_key_info.ecdsa_public_key.length",
-            }
-        },
-        {"$addFields": {"keySize": {"$ifNull": ["$rsaLen", "$ecLen"]}}},
-        {"$match": {"issuer": {"$ne": None}, "algo": {"$ne": None}}},
-        {
             "$group": {
-                "_id": {"issuer": "$issuer", "algo": "$algo", "keySize": "$keySize"},
+                "_id": {
+                    "issuer": {"$arrayElemAt": ["$parsed.issuer.organization", 0]},
+                    "algo": "$parsed.subject_key_info.key_algorithm.name",
+                    "keySize": {
+                        "$ifNull": [
+                            "$parsed.subject_key_info.rsa_public_key.length",
+                            "$parsed.subject_key_info.ecdsa_public_key.length",
+                        ]
+                    },
+                },
                 "count": {"$sum": 1},
             }
         },
         {"$sort": {"count": -1}},
-        {"$limit": matrix_limit},
     ]
-    issuer_algo_results = list(source_collection.aggregate(add_scope_match(issuer_algo_pipeline, scope), allowDiskUse=True))
+    issuer_algo_results = aggregate_scoped(
+        source_collection,
+        issuer_algo_pipeline,
+        scope,
+        "idx_scope_issuer_algo_rsa_length" if scoped else "idx_issuer_org_algo_rsa_length",
+        limit=limit,
+    )
 
     issuer_matrix_map = {}
-    for item in issuer_algo_results:
+    valid_issuer_algo_results = [
+        item for item in issuer_algo_results
+        if item["_id"].get("issuer") and item["_id"].get("algo")
+    ][:matrix_limit]
+    for item in valid_issuer_algo_results:
         issuer = item["_id"].get("issuer", "Unknown")
         algo = item["_id"].get("algo", "Unknown")
         key_size = item["_id"].get("keySize", 0)
@@ -463,7 +519,7 @@ def compute_signature_stats(client, main_db, results_db, months=36, granularity=
         if stored_doc.get("hash_trends_granularity") != granularity:
             raise RuntimeError("Verification failed: hash trend granularity mismatch")
         flattened_matrix_count = sum(len(item.get("algorithm_list", [])) for item in stored_doc.get("issuer-algo-matrix", []))
-        if flattened_matrix_count != len(issuer_algo_results):
+        if flattened_matrix_count != len(valid_issuer_algo_results):
             raise RuntimeError("Verification failed: issuer algorithm matrix mismatch")
 
     log(f"Completed {main_db} in {duration:.1f}s")
@@ -476,6 +532,7 @@ def main():
     parser.add_argument("--months", type=int, default=36, help="Number of months to look back for hash trends")
     parser.add_argument("--granularity", choices=["quarterly", "yearly", "both"], default="quarterly")
     parser.add_argument("--limit", type=int, default=50, help="Max issuer/algorithm combinations to store")
+    parser.add_argument("--sample-limit", type=int, default=None, help="Limit source documents for fast testing only")
     parser.add_argument("--verify", action="store_true", help="Verify stored results")
     args = parser.parse_args()
 
@@ -495,6 +552,7 @@ def main():
                 matrix_limit=args.limit,
                 verify=args.verify,
                 scope=scope,
+                limit=args.sample_limit,
             )
     client.close()
 

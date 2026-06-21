@@ -21,10 +21,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import subprocess
 import sys
+import time
+from datetime import datetime
 from typing import Any
 
 from pymongo import MongoClient
@@ -50,6 +53,17 @@ SCRIPT_RESULT_COLLECTIONS: dict[str, list[str]] = {
 ALL_RESULTS_COLLECTIONS = sorted(
     {name for names in SCRIPT_RESULT_COLLECTIONS.values() for name in names}
 )
+
+
+def format_duration(seconds: float) -> str:
+    total_seconds = int(round(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
 
 # Indexes referenced by generic compute scripts on main DB certificates collection.
 REQUIRED_CERTIFICATE_INDEXES = [
@@ -87,8 +101,11 @@ REQUIRED_CERTIFICATE_INDEXES = [
     "idx_scope_self_signed",
     "idx_scope_public_key_fingerprint",
     "idx_scope_domain",
+    "idx_scope_issuer_country",
     "idx_issuer_org_algo_rsa_length",
     "idx_issuer_org_algo_ecdsa_length",
+    "idx_scope_issuer_algo_rsa_length",
+    "idx_scope_issuer_algo_ecdsa_length",
 ]
 
 
@@ -159,16 +176,17 @@ def run_script(
 
     cmd.extend(extra_args)
 
-    print(f"\n{'=' * 72}")
-    print(f"Running {script_name}")
-    print(f"  databases: {', '.join(db_names)}")
-    print(f"  command:   {' '.join(cmd)}")
-    print("=" * 72)
+    print(f"\n{'=' * 72}", flush=True)
+    print(f"Running {script_name}", flush=True)
+    print(f"  databases: {', '.join(db_names)}", flush=True)
+    print(f"  command:   {' '.join(cmd)}", flush=True)
+    print("=" * 72, flush=True)
 
     if dry_run and script_name != INDEXES_SCRIPT:
-        print("  [DRY-RUN] skipped (only index creation supports --dry-run)")
+        print("  [DRY-RUN] skipped (only index creation supports --dry-run)", flush=True)
         return
 
+    sys.stdout.flush()
     subprocess.run(cmd, check=True, cwd=SCRIPT_DIR)
 
 
@@ -278,6 +296,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    run_started_at = datetime.now()
+    run_started_perf = time.perf_counter()
+    print(f"Run started at: {run_started_at.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+
+    def print_run_timing() -> None:
+        run_finished_at = datetime.now()
+        elapsed = time.perf_counter() - run_started_perf
+        print(f"\nRun finished at: {run_finished_at.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+        print(f"Total run time:  {format_duration(elapsed)}", flush=True)
+
+    atexit.register(print_run_timing)
+
     if not os.path.isfile(args.config):
         raise SystemExit(f"Config not found: {args.config}")
 
@@ -305,15 +335,15 @@ def main() -> None:
 
     extra_args = [arg for arg in args.extra_args if arg != "--"]
 
-    print(f"Config:     {args.config}")
-    print(f"Databases:  {len(entries)}")
+    print(f"Config:     {args.config}", flush=True)
+    print(f"Databases:  {len(entries)}", flush=True)
     for entry in entries:
         scopes = ["all"] + list(entry.get("countries", []))
-        print(f"  - {entry['main']} -> {entry['results']} scopes={', '.join(scopes)}")
-    print(f"Scripts:    {len(scripts)}")
+        print(f"  - {entry['main']} -> {entry['results']} scopes={', '.join(scopes)}", flush=True)
+    print(f"Scripts:    {len(scripts)}", flush=True)
 
     if args.dry_run:
-        print("\n[DRY-RUN] No scripts will modify data (indexes script prints only).")
+        print("\n[DRY-RUN] No scripts will modify data (indexes script prints only).", flush=True)
         for script_name in scripts:
             run_script(
                 script_name,
@@ -356,18 +386,18 @@ def main() -> None:
         if index_failures:
             print("\nIndex failures:")
             for msg in index_failures:
-                print(f"  ✗ {msg}")
+                print(f"  - {msg}")
 
         if collection_failures:
             print("\nResults collection failures:")
             for msg in collection_failures:
-                print(f"  ✗ {msg}")
+                print(f"  - {msg}")
 
         if per_script_failures and per_script_failures != collection_failures:
             print("\nPer-script collection failures:")
             for msg in per_script_failures:
                 if msg not in collection_failures:
-                    print(f"  ✗ {msg}")
+                    print(f"  - {msg}")
 
         all_failures = sorted(set(index_failures + collection_failures))
         if all_failures:
@@ -381,8 +411,8 @@ def main() -> None:
             raise SystemExit(f"Verification found {len(all_failures)} issue(s)")
 
         print("\nVerification PASSED")
-        print(f"  ✓ {len(REQUIRED_CERTIFICATE_INDEXES)} indexes on each main DB certificates collection")
-        print(f"  ✓ {len(ALL_RESULTS_COLLECTIONS)} results collections across {len(entries)} database(s)")
+        print(f"  - {len(REQUIRED_CERTIFICATE_INDEXES)} indexes on each main DB certificates collection")
+        print(f"  - {len(ALL_RESULTS_COLLECTIONS)} results collections across {len(entries)} database(s)")
 
     client.close()
 

@@ -57,7 +57,7 @@ def resolve_targets(db_names, entries):
     return targets
 
 
-def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, scope="all"):
+def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, scope="all", limit=None):
     source_collection = client[main_db]["certificates"]
     results_db_ref = client[results_db]
     target_collection = results_db_ref["ca-analysis"]
@@ -70,11 +70,16 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
         results_db_ref[collection_name].drop()
 
     scope_filter = get_scope_filter(scope)
-    total_certs = (
-        source_collection.count_documents(scope_filter)
-        if scope_filter
-        else source_collection.estimated_document_count()
-    )
+    scoped = bool(scope_filter)
+    if scope_filter:
+        try:
+            total_certs = source_collection.count_documents(scope_filter, hint="idx_scope")
+        except Exception:
+            total_certs = source_collection.count_documents(scope_filter)
+    else:
+        total_certs = source_collection.estimated_document_count()
+    if limit:
+        total_certs = min(total_certs, limit)
 
     colors = [
         "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444",
@@ -83,19 +88,12 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
         "#eab308", "#6b7280",
     ]
 
-    ca_validation_pipeline = [
-        {
-            "$project": {
-                "issuer": {"$arrayElemAt": ["$parsed.issuer.organization", 0]},
-                "validationLevel": {"$ifNull": ["$parsed.validation_level", "Unknown"]},
-            }
-        },
-        {"$match": {"issuer": {"$exists": True, "$ne": None}}},
+    ca_validation_pipeline = ([{"$limit": limit}] if limit else []) + [
         {
             "$group": {
                 "_id": {
-                    "issuer": "$issuer",
-                    "validationLevel": "$validationLevel",
+                    "issuer": {"$arrayElemAt": ["$parsed.issuer.organization", 0]},
+                    "validationLevel": {"$ifNull": ["$parsed.validation_level", "Unknown"]},
                 },
                 "count": {"$sum": 1},
             }
@@ -106,7 +104,7 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
     try:
         validation_results = list(source_collection.aggregate(
             add_scope_match(ca_validation_pipeline, scope),
-            hint="idx_issuer_org",
+            hint="idx_scope_issuer_validation" if scoped else "idx_issuer_org_validation_level",
             allowDiskUse=True,
         ))
     except Exception:
@@ -118,6 +116,8 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
     issuer_map = {}
     for record in validation_results:
         issuer = record["_id"]["issuer"]
+        if not issuer:
+            continue
         validation_level = record["_id"].get("validationLevel") or "Unknown"
         count = record["count"]
 
@@ -159,7 +159,7 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
     try:
         self_signed_count = source_collection.count_documents(
             {"$and": [{"parsed.signature.self_signed": True}, scope_filter]} if scope_filter else {"parsed.signature.self_signed": True},
-            hint="idx_self_signed",
+            hint="idx_scope_self_signed" if scoped else "idx_self_signed",
         )
     except Exception:
         self_signed_count = source_collection.count_documents(
@@ -175,7 +175,7 @@ def compute_ca_stats(client, main_db, results_db, top_limit=50, verify=False, sc
     try:
         country_result = list(source_collection.aggregate(
             add_scope_match(country_pipeline, scope),
-            hint="idx_issuer_country",
+            hint="idx_scope_issuer_country" if scoped else "idx_issuer_country",
             allowDiskUse=True,
         ))
     except Exception:
@@ -223,6 +223,7 @@ def main():
     parser.add_argument("--dbs", nargs="*", help="Main database names")
     parser.add_argument("--config", default=get_default_config_path(), help="Path to databases.json")
     parser.add_argument("--limit", type=int, default=50, help="Top issuers expected by old matrix script; full CA list is still stored")
+    parser.add_argument("--sample-limit", type=int, default=None, help="Limit source documents for fast testing only")
     parser.add_argument("--verify", action="store_true", help="Verify stored results")
     args = parser.parse_args()
 
@@ -239,6 +240,7 @@ def main():
                 top_limit=args.limit,
                 verify=args.verify,
                 scope=scope,
+                limit=args.sample_limit,
             )
     client.close()
 

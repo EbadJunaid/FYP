@@ -358,8 +358,8 @@ class OverviewModels:
             score += 20
             factors.append({'label': f'Weak encryption ({key_algo} {key_length})', 'points': 20})
         elif key_length >= 2048 or str(key_algo).upper() in ('ECDSA', 'EC'):
-            score -= 10
-            positive_signals.append({'label': f'Strong key ({key_algo} {key_length})', 'points': -10})
+            score -= 5
+            positive_signals.append({'label': f'Strong key ({key_algo} {key_length})', 'points': -5})
 
         if validity_days > 398:
             score += 10

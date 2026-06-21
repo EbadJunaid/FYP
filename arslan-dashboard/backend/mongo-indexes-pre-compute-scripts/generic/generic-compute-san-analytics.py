@@ -144,6 +144,7 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False,
     start_time = datetime.now(timezone.utc)
 
     scope_filter = get_scope_filter(scope)
+    scoped = bool(scope_filter)
     total_docs = (
         source_collection.count_documents(scope_filter)
         if scope_filter
@@ -195,19 +196,17 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False,
     progress_interval = 5000
     processed = 0
 
+    find_kwargs = {}
+    if scoped:
+        find_kwargs["hint"] = "idx_scope"
+
     cursor = source_collection.find(
         merge_scope_query({}, scope),
         {
             "_id": 1,
-            "domain": 1,
             "parsed.extensions.subject_alt_name.dns_names": 1,
-            "parsed.issuer.common_name": 1,
-            "parsed.validity.end": 1,
-            "parsed.signature_algorithm.name": 1,
-            "parsed.issuer.country": 1,
-            "parsed.subject.country": 1,
-            "zlint": 1,
         },
+        **find_kwargs,
     ).batch_size(batch_size)
 
     if limit:
@@ -224,8 +223,6 @@ def compute_san_analytics(client, main_db, results_db, limit=None, verify=False,
             log(f"  Processed {processed:,}/{total_docs:,} ({percent:.1f}%) - ETA {remaining:.0f}s")
 
         cert_id = cert["_id"]
-        domain = cert.get("domain", "")
-
         sans = (
             cert.get("parsed", {})
             .get("extensions", {})

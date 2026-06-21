@@ -202,6 +202,14 @@ def build_source_indexes():
             "options": {"background": True},
         },
         {
+            "name": "idx_scope_issuer_country",
+            "keys": [
+                ("scope", ASCENDING),
+                ("parsed.issuer.country", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
             "name": "idx_scope_issuer_validation",
             "keys": [
                 ("scope", ASCENDING),
@@ -275,6 +283,26 @@ def build_source_indexes():
          {
             "name": "idx_issuer_org_algo_ecdsa_length",
             "keys": [
+                ("parsed.issuer.organization", ASCENDING),
+                ("parsed.subject_key_info.key_algorithm.name", ASCENDING),
+                ("parsed.subject_key_info.ecdsa_public_key.length", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_scope_issuer_algo_rsa_length",
+            "keys": [
+                ("scope", ASCENDING),
+                ("parsed.issuer.organization", ASCENDING),
+                ("parsed.subject_key_info.key_algorithm.name", ASCENDING),
+                ("parsed.subject_key_info.rsa_public_key.length", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_scope_issuer_algo_ecdsa_length",
+            "keys": [
+                ("scope", ASCENDING),
                 ("parsed.issuer.organization", ASCENDING),
                 ("parsed.subject_key_info.key_algorithm.name", ASCENDING),
                 ("parsed.subject_key_info.ecdsa_public_key.length", ASCENDING),

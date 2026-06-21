@@ -152,37 +152,52 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
     target_collection_name = "geographic-distribution-1"
     target_collection = client[results_db][target_collection_name]
 
-    query = {"domain": {"$exists": True, "$ne": None, "$ne": ""}}
-    projection = {"_id": 1, "domain": 1}
-
-    cursor = source_collection.find(merge_scope_query(query, scope), projection)
-    # print(f"cursor first enrty: {cursor[0] if cursor.count() > 0 else 'No entries'}")
-
-    if limit:
-        cursor = cursor.limit(limit)
-
     country_groups = {}
-    processed_count = 0
+    scope_filter = get_scope_filter(scope)
 
-    for doc in cursor:
-        # Legacy shape stored sample certificate IDs in each country document.
-        # New shape intentionally omits them:
-        # cert_id = doc["_id"]
-        domain = doc.get("domain", "")
-        country = TLD_TO_COUNTRY.get(scope, scope.upper()) if get_scope_filter(scope) else get_tld_country(domain)
+    if scope_filter:
+        try:
+            scoped_count = source_collection.count_documents(scope_filter, hint="idx_scope")
+        except Exception:
+            scoped_count = source_collection.count_documents(scope_filter)
+        if limit:
+            scoped_count = min(scoped_count, limit)
+        country = TLD_TO_COUNTRY.get(scope, scope.upper())
+        country_groups[country] = {"count": scoped_count}
+        processed_count = scoped_count
+    else:
+        query = {"domain": {"$exists": True, "$nin": [None, ""]}}
+        projection = {"_id": 1, "domain": 1}
 
-        if country not in country_groups:
-            country_groups[country] = {
-                "count": 0,
-                # "certificate_ids": []
-            }
+        try:
+            cursor = source_collection.find(merge_scope_query(query, scope), projection, hint="idx_domain")
+        except Exception:
+            cursor = source_collection.find(merge_scope_query(query, scope), projection)
 
-        group = country_groups[country]
-        group["count"] += 1
-        # if len(group["certificate_ids"]) < 1000:
-        #     group["certificate_ids"].append(cert_id)
+        if limit:
+            cursor = cursor.limit(limit)
 
-        processed_count += 1
+        processed_count = 0
+
+        for doc in cursor:
+            # Legacy shape stored sample certificate IDs in each country document.
+            # New shape intentionally omits them:
+            # cert_id = doc["_id"]
+            domain = doc.get("domain", "")
+            country = get_tld_country(domain)
+
+            if country not in country_groups:
+                country_groups[country] = {
+                    "count": 0,
+                    # "certificate_ids": []
+                }
+
+            group = country_groups[country]
+            group["count"] += 1
+            # if len(group["certificate_ids"]) < 1000:
+            #     group["certificate_ids"].append(cert_id)
+
+            processed_count += 1
 
     sorted_countries = sorted(country_groups.items(), key=lambda x: x[1]["count"], reverse=True)
     total_certificates = sum(group["count"] for group in country_groups.values())

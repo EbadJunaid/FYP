@@ -91,11 +91,14 @@ def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
     detailed_collection = target_db["shared-keys-detailed"]
 
     scope_filter = get_scope_filter(scope)
-    total_docs = (
-        source_collection.count_documents(scope_filter)
-        if scope_filter
-        else source_collection.estimated_document_count()
-    )
+    scoped = bool(scope_filter)
+    if scope_filter:
+        try:
+            total_docs = source_collection.count_documents(scope_filter, hint="idx_scope")
+        except Exception:
+            total_docs = source_collection.count_documents(scope_filter)
+    else:
+        total_docs = source_collection.estimated_document_count()
 
     log("Step 1/4: Clearing old shared keys collections")
     old_collections = [
@@ -120,17 +123,27 @@ def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
             "parsed.fingerprint_sha256": {"$exists": True, "$ne": None},
         }},
         {"$group": {
-            "_id": "$parsed.subject_key_info.fingerprint_sha256",
-            "cert_fingerprints": {"$addToSet": "$parsed.fingerprint_sha256"},
-            "cert_count": {"$sum": 1},
+            "_id": {
+                "public_key": "$parsed.subject_key_info.fingerprint_sha256",
+                "certificate": "$parsed.fingerprint_sha256",
+            },
         }},
-        {"$addFields": {
-            "distinct_certs": {"$size": "$cert_fingerprints"}
+        {"$group": {
+            "_id": "$_id.public_key",
+            "distinct_certs": {"$sum": 1},
         }},
         {"$match": {"distinct_certs": {"$gt": 1}}},
     ]
 
-    shared_key_groups = list(source_collection.aggregate(add_scope_match(shared_keys_pipeline, scope), allowDiskUse=True))
+    shared_key_hint = "idx_scope_public_key_fingerprint" if scoped else "idx_public_key_fingerprint"
+    try:
+        shared_key_groups = list(source_collection.aggregate(
+            add_scope_match(shared_keys_pipeline, scope),
+            hint=shared_key_hint,
+            allowDiskUse=True,
+        ))
+    except Exception:
+        shared_key_groups = list(source_collection.aggregate(add_scope_match(shared_keys_pipeline, scope), allowDiskUse=True))
     log(f"Found {len(shared_key_groups):,} shared key groups")
 
     if not shared_key_groups:
@@ -164,9 +177,36 @@ def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
 
         public_key_hash = group["_id"]
 
-        certificates = list(source_collection.find(merge_scope_query({
-            "parsed.subject_key_info.fingerprint_sha256": public_key_hash
-        }, scope)))
+        certificate_projection = {
+            "_id": 1,
+            "domain": 1,
+            "scanned_at": 1,
+            "parsed.serial_number": 1,
+            "parsed.fingerprint_sha256": 1,
+            "parsed.issuer": 1,
+            "parsed.issuer_dn": 1,
+            "parsed.subject": 1,
+            "parsed.subject_dn": 1,
+            "parsed.validity": 1,
+            "parsed.subject_key_info": 1,
+            "parsed.signature_algorithm": 1,
+            "parsed.signature.self_signed": 1,
+            "parsed.validation_level": 1,
+            "parsed.extensions.subject_alt_name": 1,
+            "parsed.extensions.extended_key_usage": 1,
+            "parsed.extensions.authority_info_access": 1,
+        }
+        try:
+            certificates = list(source_collection.find(
+                merge_scope_query({"parsed.subject_key_info.fingerprint_sha256": public_key_hash}, scope),
+                certificate_projection,
+                hint=shared_key_hint,
+            ))
+        except Exception:
+            certificates = list(source_collection.find(
+                merge_scope_query({"parsed.subject_key_info.fingerprint_sha256": public_key_hash}, scope),
+                certificate_projection,
+            ))
 
         if not certificates:
             continue

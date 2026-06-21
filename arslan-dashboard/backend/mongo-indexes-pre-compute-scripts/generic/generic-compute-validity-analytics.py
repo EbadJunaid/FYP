@@ -12,7 +12,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
 from pymongo import MongoClient
-from scope_utils import add_scope_match, create_index_if_missing, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
+from scope_utils import add_scope_match, create_index_if_missing, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 def log(message):
@@ -60,6 +60,16 @@ def resolve_targets(db_names, entries):
     return targets
 
 
+def aggregate_scoped(collection, pipeline, scope, hint=None):
+    scoped_pipeline = add_scope_match(pipeline, scope)
+    if hint:
+        try:
+            return list(collection.aggregate(scoped_pipeline, hint=hint, allowDiskUse=True))
+        except Exception:
+            pass
+    return list(collection.aggregate(scoped_pipeline, allowDiskUse=True))
+
+
 def compute_validity_analytics(client, main_db, results_db, months=12, verify=False, scope="all"):
     from datetime import datetime as _dt
     
@@ -68,24 +78,38 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
 
     log(f"Validity analytics: {main_db} -> {results_db} scope={scope}")
     start_time = datetime.now(timezone.utc)
+    scope_filter = get_scope_filter(scope)
+    scoped = bool(scope_filter)
 
     # Step 1: Compute validity stats
     log("Step 1/4: Computing validity stats")
     stats_pipeline = [
         {"$match": {"parsed.validity.length": {"$exists": True, "$gt": 0}}},
-        {"$project": {"durationDays": {"$divide": ["$parsed.validity.length", 86400]}}},
         {
             "$group": {
                 "_id": None,
-                "avgDuration": {"$avg": "$durationDays"},
-                "minDuration": {"$min": "$durationDays"},
-                "maxDuration": {"$max": "$durationDays"},
+                "avgDuration": {"$avg": {"$divide": ["$parsed.validity.length", 86400]}},
+                "minDuration": {"$min": {"$divide": ["$parsed.validity.length", 86400]}},
+                "maxDuration": {"$max": {"$divide": ["$parsed.validity.length", 86400]}},
                 "total": {"$sum": 1},
-                "compliantCount": {"$sum": {"$cond": [{"$lte": ["$durationDays", 398]}, 1, 0]}},
+                "compliantCount": {
+                    "$sum": {
+                        "$cond": [
+                            {"$lte": [{"$divide": ["$parsed.validity.length", 86400]}, 398]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
             }
         }
     ]
-    stats_result = list(source_collection.aggregate(add_scope_match(stats_pipeline, scope), allowDiskUse=True))
+    stats_result = aggregate_scoped(
+        source_collection,
+        stats_pipeline,
+        scope,
+        "idx_scope_validity_length" if scoped else "idx_validity_length",
+    )
     stats = stats_result[0] if stats_result else {}
     total = stats.get("total", 0)
     compliant = stats.get("compliantCount", 0)
@@ -98,18 +122,29 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
     bucket_counts = {k: 0 for k in bucket_keys}
     bucket_sample_ids = {k: [] for k in bucket_keys}
 
-    # Scan certificates to count and collect sample IDs
-    for doc in source_collection.find(
-        merge_scope_query({"parsed.validity.start": {"$exists": True}, "parsed.validity.end": {"$exists": True}}, scope),
-        {"_id": 1, "parsed.validity.start": 1, "parsed.validity.end": 1},
-    ).batch_size(10000):
+    # Scan certificates to count and collect sample IDs. Keep the legacy
+    # start/end parsing behavior so results match older pre-compute output.
+    validity_find_kwargs = {"hint": "idx_scope_validity_start" if scoped else "idx_validity_start"}
+    try:
+        validity_cursor = source_collection.find(
+            merge_scope_query({"parsed.validity.start": {"$exists": True}, "parsed.validity.end": {"$exists": True}}, scope),
+            {"_id": 1, "parsed.validity.start": 1, "parsed.validity.end": 1},
+            **validity_find_kwargs,
+        ).batch_size(10000)
+    except Exception:
+        validity_cursor = source_collection.find(
+            merge_scope_query({"parsed.validity.start": {"$exists": True}, "parsed.validity.end": {"$exists": True}}, scope),
+            {"_id": 1, "parsed.validity.start": 1, "parsed.validity.end": 1},
+        ).batch_size(10000)
+
+    for doc in validity_cursor:
         try:
-            start_str = doc.get("parsed", {}).get("validity", {}).get("start")
-            end_str = doc.get("parsed", {}).get("validity", {}).get("end")
-            if not start_str or not end_str:
+            start_str_value = doc.get("parsed", {}).get("validity", {}).get("start")
+            end_str_value = doc.get("parsed", {}).get("validity", {}).get("end")
+            if not start_str_value or not end_str_value:
                 continue
-            start_dt = _dt.strptime(start_str, "%Y-%m-%dT%H:%M:%SZ")
-            end_dt = _dt.strptime(end_str, "%Y-%m-%dT%H:%M:%SZ")
+            start_dt = _dt.strptime(start_str_value, "%Y-%m-%dT%H:%M:%SZ")
+            end_dt = _dt.strptime(end_str_value, "%Y-%m-%dT%H:%M:%SZ")
             duration_days = int((end_dt - start_dt).total_seconds() / 86400)
         except Exception:
             continue
@@ -159,7 +194,12 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
         {"$group": {"_id": {"year": {"$year": "$validFromDate"}, "month": {"$month": "$validFromDate"}}, "count": {"$sum": 1}}},
         {"$sort": {"_id.year": 1, "_id.month": 1}},
     ]
-    issued_results = list(source_collection.aggregate(add_scope_match(issued_pipeline, scope), allowDiskUse=True))
+    issued_results = aggregate_scoped(
+        source_collection,
+        issued_pipeline,
+        scope,
+        "idx_scope_validity_start" if scoped else "idx_validity_start",
+    )
     issued_lookup = {f"{r['_id']['year']}-{r['_id']['month']}": r["count"] for r in issued_results}
 
     # Get expiring counts
@@ -170,15 +210,29 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
         {"$group": {"_id": {"year": {"$year": "$validToDate"}, "month": {"$month": "$validToDate"}}, "count": {"$sum": 1}}},
         {"$sort": {"_id.year": 1, "_id.month": 1}},
     ]
-    expiring_results = list(source_collection.aggregate(add_scope_match(expiring_pipeline, scope), allowDiskUse=True))
+    expiring_results = aggregate_scoped(
+        source_collection,
+        expiring_pipeline,
+        scope,
+        "idx_scope_validity_end" if scoped else "idx_validity_end",
+    )
     expiring_lookup = {f"{r['_id']['year']}-{r['_id']['month']}": r["count"] for r in expiring_results}
 
     # Collect issued sample IDs
     issued_ids_map = {}
-    for doc in source_collection.find(
-        merge_scope_query({"parsed.validity.start": {"$gte": start_str, "$lte": end_str}}, scope),
-        {"_id": 1, "parsed.validity.start": 1},
-    ).batch_size(10000):
+    try:
+        issued_cursor = source_collection.find(
+            merge_scope_query({"parsed.validity.start": {"$gte": start_str, "$lte": end_str}}, scope),
+            {"_id": 1, "parsed.validity.start": 1},
+            hint="idx_scope_validity_start" if scoped else "idx_validity_start",
+        ).batch_size(10000)
+    except Exception:
+        issued_cursor = source_collection.find(
+            merge_scope_query({"parsed.validity.start": {"$gte": start_str, "$lte": end_str}}, scope),
+            {"_id": 1, "parsed.validity.start": 1},
+        ).batch_size(10000)
+
+    for doc in issued_cursor:
         try:
             s = doc.get("parsed", {}).get("validity", {}).get("start")
             if not s:
@@ -194,10 +248,19 @@ def compute_validity_analytics(client, main_db, results_db, months=12, verify=Fa
 
     # Collect expiring sample IDs
     expiring_ids_map = {}
-    for doc in source_collection.find(
-        merge_scope_query({"parsed.validity.end": {"$gte": start_str, "$lte": end_str}}, scope),
-        {"_id": 1, "parsed.validity.end": 1},
-    ).batch_size(10000):
+    try:
+        expiring_cursor = source_collection.find(
+            merge_scope_query({"parsed.validity.end": {"$gte": start_str, "$lte": end_str}}, scope),
+            {"_id": 1, "parsed.validity.end": 1},
+            hint="idx_scope_validity_end" if scoped else "idx_validity_end",
+        ).batch_size(10000)
+    except Exception:
+        expiring_cursor = source_collection.find(
+            merge_scope_query({"parsed.validity.end": {"$gte": start_str, "$lte": end_str}}, scope),
+            {"_id": 1, "parsed.validity.end": 1},
+        ).batch_size(10000)
+
+    for doc in expiring_cursor:
         try:
             s = doc.get("parsed", {}).get("validity", {}).get("end")
             if not s:
