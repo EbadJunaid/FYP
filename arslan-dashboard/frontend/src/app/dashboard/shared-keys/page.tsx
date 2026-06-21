@@ -284,6 +284,8 @@ export default function SharedKeysPage() {
                                     <YAxis stroke="#9ca3af" fontSize={12} />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        labelStyle={{ color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
                                     />
                                     <Bar
                                         dataKey="count"
@@ -326,6 +328,8 @@ export default function SharedKeysPage() {
                                     />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        labelStyle={{ color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
                                     />
                                     <Bar
                                         dataKey="shared_certs"

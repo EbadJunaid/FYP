@@ -462,7 +462,7 @@ export default function CAAnalyticsPage() {
                                                                     className="inline-block px-2 py-1 rounded text-xs font-medium min-w-[40px]"
                                                                     style={{
                                                                         backgroundColor: `rgba(99, 102, 241, ${bgOpacity})`,
-                                                                        color: intensity > 0.5 ? '#fff' : '#c7d2fe'
+                                                                        color: intensity > 0.5 ? '#fff' : (typeof document !== 'undefined' && document.documentElement.classList.contains('light') ? '#4f46e5' : '#c7d2fe')
                                                                     }}
                                                                 >
                                                                     {count.toLocaleString()}
