@@ -10,6 +10,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
+from scope_utils import create_index_if_missing, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries, scoped_doc_id
 
 
 GENERIC_TLDS = {
@@ -24,66 +25,249 @@ GENERIC_TLDS = {
 }
 
 TLD_TO_COUNTRY = {
-    "us": "United States", "ca": "Canada", "mx": "Mexico",
-    "gt": "Guatemala", "bz": "Belize", "sv": "El Salvador", "hn": "Honduras",
-    "ni": "Nicaragua", "cr": "Costa Rica", "pa": "Panama", "cu": "Cuba",
-    "jm": "Jamaica", "ht": "Haiti", "do": "Dominican Republic", "tt": "Trinidad and Tobago",
-    "bb": "Barbados", "bs": "Bahamas", "ag": "Antigua and Barbuda", "dm": "Dominica",
-    "gd": "Grenada", "kn": "Saint Kitts and Nevis", "lc": "Saint Lucia",
-    "vc": "Saint Vincent and the Grenadines",
-    "br": "Brazil", "ar": "Argentina", "co": "Colombia", "cl": "Chile",
-    "pe": "Peru", "ve": "Venezuela", "ec": "Ecuador", "bo": "Bolivia",
-    "py": "Paraguay", "uy": "Uruguay", "gy": "Guyana", "sr": "Suriname",
-    "uk": "United Kingdom", "co.uk": "United Kingdom", "gb": "United Kingdom",
-    "ie": "Ireland", "fr": "France", "es": "Spain", "pt": "Portugal",
-    "de": "Germany", "nl": "Netherlands", "be": "Belgium", "lu": "Luxembourg",
-    "ch": "Switzerland", "at": "Austria", "it": "Italy", "gr": "Greece",
-    "se": "Sweden", "no": "Norway", "dk": "Denmark", "fi": "Finland",
-    "is": "Iceland",
-    "pl": "Poland", "cz": "Czech Republic", "sk": "Slovakia", "hu": "Hungary",
-    "ro": "Romania", "bg": "Bulgaria", "si": "Slovenia", "hr": "Croatia",
-    "rs": "Serbia", "ba": "Bosnia and Herzegovina", "mk": "North Macedonia",
-    "al": "Albania", "me": "Montenegro", "xk": "Kosovo",
-    "ee": "Estonia", "lv": "Latvia", "lt": "Lithuania",
-    "ru": "Russia", "ua": "Ukraine", "by": "Belarus", "md": "Moldova",
-    "ge": "Georgia", "am": "Armenia", "az": "Azerbaijan",
-    "tr": "Turkey", "il": "Israel", "ps": "Palestine", "jo": "Jordan",
-    "lb": "Lebanon", "sy": "Syria", "iq": "Iraq", "ir": "Iran",
-    "sa": "Saudi Arabia", "ae": "United Arab Emirates", "kw": "Kuwait",
-    "qa": "Qatar", "bh": "Bahrain", "om": "Oman", "ye": "Yemen",
-    "kz": "Kazakhstan", "uz": "Uzbekistan", "tm": "Turkmenistan",
-    "kg": "Kyrgyzstan", "tj": "Tajikistan", "af": "Afghanistan",
-    "in": "India", "pk": "Pakistan", "bd": "Bangladesh", "lk": "Sri Lanka",
-    "np": "Nepal", "bt": "Bhutan", "mv": "Maldives",
-    "th": "Thailand", "vn": "Vietnam", "sg": "Singapore", "my": "Malaysia",
-    "id": "Indonesia", "ph": "Philippines", "mm": "Myanmar", "kh": "Cambodia",
-    "la": "Laos", "bn": "Brunei", "tl": "Timor-Leste",
-    "cn": "China", "jp": "Japan", "kr": "South Korea", "kp": "North Korea",
-    "mn": "Mongolia", "tw": "Taiwan", "hk": "Hong Kong", "mo": "Macau",
-    "au": "Australia", "com.au": "Australia", "nz": "New Zealand",
-    "pg": "Papua New Guinea", "fj": "Fiji", "sb": "Solomon Islands",
-    "vu": "Vanuatu", "ws": "Samoa", "ki": "Kiribati", "to": "Tonga",
-    "fm": "Micronesia", "mh": "Marshall Islands", "pw": "Palau",
-    "nr": "Nauru", "tv": "Tuvalu",
-    "eg": "Egypt", "ly": "Libya", "tn": "Tunisia", "dz": "Algeria",
-    "ma": "Morocco", "sd": "Sudan", "ss": "South Sudan",
-    "ng": "Nigeria", "gh": "Ghana", "ci": "Cote d'Ivoire", "sn": "Senegal",
-    "ml": "Mali", "bf": "Burkina Faso", "ne": "Niger", "gn": "Guinea",
-    "sl": "Sierra Leone", "lr": "Liberia", "tg": "Togo", "bj": "Benin",
-    "mr": "Mauritania", "gm": "Gambia", "gw": "Guinea-Bissau",
+    "ac": "Ascension Island",
+    "ad": "Andorra",
+    "ae": "United Arab Emirates",
+    "af": "Afghanistan",
+    "ag": "Antigua and Barbuda",
+    "ai": "Anguilla",
+    "al": "Albania",
+    "am": "Armenia",
+    "ao": "Angola",
+    "ar": "Argentina",
+    "as": "American Samoa",
+    "at": "Austria",
+    "au": "Australia",
+    "aw": "Aruba",
+    "ax": "Åland Islands",
+    "az": "Azerbaijan",
+    "ba": "Bosnia and Herzegovina",
+    "bb": "Barbados",
+    "bd": "Bangladesh",
+    "be": "Belgium",
+    "bf": "Burkina Faso",
+    "bg": "Bulgaria",
+    "bh": "Bahrain",
+    "bi": "Burundi",
+    "bj": "Benin",
+    "bm": "Bermuda",
+    "bn": "Brunei",
+    "bo": "Bolivia",
+    "br": "Brazil",
+    "bs": "Bahamas",
+    "bt": "Bhutan",
+    "bw": "Botswana",
+    "by": "Belarus",
+    "bz": "Belize",
+    "ca": "Canada",
+    "cc": "Cocos (Keeling) Islands",
+    "cd": "Democratic Republic of Congo",
+    "cf": "Central African Republic",
+    "cg": "Republic of Congo",
+    "ch": "Switzerland",
+    "ci": "Cote d'Ivoire",
+    "cl": "Chile",
+    "cm": "Cameroon",
+    "cn": "China",
+    "co": "Colombia",
+    "co.uk": "United Kingdom",
+    "com.au": "Australia",
+    "cr": "Costa Rica",
+    "cu": "Cuba",
     "cv": "Cape Verde",
-    "cd": "Democratic Republic of Congo", "cg": "Republic of Congo",
-    "cm": "Cameroon", "cf": "Central African Republic", "td": "Chad",
-    "ga": "Gabon", "gq": "Equatorial Guinea", "st": "Sao Tome and Principe",
-    "ke": "Kenya", "tz": "Tanzania", "ug": "Uganda", "rw": "Rwanda",
-    "bi": "Burundi", "et": "Ethiopia", "so": "Somalia", "dj": "Djibouti",
-    "er": "Eritrea", "sc": "Seychelles", "mu": "Mauritius", "km": "Comoros",
+    "cw": "Curaçao",
+    "cx": "Christmas Island",
+    "cy": "Cyprus",
+    "cz": "Czech Republic",
+    "de": "Germany",
+    "dj": "Djibouti",
+    "dk": "Denmark",
+    "dm": "Dominica",
+    "do": "Dominican Republic",
+    "dz": "Algeria",
+    "ebad": "ebad",
+    "ec": "Ecuador",
+    "ee": "Estonia",
+    "eg": "Egypt",
+    "er": "Eritrea",
+    "es": "Spain",
+    "et": "Ethiopia",
+    "eu": "European Union",
+    "fi": "Finland",
+    "fj": "Fiji",
+    "fm": "Micronesia",
+    "fo": "Faroe Islands",
+    "fr": "France",
+    "ga": "Gabon",
+    "gb": "United Kingdom",
+    "gd": "Grenada",
+    "ge": "Georgia",
+    "gf": "French Guiana",
+    "gg": "Guernsey",
+    "gh": "Ghana",
+    "gi": "Gibraltar",
+    "gl": "Greenland",
+    "gm": "Gambia",
+    "gn": "Guinea",
+    "gp": "Guadeloupe",
+    "gq": "Equatorial Guinea",
+    "gr": "Greece",
+    "gs": "South Georgia and the South Sandwich Islands",
+    "gt": "Guatemala",
+    "gw": "Guinea-Bissau",
+    "gy": "Guyana",
+    "hk": "Hong Kong",
+    "hm": "Heard Island and McDonald Islands",
+    "hn": "Honduras",
+    "hr": "Croatia",
+    "ht": "Haiti",
+    "hu": "Hungary",
+    "id": "Indonesia",
+    "ie": "Ireland",
+    "il": "Israel",
+    "im": "Isle of Man",
+    "in": "India",
+    "io": "British Indian Ocean Territory",
+    "iq": "Iraq",
+    "ir": "Iran",
+    "is": "Iceland",
+    "it": "Italy",
+    "je": "Jersey",
+    "jm": "Jamaica",
+    "jo": "Jordan",
+    "jp": "Japan",
+    "ke": "Kenya",
+    "kg": "Kyrgyzstan",
+    "kh": "Cambodia",
+    "ki": "Kiribati",
+    "km": "Comoros",
+    "kn": "Saint Kitts and Nevis",
+    "kp": "North Korea",
+    "kr": "South Korea",
+    "kw": "Kuwait",
+    "ky": "Cayman Islands",
+    "kz": "Kazakhstan",
+    "la": "Laos",
+    "lb": "Lebanon",
+    "lc": "Saint Lucia",
+    "li": "Liechtenstein",
+    "lk": "Sri Lanka",
+    "lr": "Liberia",
+    "ls": "Lesotho",
+    "lt": "Lithuania",
+    "lu": "Luxembourg",
+    "lv": "Latvia",
+    "ly": "Libya",
+    "ma": "Morocco",
+    "mc": "Monaco",
+    "md": "Moldova",
+    "me": "Montenegro",
     "mg": "Madagascar",
-    "za": "South Africa", "zw": "Zimbabwe", "zm": "Zambia", "mw": "Malawi",
-    "mz": "Mozambique", "bw": "Botswana", "na": "Namibia", "sz": "Eswatini",
-    "ls": "Lesotho", "ao": "Angola",
+    "mh": "Marshall Islands",
+    "mk": "North Macedonia",
+    "ml": "Mali",
+    "mm": "Myanmar",
+    "mn": "Mongolia",
+    "mo": "Macau",
+    "mp": "Northern Mariana Islands",
+    "mr": "Mauritania",
+    "ms": "Montserrat",
+    "mt": "Malta",
+    "mu": "Mauritius",
+    "mv": "Maldives",
+    "mw": "Malawi",
+    "mx": "Mexico",
+    "my": "Malaysia",
+    "mz": "Mozambique",
+    "na": "Namibia",
+    "nc": "New Caledonia",
+    "ne": "Niger",
+    "ng": "Nigeria",
+    "ni": "Nicaragua",
+    "nl": "Netherlands",
+    "no": "Norway",
+    "np": "Nepal",
+    "nr": "Nauru",
+    "nu": "Niue",
+    "nz": "New Zealand",
+    "om": "Oman",
+    "pa": "Panama",
+    "pe": "Peru",
+    "pf": "French Polynesia",
+    "pg": "Papua New Guinea",
+    "ph": "Philippines",
+    "pk": "Pakistan",
+    "pl": "Poland",
+    "pm": "Saint Pierre and Miquelon",
+    "pn": "Pitcairn Islands",
+    "pr": "Puerto Rico",
+    "ps": "Palestine",
+    "pt": "Portugal",
+    "pw": "Palau",
+    "py": "Paraguay",
+    "qa": "Qatar",
+    "re": "Réunion",
+    "ro": "Romania",
+    "rs": "Serbia",
+    "ru": "Russia",
+    "rw": "Rwanda",
+    "sa": "Saudi Arabia",
+    "sb": "Solomon Islands",
+    "sc": "Seychelles",
+    "sd": "Sudan",
+    "se": "Sweden",
+    "sg": "Singapore",
+    "sh": "Saint Helena",
+    "si": "Slovenia",
+    "sk": "Slovakia",
+    "sl": "Sierra Leone",
+    "sm": "San Marino",
+    "sn": "Senegal",
+    "so": "Somalia",
+    "soy": "say",
+    "sr": "Suriname",
+    "ss": "South Sudan",
+    "st": "Sao Tome and Principe",
+    "sv": "El Salvador",
+    "sx": "Sint Maarten",
+    "sy": "Syria",
+    "sz": "Eswatini",
+    "tc": "Turks and Caicos Islands",
+    "td": "Chad",
+    "tf": "French Southern and Antarctic Lands",
+    "tg": "Togo",
+    "th": "Thailand",
+    "tj": "Tajikistan",
+    "tk": "Tokelau",
+    "tl": "Timor-Leste",
+    "tm": "Turkmenistan",
+    "tn": "Tunisia",
+    "to": "Tonga",
+    "tr": "Turkey",
+    "tt": "Trinidad and Tobago",
+    "tv": "Tuvalu",
+    "tw": "Taiwan",
+    "tz": "Tanzania",
+    "ua": "Ukraine",
+    "ug": "Uganda",
+    "uk": "United Kingdom",
+    "us": "United States",
+    "uy": "Uruguay",
+    "uz": "Uzbekistan",
+    "vc": "Saint Vincent and the Grenadines",
+    "ve": "Venezuela",
+    "vg": "British Virgin Islands",
+    "vn": "Vietnam",
+    "vu": "Vanuatu",
+    "wf": "Wallis and Futuna",
+    "ws": "Samoa",
+    "xk": "Kosovo",
+    "ye": "Yemen",
+    "yt": "Mayotte",
+    "za": "South Africa",
+    "zm": "Zambia",
+    "zw": "Zimbabwe"
 }
-
 
 def get_default_config_path():
     script_dir = os.path.dirname(__file__)
@@ -108,18 +292,7 @@ def load_db_entries(config_path):
 
 
 def _normalize_db_entries(items):
-    entries = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db:
-                entries.append({"main": main_db, "results": results_db})
-        else:
-            raise ValueError("Unsupported database entry in list")
-    return entries
+    return normalize_db_entries(items)
 
 
 def resolve_targets(db_names, entries):
@@ -132,7 +305,7 @@ def resolve_targets(db_names, entries):
         if name in lookup:
             targets.append(lookup[name])
         else:
-            targets.append({"main": name, "results": f"{name}-results"})
+            targets.append({"main": name, "results": f"{name}-results", "countries": []})
     return targets
 
 
@@ -143,6 +316,7 @@ def get_tld_country(domain):
     parts = domain.lower().split(".")
     if len(parts) >= 2:
         two_part = ".".join(parts[-2:])
+        # print(f"Domain: {domain}, Two-part TLD: {two_part}")
         if two_part in TLD_TO_COUNTRY:
             return TLD_TO_COUNTRY[two_part]
 
@@ -156,34 +330,61 @@ def get_tld_country(domain):
     return "Others"
 
 
-def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False):
+def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False, scope="all"):
     source_collection = client[main_db]["certificates"]
     target_collection_name = "geographic-distribution-1"
     target_collection = client[results_db][target_collection_name]
 
-    query = {"domain": {"$exists": True, "$ne": None, "$ne": ""}}
-    projection = {"_id": 1, "domain": 1}
-
-    cursor = source_collection.find(query, projection)
-    if limit:
-        cursor = cursor.limit(limit)
-
     country_groups = {}
-    processed_count = 0
+    scope_filter = get_scope_filter(scope)
 
-    for doc in cursor:
-        cert_id = doc["_id"]
-        domain = doc.get("domain", "")
-        country = get_tld_country(domain)
+    if scope_filter:
+        try:
+            scoped_count = source_collection.count_documents(scope_filter, hint="idx_scope")
+        except Exception:
+            scoped_count = source_collection.count_documents(scope_filter)
+        if limit:
+            scoped_count = min(scoped_count, limit)
+        country = TLD_TO_COUNTRY.get(scope, scope.upper())
+        country_groups[country] = {"count": scoped_count}
+        processed_count = scoped_count
+    else:
+        query = {"domain": {"$exists": True, "$nin": [None, ""]}}
+        projection = {"_id": 1, "domain": 1}
 
-        if country not in country_groups:
-            country_groups[country] = []
-        country_groups[country].append(cert_id)
-        processed_count += 1
+        try:
+            cursor = source_collection.find(merge_scope_query(query, scope), projection, hint="idx_domain")
+        except Exception:
+            cursor = source_collection.find(merge_scope_query(query, scope), projection)
 
-    sorted_countries = sorted(country_groups.items(), key=lambda x: len(x[1]), reverse=True)
-    total_certificates = sum(len(ids) for ids in country_groups.values())
-    max_count = len(sorted_countries[0][1]) if sorted_countries else 1
+        if limit:
+            cursor = cursor.limit(limit)
+
+        processed_count = 0
+
+        for doc in cursor:
+            # Legacy shape stored sample certificate IDs in each country document.
+            # New shape intentionally omits them:
+            # cert_id = doc["_id"]
+            domain = doc.get("domain", "")
+            country = get_tld_country(domain)
+
+            if country not in country_groups:
+                country_groups[country] = {
+                    "count": 0,
+                    # "certificate_ids": []
+                }
+
+            group = country_groups[country]
+            group["count"] += 1
+            # if len(group["certificate_ids"]) < 1000:
+            #     group["certificate_ids"].append(cert_id)
+
+            processed_count += 1
+
+    sorted_countries = sorted(country_groups.items(), key=lambda x: x[1]["count"], reverse=True)
+    total_certificates = sum(group["count"] for group in country_groups.values())
+    max_count = sorted_countries[0][1]["count"] if sorted_countries else 1
 
     colors = [
         "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444",
@@ -192,39 +393,33 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
         "#eab308", "#6b7280",
     ]
 
-    country_docs = []
-    for i, (country, cert_ids) in enumerate(sorted_countries):
-        count = len(cert_ids)
+    countries = []
+    now = datetime.now(timezone.utc)
+    for i, (country, group) in enumerate(sorted_countries):
+        count = group["count"]
         percentage = round((count / total_certificates) * 100, 3) if total_certificates else 0
-        country_docs.append({
-            "_id": country,
-            "country": country,
+        # certificate_ids = group["certificate_ids"]
+        countries.append({
             "count": count,
+            "name": country,
             "percentage": percentage,
             "color": colors[i % len(colors)],
             "rank": i + 1,
-            "certificate_ids": cert_ids,
-            "computed_at": datetime.now(timezone.utc),
+            # "certificate_ids": certificate_ids,
+            # "has_more": count > len(certificate_ids),
+            "computed_at": now,
             "source_database": main_db,
             "source_collection": "certificates",
-            "testing_mode": bool(limit),
         })
 
-    target_collection.delete_many({})
-    if country_docs:
-        batch_size = 100
-        for i in range(0, len(country_docs), batch_size):
-            target_collection.insert_many(country_docs[i:i + batch_size])
-
-    target_collection.create_index("rank")
-    target_collection.create_index("count")
-    target_collection.create_index("computed_at")
-
-    metadata = {
-        "_id": "metadata",
-        "last_computed": datetime.now(timezone.utc),
+    geo_doc = {
+        "_id": scoped_doc_id("geographic_distribution", scope),
+        "scope": scope,
+        "countries": countries,
+        "computed_at": now,
+        "last_computed": now,
         "computation_duration_seconds": 0,
-        "total_countries": len(country_docs),
+        "total_countries": len(countries),
         "total_certificates": total_certificates,
         "source_database": main_db,
         "source_collection": "certificates",
@@ -233,17 +428,25 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
         "testing_mode": bool(limit),
         "documents_processed": processed_count,
     }
-    target_collection.replace_one({"_id": "metadata"}, metadata, upsert=True)
+
+    target_collection.replace_one({"scope": scope}, geo_doc, upsert=True)
+
+    create_index_if_missing(target_collection, "scope", name="idx_geo_distribution_scope", background=True)
+    create_index_if_missing(target_collection, "computed_at", name="idx_geo_distribution_computed_at", background=True)
+    create_index_if_missing(target_collection, "countries.rank", name="idx_geo_distribution_country_rank", background=True)
+    create_index_if_missing(target_collection, "countries.count", name="idx_geo_distribution_country_count", background=True)
+    create_index_if_missing(target_collection, "countries.name", name="idx_geo_distribution_country_name", background=True)
 
     if verify:
-        stored_count = target_collection.count_documents({"_id": {"$ne": "metadata"}})
-        if stored_count != len(country_docs):
-            raise RuntimeError("Verification failed: record count mismatch")
-        if sum(doc["count"] for doc in country_docs) != total_certificates:
+        stored_doc = target_collection.find_one({"scope": scope})
+        if not stored_doc:
+            raise RuntimeError("Verification failed: geographic distribution missing")
+        if len(stored_doc.get("countries", [])) != len(countries):
+            raise RuntimeError("Verification failed: countries count mismatch")
+        if sum(doc["count"] for doc in countries) != total_certificates:
             raise RuntimeError("Verification failed: total count mismatch")
-        stored_meta = target_collection.find_one({"_id": "metadata"})
-        if stored_meta and stored_meta.get("total_certificates") != total_certificates:
-            raise RuntimeError("Verification failed: metadata total mismatch")
+        if stored_doc.get("total_certificates") != total_certificates:
+            raise RuntimeError("Verification failed: stored total mismatch")
 
 
 def main():
@@ -259,13 +462,15 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        compute_geographic_distribution(
-            client,
-            target["main"],
-            target["results"],
-            limit=args.limit,
-            verify=args.verify,
-        )
+        for scope, _country in get_scopes_for_entry(target):
+            compute_geographic_distribution(
+                client,
+                target["main"],
+                target["results"],
+                limit=args.limit,
+                verify=args.verify,
+                scope=scope,
+            )
     client.close()
 
 

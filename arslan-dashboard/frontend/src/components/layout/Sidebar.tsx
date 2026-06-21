@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
     { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },
     { id: 'shared-keys', label: 'Shared Public Keys', icon: 'shared', href: '/dashboard/shared-keys' },
     { id: 'cas-vs-domains', label: 'CAs vs Domains', icon: 'domains', href: '/dashboard/cas-vs-domains' },
+    { id: 'vulnerabilities', label: 'Risk Analysis', icon: 'vulnerabilities', href: '/dashboard/vulnerabilities' },
     // { id: 'trends', label: 'Trends', icon: 'trends', href: '/dashboard/trends' },
     // { id: 'type-distribution', label: 'Type Distribution', icon: 'type', href: '/dashboard/type-distribution' },
     // { id: 'issuer-organizations', label: 'Issuer Organizations', icon: 'issuer', href: '/dashboard/issuer-organizations' },
@@ -122,6 +123,14 @@ const SidebarIcon: React.FC<{ icon: string; isActive: boolean }> = ({ icon, isAc
                 <circle cx="6" cy="12" r="3" />
                 <circle cx="18" cy="19" r="3" />
                 <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" />
+            </svg>
+        ),
+        vulnerabilities: (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2v20" />
+                <path d="M2 12h20" />
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="3" fill="currentColor" />
             </svg>
         ),
     };

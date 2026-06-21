@@ -14,13 +14,11 @@ import {
     SunIcon,
     MoonIcon,
     MenuIcon,
-    FilterIcon,
 } from '@/components/icons/Icons';
 
 interface HeaderProps {
     onMenuClick: () => void;
     onSearch: (query: string) => void;
-    onFilterClick: () => void;
     // ============================================================
     // COMMENT FOR NOTIFICATION ICON - Frontend Prop
     // ============================================================
@@ -49,7 +47,7 @@ const pageTitles: Record<string, string> = {
     '/dashboard/shared-keys': 'Shared Public Keys',
 };
 
-export default function Header({ onMenuClick, onSearch, onFilterClick /*, onNotificationClick */ }: HeaderProps) {
+export default function Header({ onMenuClick, onSearch /*, onNotificationClick */ }: HeaderProps) {
     const pathname = usePathname();
     const { theme, toggleTheme } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
@@ -396,15 +394,7 @@ export default function Header({ onMenuClick, onSearch, onFilterClick /*, onNoti
                         )}
                     </div> */}
 
-                    {/* Filters Button */}
-                    <button
-                        onClick={onFilterClick}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-text-secondary hover:bg-card-bg hover:text-text-primary transition-colors border border-card-border"
-                        aria-label="Open filters"
-                    >
-                        <FilterIcon size={18} />
-                        <span className="hidden sm:inline text-sm font-medium">Filters</span>
-                    </button>
+                    {/* Filters button removed */}
                 </div>
             </div>
         </header>

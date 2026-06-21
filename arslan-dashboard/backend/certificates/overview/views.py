@@ -80,3 +80,25 @@ class UniqueFiltersView(View):
                 return json_response(filters)
             except Exception as e:
                 return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class VulnerabilitiesView(View):
+    """
+    GET /api/overview/vulnerabilities
+    Returns certificates with vulnerabilities and summary data
+    Query params: page, page_size
+    """
+    def get(self, request):
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+            risk_level = request.GET.get('risk_level')
+            data = OverviewController.get_vulnerabilities(
+                page=page,
+                page_size=page_size,
+                risk_level=risk_level,
+            )
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)

@@ -8,54 +8,73 @@ class ValidityModels:
 
     
     @classmethod
-    def get_validity_stats_fast(cls) -> Dict:
-        """
-        Get validity statistics (OPTIMIZED - reads from pre-computed data).
-        
-        PERFORMANCE:
-        - Source: tranco-latest-8-lakh-results.validity-stats (1 document)
-        - Response time: ~0.003 seconds (60,000x faster than original)
-        - Original time: ~180 seconds (aggregation + 3 counts on 878K docs)
-        
-        Returns pre-computed:
-            - averageValidityDays: avg number of days
-            - expiring30Days: count expiring in next 30 days
-            - expiring60Days: count expiring in next 60 days
-            - expiring90Days: count expiring in next 90 days
-            - complianceRate: % of certs with validity <= 398 days
-            - shortestValidityDays: min validity period
-            - longestValidityDays: max validity period
-        """
-        from ..db import MongoDBClient
-        from datetime import datetime, timezone, timedelta
-        collection = MongoDBClient.get_results_db()['validity-stats']
-        
-        # Get the pre-computed document
-        result = collection.find_one({})
-        
-        if not result:
-            # Fallback to slow method if no pre-computed data
-            import logging
-            logging.warning("No pre-computed validity stats found. Run compute_validity_stats.py")
-            return cls.get_validity_stats()
-        
-        # Check data freshness (warn if > 12 hours old)
-        computed_at_str = result.get('computedAt')
-        if computed_at_str:
+    def _get_precomputed_doc(cls) -> Optional[Dict[str, Any]]:
+        try:
+            return MongoDBClient.find_scoped_result_doc('validity-analysis', fallback_id='validity_analysis')
+        except Exception as e:
+            print(f"[VALIDITY ANALYTICS] Failed to read validity-analysis document: {e}")
+            return None
+
+    @classmethod
+    def _warn_if_stale(cls, doc: Dict[str, Any]) -> None:
+        computed_at_str = doc.get('computedAt')
+        if not computed_at_str:
+            return
+
+        try:
             computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
             age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
             if age_hours > 12:
                 import logging
-                logging.warning(f"Pre-computed validity stats is {age_hours:.1f} hours old. Consider running compute_validity_stats.py")
-        
-        # Remove MongoDB _id field and metadata
-        result.pop('_id', None)
-        result.pop('sourceCollection', None)
-        result.pop('computedAt', None)
-        result.pop('referenceDate', None)
-        
-        return result
-    
+                logging.warning(f"Pre-computed validity analysis is {age_hours:.1f} hours old. Consider running compute_validity_analytics.py")
+        except Exception:
+            pass
+
+    @classmethod
+    def _get_real_time_expiring_counts(cls) -> Dict[str, int]:
+        now = datetime.now(timezone.utc)
+        now_iso = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        plus_30 = (now + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        plus_60 = (now + timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        plus_90 = (now + timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        return {
+            'expiring30Days': cls.collection.count_documents({
+                'parsed.validity.end': {'$gt': now_iso, '$lte': plus_30}
+            }),
+            'expiring60Days': cls.collection.count_documents({
+                'parsed.validity.end': {'$gt': now_iso, '$lte': plus_60}
+            }),
+            'expiring90Days': cls.collection.count_documents({
+                'parsed.validity.end': {'$gt': now_iso, '$lte': plus_90}
+            })
+        }
+
+    @classmethod
+    def get_validity_stats_fast(cls) -> Dict:
+        """
+        Get validity statistics (OPTIMIZED - reads from pre-computed data).
+        """
+        result = cls._get_precomputed_doc()
+        if not result:
+            import logging
+            logging.warning("No pre-computed validity analysis found. Run compute_validity_analytics.py")
+            return cls.get_validity_stats()
+
+        cls._warn_if_stale(result)
+        live_counts = cls._get_real_time_expiring_counts()
+
+        return {
+            'averageValidityDays': result.get('averageValidityDays', 0),
+            'shortestValidityDays': result.get('shortestValidityDays', 0),
+            'longestValidityDays': result.get('longestValidityDays', 0),
+            'complianceRate': result.get('complianceRate', 0),
+            'totalCertificates': result.get('totalCertificates', 0),
+            'expiring30Days': live_counts['expiring30Days'],
+            'expiring60Days': live_counts['expiring60Days'],
+            'expiring90Days': live_counts['expiring90Days']
+        }
+
     @classmethod
     def get_validity_distribution_fast(cls) -> list:
         """
@@ -74,35 +93,25 @@ class ValidityModels:
         """
         from ..db import MongoDBClient
         from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['validity-distribution']
-        
-        # Get pre-computed distribution, sorted by bucketId
-        distribution = list(collection.find({}).sort('bucketId', 1))
-        
-        if not distribution:
-            # Fallback to slow method if no pre-computed data
+        collection = MongoDBClient.get_results_db()['validity-analysis']
+
+        result = cls._get_precomputed_doc()
+        if not result or not result.get('validity_distribution'):
             import logging
-            logging.warning("No pre-computed validity distribution found. Run compute_validity_distribution.py")
+            logging.warning("No pre-computed validity analysis distribution found. Run compute_validity_analytics.py")
             return cls.get_validity_distribution()
-        
-        # Check data freshness
-        if distribution:
-            computed_at_str = distribution[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 12:
-                    import logging
-                    logging.warning(f"Pre-computed validity distribution is {age_hours:.1f} hours old. Consider running compute_validity_distribution.py")
-        
-        # Remove MongoDB _id and metadata fields
-        for item in distribution:
-            item.pop('_id', None)
-            item.pop('computedAt', None)
-            item.pop('sourceCollection', None)
-            item.pop('bucketId', None)
-        
-        return distribution
+
+        cls._warn_if_stale(result)
+        return [
+            {
+                'range': item.get('range'),
+                'count': item.get('count', 0),
+                'percentage': item.get('percentage', 0),
+                'color': item.get('color', '#6b7280')
+            }
+            for item in result.get('validity_distribution', [])
+        ]
+        # return result.get('validity_distribution', [])
     
     @classmethod
     def get_issuance_timeline_fast(cls, months: int = 12) -> list:
@@ -123,36 +132,26 @@ class ValidityModels:
         """
         from ..db import MongoDBClient
         from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['issuance-timeline']
-        
-        # Query pre-computed timeline for this month count
-        query = {'months': months}
-        timeline = list(collection.find(query).sort([('year', 1), ('monthNum', 1)]))
-        
-        if not timeline:
-            # Fallback to slow method if no pre-computed data
+        collection = MongoDBClient.get_results_db()['validity-analysis']
+
+        result = cls._get_precomputed_doc()
+        if not result or not result.get('issuance_timeline'):
             import logging
-            logging.warning(f"No pre-computed issuance timeline found for {months} months. Run compute_issuance_timeline.py")
+            logging.warning(f"No pre-computed issuance timeline found. Run compute_validity_analytics.py")
             return cls.get_issuance_timeline(months=months)
-        
-        # Check data freshness
-        if timeline:
-            computed_at_str = timeline[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 12:
-                    import logging
-                    logging.warning(f"Pre-computed issuance timeline is {age_hours:.1f} hours old. Consider running compute_issuance_timeline.py")
-        
-        # Remove MongoDB _id and metadata fields
-        for item in timeline:
-            item.pop('_id', None)
-            item.pop('computedAt', None)
-            item.pop('sourceCollection', None)
-            item.pop('months', None)
-        
-        return timeline
+
+        cls._warn_if_stale(result)
+        return [
+            {
+                'month': item.get('month'),
+                'year': item.get('year'),
+                'monthNum': item.get('monthNum', 0),
+                'issued': item.get('issued', 0),
+                'expiring': item.get('expiring', 0)
+            }
+            for item in result.get('issuance_timeline', [])
+        ]
+        # return result.get('issuance_timeline', [])
 
     @classmethod
     def get_validity_stats(cls) -> Dict:

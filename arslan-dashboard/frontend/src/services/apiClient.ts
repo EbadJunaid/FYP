@@ -2,6 +2,7 @@
 // Handles all API calls to Django backend
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
 
 // Types for API responses
 export interface ApiResponse<T> {
@@ -69,6 +70,22 @@ export interface Certificate {
     publicKey?: string;
     spkiFingerprint?: string;
     spkiSubjectFingerprint?: string;
+    publicKeyHash?: string;
+    validityDays?: number;
+    riskScore?: number;
+    riskLevel?: 'Critical' | 'High' | 'Medium' | 'Low';
+    riskFactors?: Array<{ label: string; points: number }>;
+    positiveSignals?: Array<{ label: string; points: number }>;
+    sharedPublicKey?: boolean;
+    sharedKeyDetails?: {
+        publicKeyHash: string;
+        publicKeyHashShort: string;
+        certificateCount: number;
+        sampleDomains: string[];
+        keyType: string;
+        issuers: Array<{ organization: string; certificate_count?: number; common_name?: string }>;
+        riskLevel: string;
+    };
 }
 
 export interface DashboardMetrics {
@@ -276,8 +293,25 @@ class ApiClient {
         this.baseUrl = baseUrl;
     }
 
+    private getCurrentScope(): string {
+        if (typeof window === 'undefined') return 'all';
+        const params = new URLSearchParams(window.location.search);
+        const urlScope = params.get('scope');
+        if (urlScope) return urlScope;
+        const storedScope = localStorage.getItem(SELECTED_SCOPE_KEY);
+        if (storedScope) return storedScope;
+        return 'all';
+    }
+
+    private endpointWithScope(endpoint: string): string {
+        const scope = this.getCurrentScope();
+        const separator = endpoint.includes('?') ? '&' : '?';
+        return `${endpoint}${separator}scope=${encodeURIComponent(scope)}`;
+    }
+
     private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-        const url = `${this.baseUrl}${endpoint}`;
+        const scopedEndpoint = this.endpointWithScope(endpoint);
+        const url = `${this.baseUrl}${scopedEndpoint}`;
 
         try {
             const response = await fetch(url, {
@@ -337,6 +371,8 @@ class ApiClient {
         san_count_max?: number;
         // Shared Keys page filter
         shared_key?: boolean;
+        // Vulnerabilities page filter
+        risk_filter?: string;
         // Global filter params
         startDate?: string;
         endDate?: string;
@@ -348,10 +384,14 @@ class ApiClient {
         const queryParams = new URLSearchParams();
         if (params?.page) queryParams.append('page', params.page.toString());
         if (params?.pageSize) queryParams.append('page_size', params.pageSize.toString());
+        if (params?.search?.trim()) {
+            queryParams.append('search', params.search.trim());
+            const query = queryParams.toString();
+            return this.fetch<CertificateListResponse>(`/shared/certificates/${query ? `?${query}` : ''}`);
+        }
         if (params?.status) queryParams.append('status', params.status);
         if (params?.country) queryParams.append('country', params.country);
         if (params?.issuer) queryParams.append('issuer', params.issuer);
-        if (params?.search) queryParams.append('search', params.search);
         if (params?.encryptionType) queryParams.append('encryption_type', params.encryptionType);
         if (params?.encryption_type) queryParams.append('encryption_type', params.encryption_type);
         if (params?.hasVulnerabilities) queryParams.append('has_vulnerabilities', 'true');
@@ -377,6 +417,8 @@ class ApiClient {
         if (params?.san_count_max !== undefined) queryParams.append('san_count_max', params.san_count_max.toString());
         // Shared Keys filter
         if (params?.shared_key) queryParams.append('shared_key', 'true');
+        // Vulnerabilities page filters
+        if (params?.risk_filter) queryParams.append('risk_filter', params.risk_filter);
         // Global filter params
         if (params?.startDate) queryParams.append('start_date', params.startDate);
         if (params?.endDate) queryParams.append('end_date', params.endDate);
@@ -481,12 +523,16 @@ class ApiClient {
         return this.fetch<FutureRisk>('/overview/future-risk/');
     }
 
-    async getVulnerabilities(page: number = 1, pageSize: number = 10): Promise<{
+    async getVulnerabilities(page: number = 1, pageSize: number = 10, riskLevel?: string): Promise<{
         certificates: Certificate[];
-        summary: { critical: number; warning: number; total: number };
+        summary: { critical: number; high?: number; medium?: number; low?: number; warning: number; total: number };
         pagination: PaginationInfo;
     }> {
-        return this.fetch(`/vulnerabilities/?page=${page}&page_size=${pageSize}`);
+        const params = new URLSearchParams();
+        params.append('page', page.toString());
+        params.append('page_size', pageSize.toString());
+        if (riskLevel) params.append('risk_level', riskLevel);
+        return this.fetch(`/overview/vulnerablities/?${params.toString()}`);
     }
 
     async getNotifications(): Promise<NotificationResponse> {
@@ -589,7 +635,8 @@ class ApiClient {
         if (params?.encryption_type) queryParams.append('encryption_type', params.encryption_type);
 
         const query = queryParams.toString();
-        const url = `${this.baseUrl}/certificates/export/${query ? `?${query}` : ''}`;
+        const scopedEndpoint = this.endpointWithScope(`/certificates/export/${query ? `?${query}` : ''}`);
+        const url = `${this.baseUrl}${scopedEndpoint}`;
 
         // Trigger download
         const link = document.createElement('a');

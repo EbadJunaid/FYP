@@ -532,7 +532,7 @@ export default function SignatureHashPage() {
                                                                 className="w-full h-6 rounded flex items-center justify-center text-xs font-medium"
                                                                 style={{
                                                                     backgroundColor: `rgba(99, 102, 241, ${bgOpacity})`,
-                                                                    color: intensity > 0.5 ? '#fff' : '#a5b4fc'
+                                                                    color: intensity > 0.5 ? '#fff' : (typeof document !== 'undefined' && document.documentElement.classList.contains('light') ? '#4f46e5' : '#a5b4fc')
                                                                 }}
                                                             >
                                                                 {count >= 1000 ? `${(count / 1000).toFixed(1)}k` : count}

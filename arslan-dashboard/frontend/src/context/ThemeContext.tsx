@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Theme } from '@/types/dashboard';
 
 interface ThemeContextType {
@@ -16,28 +16,41 @@ interface ThemeProviderProps {
     defaultTheme?: Theme;
 }
 
+const THEME_KEY = 'ssl-guardian-theme';
+
+function getInitialTheme(defaultTheme: Theme): Theme {
+    if (typeof window === 'undefined') {
+        return defaultTheme;
+    }
+
+    const savedTheme = window.localStorage.getItem(THEME_KEY) as Theme | null;
+    return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : defaultTheme;
+}
+
 export function ThemeProvider({ children, defaultTheme = 'dark' }: ThemeProviderProps) {
     const [theme, setThemeState] = useState<Theme>(defaultTheme);
-    const [mounted, setMounted] = useState(false);
+    const hasLoadedStoredTheme = useRef(false);
 
-    // Load theme from localStorage on mount - ONLY ONCE
     useEffect(() => {
-        const savedTheme = localStorage.getItem('ssl-guardian-theme') as Theme | null;
-        if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
-            setThemeState(savedTheme);
+        if (!hasLoadedStoredTheme.current) {
+            hasLoadedStoredTheme.current = true;
+            const storedTheme = getInitialTheme(defaultTheme);
+            const root = document.documentElement;
+            root.classList.remove('light', 'dark');
+            root.classList.add(storedTheme);
+            localStorage.setItem(THEME_KEY, storedTheme);
+
+            if (storedTheme !== theme) {
+                queueMicrotask(() => setThemeState(storedTheme));
+            }
+            return;
         }
-        setMounted(true);
-    }, []); // Empty deps = run once
 
-    // Apply theme class to document - ONLY when theme changes
-    useEffect(() => {
-        if (!mounted) return; // Don't run until mounted
-        
         const root = document.documentElement;
         root.classList.remove('light', 'dark');
         root.classList.add(theme);
-        localStorage.setItem('ssl-guardian-theme', theme);
-    }, [theme, mounted]); // Only re-run when theme actually changes
+        localStorage.setItem(THEME_KEY, theme);
+    }, [defaultTheme, theme]); // Only re-run when theme actually changes
 
     const toggleTheme = () => {
         setThemeState(prev => (prev === 'dark' ? 'light' : 'dark'));

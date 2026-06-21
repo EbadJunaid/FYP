@@ -44,6 +44,14 @@ const certificatesFetcher = async (key: string) => {
     const page = parseInt(parts[3]) || 1;
     const search = parts[4] || undefined;
 
+    if (search) {
+        return fetchCertificates({
+            page,
+            pageSize: 10,
+            search,
+        });
+    }
+
     let issuer: string | undefined;
     let selfSigned: string | undefined;
     let validationLevel: string | undefined;
@@ -166,6 +174,15 @@ export default function CAAnalyticsPage() {
             maxCount
         };
     }, [issuerValidationMatrix]);
+
+        // Filter out aggregated "Others" category from distribution
+        const filteredCaDistribution = useMemo(() => {
+            if (!caDistribution) return [];
+            return caDistribution.filter((entry) => {
+                const name = entry?.name || '';
+                return name.toLowerCase() !== 'others';
+            });
+        }, [caDistribution]);
 
     // Certificates table - build SWR key that works for all filter types
     const getSWRKey = () => {
@@ -353,7 +370,7 @@ export default function CAAnalyticsPage() {
                             <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={0}>
                                 <BarChart
                                     layout="vertical"
-                                    data={caDistribution}
+                                    data={filteredCaDistribution}
                                     margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
@@ -375,21 +392,21 @@ export default function CAAnalyticsPage() {
                                         itemStyle={{ color: '#ffffff' }}
                                         labelStyle={{ color: '#ffffff' }}
                                         formatter={(value, name) => [
-                                            `${Number(value).toLocaleString()} (${caDistribution?.find(d => d.count === value)?.percentage || 0}%)`,
+                                            `${Number(value).toLocaleString()} (${filteredCaDistribution?.find(d => d.count === value)?.percentage || 0}%)`,
                                             name === 'count' ? 'Certificates' : String(name)
                                         ]}
                                         labelFormatter={(label) => label}
                                     />
-                                    <Bar
-                                        dataKey="count"
-                                        radius={[0, 4, 4, 0]}
-                                        cursor="pointer"
-                                        onClick={(data) => handleBarClick(data)}
-                                    >
-                                        {caDistribution?.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Bar>
+                                        <Bar
+                                            dataKey="count"
+                                            radius={[0, 4, 4, 0]}
+                                            cursor="pointer"
+                                            onClick={(data) => handleBarClick(data)}
+                                        >
+                                            {filteredCaDistribution?.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         )}
@@ -445,7 +462,7 @@ export default function CAAnalyticsPage() {
                                                                     className="inline-block px-2 py-1 rounded text-xs font-medium min-w-[40px]"
                                                                     style={{
                                                                         backgroundColor: `rgba(99, 102, 241, ${bgOpacity})`,
-                                                                        color: intensity > 0.5 ? '#fff' : '#c7d2fe'
+                                                                        color: intensity > 0.5 ? '#fff' : (typeof document !== 'undefined' && document.documentElement.classList.contains('light') ? '#4f46e5' : '#c7d2fe')
                                                                     }}
                                                                 >
                                                                     {count.toLocaleString()}

@@ -21,14 +21,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import subprocess
 import sys
+import time
+from datetime import datetime
 from typing import Any
 
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
+from scope_utils import normalize_db_entries
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG = os.path.join(SCRIPT_DIR, "databases.json")
@@ -37,26 +41,12 @@ MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 
 # Collections each compute script is expected to populate in <results_db>.
 SCRIPT_RESULT_COLLECTIONS: dict[str, list[str]] = {
-    "generic-compute-ca-analytics.py": ["ca-analytics"],
-    "generic-compute-ca-stats.py": ["ca-stats"],
-    "generic-compute-hash-trends.py": ["hash-trends"],
+    "generic-compute-ca-stats.py": ["ca-analysis"],
     "generic-compute-geographic-distribution.py": ["geographic-distribution-1"],
-    "generic-compute-issuance-timeline.py": ["issuance-timeline"],
-    "generic-compute-issuer-algorithm-matrix.py": ["issuer-algorithm-matrix"],
-    "generic-compute-issuer-validation-matrix.py": ["issuer-validation-matrix"],
-    "generic-compute-san-analytics.py": [
-        "san-stats",
-        "san-distribution",
-        "san-wildcard-certs",
-        "san-standard-certs",
-        "san-multi-domain-certs",
-        "san-count-groups",
-        "san-tld-certs",
-        "san-filter-metadata",
-    ],
+    "generic-compute-san-analytics.py": ["san-analysis"],
     "generic-compute-shared-keys.py": ["shared-keys-detailed"],
-    "generic-compute-signature-stats.py": ["signature-stats"],
-    "generic-compute-validity-analytics.py": ["validity-stats", "validity-distribution"],
+    "generic-compute-signature-stats.py": ["signature-and-hash"],
+    "generic-compute-validity-analytics.py": ["validity-analysis"],
 }
 
 # Union of all results collections (used for final verification).
@@ -64,21 +54,58 @@ ALL_RESULTS_COLLECTIONS = sorted(
     {name for names in SCRIPT_RESULT_COLLECTIONS.values() for name in names}
 )
 
+
+def format_duration(seconds: float) -> str:
+    total_seconds = int(round(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
 # Indexes referenced by generic compute scripts on main DB certificates collection.
 REQUIRED_CERTIFICATE_INDEXES = [
     "idx_validity_end",
-    "idx_zlint_errors",
-    "idx_issuer_org_primary",
-    "idx_domain",
-    "idx_issuer_org",
+    "idx_validity_start",
+    "idx_validity_length",
+    "idx_key_algorithm_name",
+    "idx_rsa_public_key_length",
+    "idx_ecdsa_public_key_length",
     "idx_signature_algo",
+    "idx_zlint_errors",
+    "idx_self_signed",
+    "idx_scope",
+    "idx_validation_level",
+    "idx_cert_fingerprint_sha256",
+    "idx_public_key_fingerprint",
+    "idx_domain",
+    "idx_issuer_country",
+    "idx_issuer_org",
+    "idx_san_dns_names",
     "idx_algo_rsa_length",
     "idx_algo_ecdsa_length",
-    "idx_self_signed",
-    "idx_issuer_country",
-    "idx_san_dns_names",
-    "idx_validity_length",
-    "idx_public_key_fingerprint",
+    "idx_issuer_org_validation_level",
+    "idx_cert_and_public_key_fingerprint",
+    "idx_scope_validity_end",
+    "idx_scope_zlint_errors",
+    "idx_scope_id",
+    "idx_scope_validity_start",
+    "idx_scope_validity_length",
+    "idx_scope_algo_rsa_length",
+    "idx_scope_algo_ecdsa_length",
+    "idx_scope_issuer_org",
+    "idx_scope_issuer_validation",
+    "idx_scope_signature_algo",
+    "idx_scope_self_signed",
+    "idx_scope_public_key_fingerprint",
+    "idx_scope_domain",
+    "idx_scope_issuer_country",
+    "idx_issuer_org_algo_rsa_length",
+    "idx_issuer_org_algo_ecdsa_length",
+    "idx_scope_issuer_algo_rsa_length",
+    "idx_scope_issuer_algo_ecdsa_length",
 ]
 
 
@@ -96,23 +123,7 @@ def load_db_entries(config_path: str) -> list[dict[str, str]]:
 
 
 def _normalize_db_entries(items: list[Any]) -> list[dict[str, str]]:
-    entries: list[dict[str, str]] = []
-    for item in items:
-        if isinstance(item, str):
-            entries.append({"main": item, "results": f"{item}-results"})
-        elif isinstance(item, dict):
-            main_db = item.get("main") or item.get("db") or item.get("name")
-            results_db = item.get("results") or (f"{main_db}-results" if main_db else None)
-            if main_db and results_db:
-                entry: dict[str, str] = {"main": main_db, "results": results_db}
-                if item.get("id"):
-                    entry["id"] = str(item["id"])
-                entries.append(entry)
-            elif main_db:
-                entries.append({"main": main_db, "results": f"{main_db}-results"})
-        else:
-            raise ValueError("Unsupported database entry in databases.json")
-    return entries
+    return normalize_db_entries(items)
 
 
 def discover_generic_scripts() -> list[str]:
@@ -120,7 +131,15 @@ def discover_generic_scripts() -> list[str]:
     scripts = [
         name
         for name in os.listdir(SCRIPT_DIR)
-        if name.startswith("generic-") and name.endswith(".py") and name != "run-generic.py"
+        if name.startswith("generic-") and name.endswith(".py") and name not in {
+            "run-generic.py",
+            "generic-compute-ca-analytics.py",
+            "generic-compute-issuer-validation-matrix.py",
+            "generic-compute-hash-trends.py",
+            "generic-compute-issuer-algorithm-matrix.py",
+            "generic-compute-issuance-timeline.py",
+            "generic-compute-validity-analytics-old.py",
+        }
     ]
     if INDEXES_SCRIPT in scripts:
         scripts.remove(INDEXES_SCRIPT)
@@ -157,16 +176,17 @@ def run_script(
 
     cmd.extend(extra_args)
 
-    print(f"\n{'=' * 72}")
-    print(f"Running {script_name}")
-    print(f"  databases: {', '.join(db_names)}")
-    print(f"  command:   {' '.join(cmd)}")
-    print("=" * 72)
+    print(f"\n{'=' * 72}", flush=True)
+    print(f"Running {script_name}", flush=True)
+    print(f"  databases: {', '.join(db_names)}", flush=True)
+    print(f"  command:   {' '.join(cmd)}", flush=True)
+    print("=" * 72, flush=True)
 
     if dry_run and script_name != INDEXES_SCRIPT:
-        print("  [DRY-RUN] skipped (only index creation supports --dry-run)")
+        print("  [DRY-RUN] skipped (only index creation supports --dry-run)", flush=True)
         return
 
+    sys.stdout.flush()
     subprocess.run(cmd, check=True, cwd=SCRIPT_DIR)
 
 
@@ -276,6 +296,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    run_started_at = datetime.now()
+    run_started_perf = time.perf_counter()
+    print(f"Run started at: {run_started_at.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+
+    def print_run_timing() -> None:
+        run_finished_at = datetime.now()
+        elapsed = time.perf_counter() - run_started_perf
+        print(f"\nRun finished at: {run_finished_at.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+        print(f"Total run time:  {format_duration(elapsed)}", flush=True)
+
+    atexit.register(print_run_timing)
+
     if not os.path.isfile(args.config):
         raise SystemExit(f"Config not found: {args.config}")
 
@@ -286,7 +318,7 @@ def main() -> None:
     if args.dbs:
         lookup = {entry["main"]: entry for entry in entries}
         entries = [
-            lookup[name] if name in lookup else {"main": name, "results": f"{name}-results"}
+            lookup[name] if name in lookup else {"main": name, "results": f"{name}-results", "countries": []}
             for name in args.dbs
         ]
 
@@ -303,14 +335,15 @@ def main() -> None:
 
     extra_args = [arg for arg in args.extra_args if arg != "--"]
 
-    print(f"Config:     {args.config}")
-    print(f"Databases:  {len(entries)}")
+    print(f"Config:     {args.config}", flush=True)
+    print(f"Databases:  {len(entries)}", flush=True)
     for entry in entries:
-        print(f"  - {entry['main']} -> {entry['results']}")
-    print(f"Scripts:    {len(scripts)}")
+        scopes = ["all"] + list(entry.get("countries", []))
+        print(f"  - {entry['main']} -> {entry['results']} scopes={', '.join(scopes)}", flush=True)
+    print(f"Scripts:    {len(scripts)}", flush=True)
 
     if args.dry_run:
-        print("\n[DRY-RUN] No scripts will modify data (indexes script prints only).")
+        print("\n[DRY-RUN] No scripts will modify data (indexes script prints only).", flush=True)
         for script_name in scripts:
             run_script(
                 script_name,
@@ -353,18 +386,18 @@ def main() -> None:
         if index_failures:
             print("\nIndex failures:")
             for msg in index_failures:
-                print(f"  ✗ {msg}")
+                print(f"  - {msg}")
 
         if collection_failures:
             print("\nResults collection failures:")
             for msg in collection_failures:
-                print(f"  ✗ {msg}")
+                print(f"  - {msg}")
 
         if per_script_failures and per_script_failures != collection_failures:
             print("\nPer-script collection failures:")
             for msg in per_script_failures:
                 if msg not in collection_failures:
-                    print(f"  ✗ {msg}")
+                    print(f"  - {msg}")
 
         all_failures = sorted(set(index_failures + collection_failures))
         if all_failures:
@@ -378,8 +411,8 @@ def main() -> None:
             raise SystemExit(f"Verification found {len(all_failures)} issue(s)")
 
         print("\nVerification PASSED")
-        print(f"  ✓ {len(REQUIRED_CERTIFICATE_INDEXES)} indexes on each main DB certificates collection")
-        print(f"  ✓ {len(ALL_RESULTS_COLLECTIONS)} results collections across {len(entries)} database(s)")
+        print(f"  - {len(REQUIRED_CERTIFICATE_INDEXES)} indexes on each main DB certificates collection")
+        print(f"  - {len(ALL_RESULTS_COLLECTIONS)} results collections across {len(entries)} database(s)")
 
     client.close()
 

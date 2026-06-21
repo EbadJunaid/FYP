@@ -10,6 +10,11 @@ interface CALeaderboardCardProps {
 }
 
 export default function CALeaderboardCard({ data, onItemClick }: CALeaderboardCardProps) {
+    const filteredData = data.filter((ca) => {
+        const name = (ca?.name || '').toString().toLowerCase();
+        return name !== 'others';
+    });
+
     return (
         <Card
             title="CA Leaderboard"
@@ -19,7 +24,7 @@ export default function CALeaderboardCard({ data, onItemClick }: CALeaderboardCa
             infoTooltip="Top certificate authorities by issuance count. Click on a CA to filter certificates issued by that authority."
         >
             <div className="space-y-3">
-                {data.map((ca) => (
+                {filteredData.map((ca) => (
                     <div
                         key={ca.id}
                         onClick={() => onItemClick?.(ca)}

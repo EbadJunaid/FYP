@@ -26,8 +26,8 @@ class GlobalFilterParams(object):
             result['countries'] = tuple(self.countries)
         if self.issuers and len(self.issuers) > 0:
             result['issuers'] = tuple(self.issuers)
-        if self.grades and len(self.grades) > 0:
-            result['grades'] = tuple(self.grades)
+        # if self.grades and len(self.grades) > 0:
+        # result['grades'] = tuple(self.grades)
         if self.statuses and len(self.statuses) > 0:
             result['statuses'] = tuple(self.statuses)
         if self.validation_levels and len(self.validation_levels) > 0:
@@ -182,6 +182,10 @@ class SharedApisController(object):
         expiring_end: Optional[str] = None,
         # Shared Keys page filter
         shared_key: Optional[bool] = None,
+        # Vulnerabilities page filter
+        risk_filter: Optional[str] = None,
+        # Validation level filter
+        validation_levels: Optional[List[str]] = None,
         # Global filter params
         global_filters: Optional[GlobalFilterParams] = None
     ) -> Dict:
@@ -219,6 +223,8 @@ class SharedApisController(object):
             'expiring_start': expiring_start,
             'expiring_end': expiring_end,
             'shared_key': shared_key,
+            'risk_filter': risk_filter,
+            'validation_levels': tuple(validation_levels) if validation_levels else None,
             # Include global filter params in cache key
             **((global_filters.to_cache_key() if global_filters else {}))
         }
@@ -273,6 +279,8 @@ class SharedApisController(object):
             expiring_start=expiring_start,
             expiring_end=expiring_end,
             shared_key=shared_key,
+            risk_filter=risk_filter,
+            validation_levels=validation_levels,
             base_filter=base_filter
         )
         

@@ -15,7 +15,6 @@ import { NotificationItem } from '@/services/apiClient';
 import GlobalHealthCard from '@/components/dashboard/GlobalHealthCard';
 import MetricCard from '@/components/dashboard/MetricCard';
 import EncryptionStrengthCard from '@/components/dashboard/EncryptionStrengthCard';
-import FutureRiskCard from '@/components/dashboard/FutureRiskCard';
 import CALeaderboardCard from '@/components/dashboard/CALeaderboardCard';
 import GeographicDistributionCard from '@/components/dashboard/GeographicDistributionCard';
 import ValidityTrendCard from '@/components/dashboard/ValidityTrendCard';
@@ -45,7 +44,7 @@ function DashboardContent() {
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
 
-  const { metrics, encryptionStrength, futureRisk, caLeaderboard, geographicDistribution, validityTrend, filters } = state;
+  const { metrics, encryptionStrength, caLeaderboard, geographicDistribution, validityTrend, filters } = state;
 
   // Scroll to table after card click
   const scrollToTable = () => {
@@ -106,7 +105,6 @@ function DashboardContent() {
         <Header
           onMenuClick={() => setMobileMenuOpen(true)}
           onSearch={handleSearch}
-          onFilterClick={() => setFilterModalOpen(true)}
           /* onNotificationClick={handleNotificationClick} */ // COMMENT FOR NOTIFICATION ICON
         />
 
@@ -167,37 +165,21 @@ function DashboardContent() {
                 value={metrics.criticalVulnerabilities.count}
                 label="Critical Vulnerabilities"
                 onClick={() => handleCardClickWithScroll('vulnerabilities')}
-                detailsLink="#"
-                onDetailsClick={(e) => {
-                  e.stopPropagation();
-                  setComingSoonModalOpen(true);
-                }}
+                detailsLink="/dashboard/vulnerabilities"
                 infoTooltip="Certificates with security issues detected by ZLint analysis"
               />
             )}
           </div>
 
-          {/* Second Row - Encryption Strength & Future Risk - MATCHED HEIGHTS */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-6">
-            {/* Encryption Strength Distribution - Takes 2 columns */}
-            <div className="lg:col-span-2 h-full">
-              <div className="h-full min-h-[400px]">
-                <EncryptionStrengthCard
-                  data={encryptionStrength}
-                  onBarClick={(item) => handleCardClickWithScroll('encryptionBar', item)}
-                  onViewDetails={handleViewFullReport}
-                />
-              </div>
+          {/* Encryption Strength Distribution - full width */}
+          <div className="mb-6">
+            <div className="h-full min-h-[400px]">
+              <EncryptionStrengthCard
+                data={encryptionStrength}
+                onBarClick={(item) => handleCardClickWithScroll('encryptionBar', item)}
+                onViewDetails={handleViewFullReport}
+              />
             </div>
-
-            {/* Future Risk Predictor */}
-            {futureRisk && (
-              <div className="h-full min-h-[400px]">
-                <FutureRiskCard
-                  data={futureRisk}
-                />
-              </div>
-            )}
           </div>
 
           {/* Deep Analysis Grid Header */}

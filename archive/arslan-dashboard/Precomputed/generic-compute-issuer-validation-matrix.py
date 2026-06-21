@@ -150,26 +150,16 @@ def compute_issuer_validation_matrix(client, main_db, results_db, top_limit, ver
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generic issuer validation matrix pre-compute")
-    parser.add_argument("--dbs", nargs="*", help="Main database names")
-    parser.add_argument("--config", default=get_default_config_path(), help="Path to databases.json")
-    parser.add_argument("--limit", type=int, default=50, help="Top issuers to keep")
-    parser.add_argument("--verify", action="store_true", help="Verify stored results")
-    args = parser.parse_args()
+    # Deprecated entry point: CA analytics, CA stats, and issuer validation
+    # matrix are now computed together by generic-compute-ca-stats.py into
+    # <results_db>.ca-analysis. Old implementation is kept above for reference.
+    import importlib.util
 
-    entries = load_db_entries(args.config)
-    targets = resolve_targets(args.dbs, entries)
-
-    client = MongoClient("mongodb://localhost:27017/")
-    for target in targets:
-        compute_issuer_validation_matrix(
-            client,
-            target["main"],
-            target["results"],
-            top_limit=args.limit,
-            verify=args.verify,
-        )
-    client.close()
+    merged_path = os.path.join(os.path.dirname(__file__), "generic-compute-ca-stats.py")
+    spec = importlib.util.spec_from_file_location("generic_compute_ca_stats", merged_path)
+    merged = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(merged)
+    merged.main()
 
 
 if __name__ == "__main__":

@@ -86,3 +86,7 @@ arslan-dashboard/backend/Pre-Computed.md
 
 arslan-dashboard/data-sample.json
 crawler-expr
+
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
+temp-saving
+arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/compare-precompute-results.py

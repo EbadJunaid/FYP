@@ -5,7 +5,6 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import MobileDrawer from '@/components/layout/MobileDrawer';
 import FilterModal from '@/components/FilterModal';
-import { ThemeProvider } from '@/context/ThemeContext';
 import { SearchProvider, useSearch } from '@/context/SearchContext';
 import { FilterOptions } from '@/types/dashboard';
 
@@ -46,7 +45,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 <Header
                     onMenuClick={() => setMobileMenuOpen(true)}
                     onSearch={handleSearch}
-                    onFilterClick={() => setFilterModalOpen(true)}
                 />
 
                 {/* Page Content */}
@@ -72,13 +70,11 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     return (
-        <ThemeProvider defaultTheme="dark">
-            <SearchProvider>
-                <DashboardLayoutInner>
-                    {children}
-                </DashboardLayoutInner>
-            </SearchProvider>
-        </ThemeProvider>
+        <SearchProvider>
+            <DashboardLayoutInner>
+                {children}
+            </DashboardLayoutInner>
+        </SearchProvider>
     );
 }
 

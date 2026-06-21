@@ -73,9 +73,20 @@ interface SharedKeyDetailResponse {
     data: SharedKeyDetail;
 }
 
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
+
+const getStoredScope = () => {
+    if (typeof window === 'undefined') return 'all';
+    const params = new URLSearchParams(window.location.search);
+    const urlScope = params.get('scope');
+    if (urlScope) return urlScope;
+    return localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
+};
+
 // Fetcher for shared key detail
 const detailFetcher = async (publicKeyHash: string): Promise<SharedKeyDetail> => {
-    const response = await fetch(`http://localhost:8000/api/shared-keys/detail/${publicKeyHash}/`);
+    const scope = getStoredScope();
+    const response = await fetch(`http://localhost:8000/api/shared-keys/detail/${publicKeyHash}/?scope=${encodeURIComponent(scope)}`);
     const json: SharedKeyDetailResponse = await response.json();
     if (!json.success) {
         throw new Error('Failed to fetch shared key details');

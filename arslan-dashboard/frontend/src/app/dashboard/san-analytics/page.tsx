@@ -87,6 +87,8 @@ const certificatesFetcher = async (key: string) => {
         apiFilterType = 'standard';
     } else if (filterType === 'wildcard' || filterType === 'sanType' && filterValue === 'wildcard') {
         apiFilterType = 'wildcard';
+    } else if (filterType === 'sanType' && filterValue === 'standard') {
+        apiFilterType = 'standard';
     } else if (filterType === 'multidomain') {
         apiFilterType = 'multi-domain';
     } else if (filterType === 'bucket') {
@@ -260,11 +262,12 @@ export default function SANAnalyticsPage() {
     const handleCardClick = useCallback((type: FilterType, value: string = '') => {
         setFilterType(type);
         setFilterValue(value);
+        setSearchQuery('');
         setCurrentPage(1);
         setTimeout(() => {
             tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
-    }, []);
+    }, [setSearchQuery]);
 
     const handleRowClick = useCallback((entry: ScanEntry) => {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -415,6 +418,8 @@ export default function SANAnalyticsPage() {
                                     <YAxis stroke="#9ca3af" fontSize={12} />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        labelStyle={{ color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
                                         formatter={(value) => [Number(value).toLocaleString(), 'Certificates']}
                                         labelFormatter={(label) => formatSanBucketLabel(String(label))}
                                     />
@@ -466,6 +471,8 @@ export default function SANAnalyticsPage() {
                                     </Pie>
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        labelStyle={{ color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
                                         formatter={(value) => [Number(value).toLocaleString(), 'SANs']}
                                     />
                                 </PieChart>
@@ -500,6 +507,8 @@ export default function SANAnalyticsPage() {
                                 />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                    labelStyle={{ color: '#fff' }}
+                                    itemStyle={{ color: '#fff' }}
                                     formatter={(value) => [Number(value).toLocaleString(), 'SANs']}
                                 />
                                 <Bar

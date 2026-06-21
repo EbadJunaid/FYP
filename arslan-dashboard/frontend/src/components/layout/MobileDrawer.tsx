@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
     { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },
     { id: 'shared-keys', label: 'Shared Public Keys', icon: 'shared', href: '/dashboard/shared-keys' },
     { id: 'cas-vs-domains', label: 'CAs vs Domains', icon: 'domains', href: '/dashboard/cas-vs-domains' },
+    { id: 'vulnerabilities', label: 'Risk Analysis', icon: 'vulnerabilities', href: '/dashboard/vulnerabilities' },
     //{ id: 'trends', label: 'Trends', icon: 'trends', href: '/dashboard/trends' },
     // ============================================================
     // COMMENT FOR MOBILE MENU - These items should not display on small screens

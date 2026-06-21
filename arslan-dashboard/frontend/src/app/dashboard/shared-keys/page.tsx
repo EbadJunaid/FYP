@@ -41,6 +41,15 @@ interface SharedKeyListItem {
 }
 
 const STORAGE_KEY = 'shared-keys-state';
+const SELECTED_SCOPE_KEY = 'selected_certificate_scope';
+
+const getStoredScope = () => {
+    if (typeof window === 'undefined') return 'all';
+    const params = new URLSearchParams(window.location.search);
+    const urlScope = params.get('scope');
+    if (urlScope) return urlScope;
+    return localStorage.getItem(SELECTED_SCOPE_KEY) || 'all';
+};
 
 // Card info tooltips
 const cardInfoTooltips: Record<string, string> = {
@@ -65,7 +74,8 @@ const sharedKeysListFetcher = async (key: string) => {
     const sortBy = parts[3] || 'certificate_count';
     const sortOrder = parts[4] || 'desc';
     
-    const response = await fetch(`http://localhost:8000/api/shared-keys/list/?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`);
+    const scope = getStoredScope();
+    const response = await fetch(`http://localhost:8000/api/shared-keys/list/?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}&scope=${encodeURIComponent(scope)}`);
     const json = await response.json();
     if (json.success && json.data) {
         return json.data;
@@ -274,6 +284,8 @@ export default function SharedKeysPage() {
                                     <YAxis stroke="#9ca3af" fontSize={12} />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        labelStyle={{ color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
                                     />
                                     <Bar
                                         dataKey="count"
@@ -316,6 +328,8 @@ export default function SharedKeysPage() {
                                     />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        labelStyle={{ color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
                                     />
                                     <Bar
                                         dataKey="shared_certs"

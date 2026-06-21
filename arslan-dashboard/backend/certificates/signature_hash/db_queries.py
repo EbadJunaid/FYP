@@ -12,89 +12,89 @@ class SignatureHashModel:
     collection = db['certificates']
 
     @classmethod
-    def get_signature_stats_fast(cls) -> Dict:
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['signature-stats']
+    # def get_signature_stats_fast(cls) -> Dict:
+    #     from datetime import datetime, timezone
+    #     collection = MongoDBClient.get_results_db()['signature-stats']
 
-        result = collection.find_one({})
-        if not result:
-            import logging
-            logging.warning("No pre-computed signature stats found. Run compute_signature_stats.py")
-            return cls.get_signature_stats()
+    #     result = collection.find_one({})
+    #     if not result:
+    #         import logging
+    #         logging.warning("No pre-computed signature stats found. Run compute_signature_stats.py")
+    #         return cls.get_signature_stats()
 
-        computed_at_str = result.get('computedAt')
-        if computed_at_str:
-            computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-            age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-            if age_hours > 24:
-                import logging
-                logging.warning(f"Pre-computed signature stats is {age_hours:.1f} hours old. Consider running compute_signature_stats.py")
+    #     computed_at_str = result.get('computedAt')
+    #     if computed_at_str:
+    #         computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
+    #         age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
+    #         if age_hours > 24:
+    #             import logging
+    #             logging.warning(f"Pre-computed signature stats is {age_hours:.1f} hours old. Consider running compute_signature_stats.py")
 
-        result.pop('_id', None)
-        result.pop('sourceCollection', None)
-        result.pop('documentCount', None)
+    #     result.pop('_id', None)
+    #     result.pop('sourceCollection', None)
+    #     result.pop('documentCount', None)
 
-        return result
+    #     return result
 
-    @classmethod
-    def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['hash-trends']
+    # @classmethod
+    # def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
+    #     from datetime import datetime, timezone
+    #     collection = MongoDBClient.get_results_db()['hash-trends']
 
-        query = {'granularity': granularity, 'months': months}
-        trends = list(collection.find(query).sort([('year', 1), ('quarter', 1)]))
+    #     query = {'granularity': granularity, 'months': months}
+    #     trends = list(collection.find(query).sort([('year', 1), ('quarter', 1)]))
 
-        if not trends:
-            import logging
-            logging.warning(f"No pre-computed hash trends found for {granularity}/{months}. Run compute_hash_trends.py")
-            return cls.get_hash_trends(months=months, granularity=granularity)
+    #     if not trends:
+    #         import logging
+    #         logging.warning(f"No pre-computed hash trends found for {granularity}/{months}. Run compute_hash_trends.py")
+    #         return cls.get_hash_trends(months=months, granularity=granularity)
 
-        if trends:
-            computed_at_str = trends[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 24:
-                    import logging
-                    logging.warning(f"Pre-computed hash trends is {age_hours:.1f} hours old. Consider running compute_hash_trends.py")
+    #     if trends:
+    #         computed_at_str = trends[0].get('computedAt')
+    #         if computed_at_str:
+    #             computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
+    #             age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
+    #             if age_hours > 24:
+    #                 import logging
+    #                 logging.warning(f"Pre-computed hash trends is {age_hours:.1f} hours old. Consider running compute_hash_trends.py")
 
-        for trend in trends:
-            trend.pop('_id', None)
-            trend.pop('computedAt', None)
-            trend.pop('sourceCollection', None)
-            trend.pop('granularity', None)
-            trend.pop('months', None)
+    #     for trend in trends:
+    #         trend.pop('_id', None)
+    #         trend.pop('computedAt', None)
+    #         trend.pop('sourceCollection', None)
+    #         trend.pop('granularity', None)
+    #         trend.pop('months', None)
 
-        return trends
+    #     return trends
 
-    @classmethod
-    def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
-        from datetime import datetime, timezone
-        collection = MongoDBClient.get_results_db()['issuer-algorithm-matrix']
+    # @classmethod
+    # def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+    #     from datetime import datetime, timezone
+    #     collection = MongoDBClient.get_results_db()['issuer-algorithm-matrix']
 
-        matrix = list(collection.find({}).sort('count', -1).limit(limit))
+    #     matrix = list(collection.find({}).sort('count', -1).limit(limit))
 
-        if not matrix:
-            import logging
-            logging.warning("No pre-computed issuer algorithm matrix found. Run compute_issuer_algorithm_matrix.py")
-            return cls.get_issuer_algorithm_matrix(limit=limit)
+    #     if not matrix:
+    #         import logging
+    #         logging.warning("No pre-computed issuer algorithm matrix found. Run compute_issuer_algorithm_matrix.py")
+    #         return cls.get_issuer_algorithm_matrix(limit=limit)
 
-        if matrix:
-            computed_at_str = matrix[0].get('computedAt')
-            if computed_at_str:
-                computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
-                age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
-                if age_hours > 24:
-                    import logging
-                    logging.warning(f"Pre-computed issuer algorithm matrix is {age_hours:.1f} hours old. Consider running compute_issuer_algorithm_matrix.py")
+    #     if matrix:
+    #         computed_at_str = matrix[0].get('computedAt')
+    #         if computed_at_str:
+    #             computed_at = datetime.fromisoformat(computed_at_str.replace('Z', '+00:00'))
+    #             age_hours = (datetime.now(timezone.utc) - computed_at).total_seconds() / 3600
+    #             if age_hours > 24:
+    #                 import logging
+    #                 logging.warning(f"Pre-computed issuer algorithm matrix is {age_hours:.1f} hours old. Consider running compute_issuer_algorithm_matrix.py")
 
-        for item in matrix:
-            item.pop('_id', None)
-            item.pop('computedAt', None)
-            item.pop('sourceCollection', None)
-            item.pop('percentage', None)
+    #     for item in matrix:
+    #         item.pop('_id', None)
+    #         item.pop('computedAt', None)
+    #         item.pop('sourceCollection', None)
+    #         item.pop('percentage', None)
 
-        return matrix
+    #     return matrix
 
     @classmethod
     def get_signature_stats(cls) -> Dict:
@@ -441,3 +441,81 @@ class SignatureHashModel:
             })
 
         return matrix
+
+    # =========================================================================
+    # NEW SIGNATURE-AND-HASH IMPLEMENTATION
+    # -------------------------------------------------------------------------
+    # The methods below intentionally keep the same names as the legacy fast
+    # methods above. Python uses the later definition, so these methods now read
+    # from one collection/document:
+    #
+    #   <results_db>.signature-and-hash / {"_id": "signature_and_hash"}
+    #
+    # If that document is missing, they fall back to the existing slow methods.
+    # =========================================================================
+
+    @classmethod
+    def _get_signature_and_hash_doc(cls) -> Optional[Dict]:
+        return MongoDBClient.find_scoped_result_doc('signature-and-hash', fallback_id='signature_and_hash')
+
+    @classmethod
+    def get_signature_stats_fast(cls) -> Dict:
+        doc = cls._get_signature_and_hash_doc()
+        if not doc:
+            import logging
+            logging.warning("No pre-computed signature-and-hash data found. Falling back to live signature stats.")
+            return cls.get_signature_stats()
+
+        return {
+            'algorithmDistribution': doc.get('algorithmDistribution', []),
+            'hashDistribution': doc.get('hashDistribution', []),
+            'keySizeDistribution': doc.get('keySizeDistribution', []),
+            'weakHashCount': doc.get('weakHashCount', 0),
+            'hashComplianceRate': doc.get('hashComplianceRate', 0),
+            'strengthScore': doc.get('strengthScore', 0),
+            'selfSignedCount': doc.get('selfSignedCount', 0),
+            'totalCertificates': doc.get('totalCertificates', 0),
+            'maxEncryptionType': doc.get('maxEncryptionType'),
+            # 'computedAt': doc.get('computedAt'),
+        }
+
+    @classmethod
+    def get_hash_trends_fast(cls, months: int = 36, granularity: str = 'quarterly') -> List[Dict]:
+        doc = cls._get_signature_and_hash_doc()
+        if not doc:
+            import logging
+            logging.warning("No pre-computed signature-and-hash data found. Falling back to live hash trends.")
+            return cls.get_hash_trends(months=months, granularity=granularity)
+
+        if doc.get('hash_trends_months') != months or doc.get('hash_trends_granularity') != granularity:
+            import logging
+            logging.warning(
+                "Pre-computed hash trends do not match requested months/granularity. "
+                "Falling back to live hash trends."
+            )
+            return cls.get_hash_trends(months=months, granularity=granularity)
+
+        return doc.get('hash-trends', [])
+
+    @classmethod
+    def get_issuer_algorithm_matrix_fast(cls, limit: int = 10) -> List[Dict]:
+        doc = cls._get_signature_and_hash_doc()
+        if not doc:
+            import logging
+            logging.warning("No pre-computed signature-and-hash data found. Falling back to live issuer algorithm matrix.")
+            return cls.get_issuer_algorithm_matrix(limit=limit)
+
+        matrix = []
+        for issuer_item in doc.get('issuer-algo-matrix', []):
+            issuer = issuer_item.get('issuer')
+            for algorithm_item in issuer_item.get('algorithm_list', []):
+                matrix.append({
+                    'issuer': issuer,
+                    'algorithm': algorithm_item.get('algorithm'),
+                    'algorithmType': algorithm_item.get('algorithmType'),
+                    'keySize': algorithm_item.get('keySize'),
+                    'count': algorithm_item.get('count', 0),
+                })
+
+        matrix.sort(key=lambda item: item.get('count', 0), reverse=True)
+        return matrix[:limit]

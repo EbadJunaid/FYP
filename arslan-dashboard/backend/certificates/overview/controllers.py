@@ -1,5 +1,6 @@
 from typing import List, Dict, Optional
 from ..cache_service import cache
+from ..db import MongoDBClient
 from .db_queries import OverviewModels
 #import from shared models...
 from ..shared_apis.controllers import GlobalFilterParams
@@ -63,3 +64,20 @@ class OverviewController:
         cache.set('future_risk', cache_params, result)
         return result
 
+    @staticmethod
+    def get_vulnerabilities(page: int = 1, page_size: int = 10, risk_level: str = None) -> Dict:
+        """Get certificate vulnerability details for the overview vulnerabilities page"""
+        cache_params = {
+            'page': page,
+            'page_size': page_size,
+            'scope': MongoDBClient.get_current_scope(),
+            'risk_level': risk_level,
+        }
+        
+        cached = cache.get('vulnerabilities', cache_params)
+        if cached:
+            return cached
+        results = OverviewModels.get_vulnerabilities(page=page, page_size=page_size, risk_level=risk_level)
+        cache.set('vulnerabilities', cache_params, results)
+        return results
+    

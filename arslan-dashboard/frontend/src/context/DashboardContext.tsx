@@ -9,14 +9,12 @@ import {
     CALeaderboardEntry,
     GeographicEntry,
     DashboardMetrics,
-    FutureRisk,
     ValidityTrendPoint,
 } from '@/types/dashboard';
 import {
     fetchDashboardMetrics,
     fetchCertificates,
     fetchEncryptionStrength,
-    fetchFutureRisk,
     fetchCALeaderboard,
     fetchGeographicDistribution,
     fetchValidityTrends,
@@ -172,7 +170,7 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                 setState((prev) => ({ ...prev, isLoading: false }));
             });
 
-            // Phase 2: Load SLOW APIs independently (global-health, future-risk)
+            // Phase 2: Load SLOW APIs independently (global-health)
             // These load in the background without blocking the UI
             fetchDashboardMetrics().then((metrics) => {
                 setState((prev) => ({
@@ -190,26 +188,6 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
                     loadingStates: {
                         ...prev.loadingStates!,
                         metrics: false,
-                    },
-                }));
-            });
-
-            fetchFutureRisk().then((futureRiskData) => {
-                setState((prev) => ({
-                    ...prev,
-                    futureRisk: futureRiskData as FutureRisk,
-                    loadingStates: {
-                        ...prev.loadingStates!,
-                        futureRisk: false,
-                    },
-                }));
-            }).catch((error) => {
-                console.error('Error loading future risk:', error);
-                setState((prev) => ({
-                    ...prev,
-                    loadingStates: {
-                        ...prev.loadingStates!,
-                        futureRisk: false,
                     },
                 }));
             });
