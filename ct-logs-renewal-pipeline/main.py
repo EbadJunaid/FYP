@@ -80,7 +80,7 @@ SCRIPTS = {
     "crawler":      BASE_DIR / "../ssl-certificates-crawler/domain-based-crawler/src/crawler-args.py",
     "data_renew_merge": BASE_DIR / "data-renew-merge.py",
     "new_data":         BASE_DIR / "new-data.py",
-    "generic":          BASE_DIR / "../arslan-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/run-generic.py",
+    "generic":          BASE_DIR / "../dashboard/backend/mongo-indexes-pre-compute-scripts/generic/run-generic.py",
     "go_server": BASE_DIR / "go-server.py",
 }
 
