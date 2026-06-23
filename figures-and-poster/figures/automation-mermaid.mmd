@@ -1,0 +1,67 @@
+flowchart TB
+    subgraph S1["Stage 1 — CT log Server"]
+        M1["CT log listener"]
+        M2["Domain Ingestion Service"]
+        DB1[("Live domain database<br/>continuously updated")]
+        M1 --> M2 --> DB1
+    end
+
+    subgraph S2["Stage 2 — Automated renewal pipeline"]
+        M3["Scheduler"]
+        M4["Pipeline controller"]
+        M6["Renewal Certificates"]
+        MATCH["Match against live domain database and gets the domains which gets renewed"]
+        CAND["Run Crawler on renewed domains"]
+        M7[("Explore new domains")]
+        M8[("Fetching their certificates")]
+        RDB["Move new certificates into the main database"]
+        M9["Start the CT log Server"]
+        
+        MDB[("Main Database")]
+        MAIN_DASHBOARD(["Main Dashboard"])
+
+        M3 --> M4
+        M4 --> M6
+        M6 --> MATCH --> CAND
+        M4 --> M7
+        M7 --> M8 --> RDB
+        M4 --> M9
+        
+        %% Anchors the dashboard down to maintain left/right balance
+        M9 ~~~ MAIN_DASHBOARD
+        
+        %% New connections
+        CAND --> MDB
+        MAIN_DASHBOARD --> MDB
+    end
+
+    DB1 -.-> MATCH
+
+    %% Original classDef definitions
+    classDef stage1 fill:#E6F1FB,stroke:#185FA5,color:#042C53
+    classDef stage2ctrl fill:#EEEDFE,stroke:#534AB7,color:#26215C
+    classDef stage2data fill:#FAECE7,stroke:#993C1D,color:#4A1B0C
+    classDef stage2db fill:#E6F1FB,stroke:#185FA5,color:#042C53
+    classDef stage2crawl fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+    classDef neutral fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+    
+    %% Dashboard styling
+    classDef dashboard fill:#FFD6D6,stroke:#B51F1F,color:#3C0A0A,stroke-width:2px;
+
+    %% Class assignments
+    class M1,M2,DB1 stage1
+    class M3,M4,M6,M7,M9 stage2ctrl
+    class M5,DS,MATCH,CAND stage2data
+    class M8,RDB stage2crawl
+    class SCHEMA neutral
+    
+    %% Apply classes to new nodes
+    class MDB stage2db
+    class MAIN_DASHBOARD dashboard
+
+    %% SUBGRAPH STYLING (Transparent background, solid black borders and text)
+    style S1 fill:transparent,stroke:#000000,stroke-width:2px,color:#000000
+    style S2 fill:transparent,stroke:#000000,stroke-width:2px,color:#000000
+    
+    %% ARROW/LINK STYLING (Forces all lines and arrows to be solid black)
+    linkStyle default stroke:#000000,stroke-width:2px,color:#000000
