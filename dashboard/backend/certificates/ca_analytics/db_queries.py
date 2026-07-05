@@ -12,6 +12,121 @@ class CAModel:
 
     # Use the same certificates collection reference as CertificateModel
     collection = db['certificates']
+    _ranking_colors = [
+        '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
+        '#06b6d4', '#14b8a6', '#6366f1', '#ec4899', '#84cc16',
+    ]
+
+    _ranking_groups = {
+        'ca': {
+            'label': 'CA',
+            'field': 'parsed.issuer.organization',
+            'match_key': 'issuer',
+        },
+        'country': {
+            'label': 'Issuer Country',
+            'field': 'parsed.issuer.country',
+            'match_key': 'country',
+        },
+        'validation_level': {
+            'label': 'Validation Level',
+            'field': 'parsed.validation_level',
+            'match_key': 'validation_level',
+        },
+    }
+
+    @classmethod
+    def _ranking_group_config(cls, group_by: str) -> Dict[str, str]:
+        return cls._ranking_groups.get(group_by, cls._ranking_groups['ca'])
+
+    @staticmethod
+    def _notebook_ranking_formula() -> Dict[str, Any]:
+        return {
+            'coreHygiene': 'mean(ZCS, ZHFS)',
+            'cryptoHealth': 'mean(KHS, KUS, WKLP)',
+            'operationalStability': 'mean(CADS, TSI, IOPS)',
+            'policyCompliance': 'mean(EKUVS, PICS, DVAS, NCVS)',
+            'riskFactors': 'mean(GNS, ACCS, REVPS)',
+            'finalScore': 'mean(core_hygiene, crypto_health, operational_stability, policy_compliance, risk_factors) * 100',
+        }
+
+    @classmethod
+    def get_ranking(cls, limit: int = 20, group_by: str = 'ca') -> Dict[str, Any]:
+        group_by = group_by if group_by in cls._ranking_groups else 'ca'
+        limit = max(1, min(int(limit or 20), 5000))
+
+        empty_response = {
+            'groupBy': group_by,
+            'metricLabel': cls._ranking_group_config(group_by)['label'],
+            'mode': 'precomputed',
+            'items': [],
+            'summary': {
+                'rankedCount': 0,
+                'topName': None,
+                'topScore': 0,
+                'averageScore': 0,
+                'totalCertificates': 0,
+                'bestHygieneName': None,
+            },
+            'formula': cls._notebook_ranking_formula(),
+        }
+
+        if group_by != 'ca':
+            return empty_response
+
+        analysis_doc = cls._get_ca_analysis_doc()
+        if not analysis_doc:
+            return empty_response
+
+        ca_list = [
+            item for item in analysis_doc.get('ca-list', [])
+            if item.get('scoreSampleCount', 0) > 0
+        ]
+        if not ca_list:
+            return {**empty_response, 'summary': {**empty_response['summary'], 'totalCertificates': analysis_doc.get('total_certs', 0)}}
+
+        ca_list = sorted(ca_list, key=lambda item: item.get('scoreRank') or 999999)
+        items = []
+        for index, item in enumerate(ca_list, start=1):
+            items.append({
+                'id': item.get('ca_id', f'ca-{index}'),
+                'name': item.get('name'),
+                'rank': item.get('scoreRank') or index,
+                'marketRank': item.get('rank'),
+                'count': item.get('count', 0),
+                'percentage': item.get('percentage', 0),
+                'score': item.get('score', 0),
+                'scoreSampleCount': item.get('scoreSampleCount', 0),
+                'coreHygiene': item.get('coreHygiene', 0),
+                'cryptoHealth': item.get('cryptoHealth', 0),
+                'operationalStability': item.get('operationalStability', 0),
+                'policyCompliance': item.get('policyCompliance', 0),
+                'riskFactors': item.get('riskFactors', 0),
+                'validationBreakdown': {
+                    validation_item.get('validationlevel_type', 'Unknown'): validation_item.get('count', 0)
+                    for validation_item in item.get('validationLevel', [])
+                },
+                'color': item.get('color', cls._ranking_colors[(index - 1) % len(cls._ranking_colors)]),
+            })
+
+        limited = items[:limit]
+        top = items[0] if items else None
+        best_hygiene = max(items, key=lambda entry: entry.get('coreHygiene', 0), default=None)
+        return {
+            'groupBy': 'ca',
+            'metricLabel': 'CA',
+            'mode': 'precomputed',
+            'items': limited,
+            'summary': {
+                'rankedCount': len(items),
+                'topName': top.get('name') if top else None,
+                'topScore': top.get('score', 0) if top else 0,
+                'averageScore': round(sum(entry.get('score', 0) for entry in items) / len(items), 2) if items else 0,
+                'totalCertificates': analysis_doc.get('total_certs', 0),
+                'bestHygieneName': best_hygiene.get('name') if best_hygiene else None,
+            },
+            'formula': analysis_doc.get('ranking_formula') or cls._notebook_ranking_formula(),
+        }
 
     # @classmethod
     # def get_ca_stats_fast(cls) -> Dict:

@@ -7,10 +7,10 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import DownloadModal from '@/components/DownloadModal';
-import {ChevronRightIcon, CertificateIcon, GlobeIcon, ShieldIcon, AlertIcon, DownloadIcon } from '@/components/icons/Icons';
+import {ChevronRightIcon, CertificateIcon, GlobeIcon, ShieldIcon, AlertIcon } from '@/components/icons/Icons';
 
 import { useSearch } from '@/context/SearchContext';
-import apiClient, { CAStats, IssuerValidationEntry, CALeaderboardEntry } from '@/services/apiClient';
+import apiClient, { CAStats, IssuerValidationEntry, CALeaderboardEntry, CARankingResponse } from '@/services/apiClient';
 import { fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry } from '@/types/dashboard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -34,6 +34,7 @@ const HEATMAP_COLUMNS = ['DV', 'OV', 'EV', 'Unknown'];
 const caStatsFetcher = () => apiClient.getCAStats();
 const caDistributionFetcher = () => apiClient.getCAAnalytics(10);
 const issuerValidationFetcher = () => apiClient.getIssuerValidationMatrix(10);
+const caRankingFetcher = () => apiClient.getCARanking(10, 'ca');
 
 type FilterType = 'issuer' | 'self_signed' | 'heatmap';
 
@@ -120,8 +121,15 @@ export default function CAAnalyticsPage() {
         { revalidateOnFocus: false, dedupingInterval: 600000 }
     );
 
+    const { data: caRanking, isLoading: isRankingLoading } = useSWR<CARankingResponse>(
+        `ca-ranking|${dbKey}`,
+        caRankingFetcher,
+        { revalidateOnFocus: false, dedupingInterval: 600000 }
+    );
+
     // Restore state on mount
     useEffect(() => {
+        const timer = window.setTimeout(() => {
         try {
             const saved = sessionStorage.getItem(STORAGE_KEY);
             if (saved) {
@@ -137,14 +145,19 @@ export default function CAAnalyticsPage() {
             console.error('Error restoring state:', e);
         }
         setIsRestoring(false);
+        }, 0);
+        return () => window.clearTimeout(timer);
     }, []);
 
     // Set default filter to top CA when data loads (if not restoring from session)
     useEffect(() => {
         if (!defaultFilterSet && caStats?.top_ca?.name && !isRestoring) {
-            setFilterType('issuer');
-            setFilterValue(caStats.top_ca.name);
-            setDefaultFilterSet(true);
+            const timer = window.setTimeout(() => {
+                setFilterType('issuer');
+                setFilterValue(caStats.top_ca.name);
+                setDefaultFilterSet(true);
+            }, 0);
+            return () => window.clearTimeout(timer);
         }
     }, [caStats, defaultFilterSet, isRestoring]);
 
@@ -210,12 +223,13 @@ export default function CAAnalyticsPage() {
     // Scroll to table on search
     useEffect(() => {
         if (searchQuery) {
-            setCurrentPage(1);
-            requestAnimationFrame(() => {
-                setTimeout(() => {
+            const timer = window.setTimeout(() => {
+                setCurrentPage(1);
+                requestAnimationFrame(() => {
                     tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-            });
+                });
+            }, 100);
+            return () => window.clearTimeout(timer);
         }
     }, [searchQuery]);
 
@@ -253,15 +267,6 @@ export default function CAAnalyticsPage() {
     const handlePageChange = useCallback((page: number) => {
         setCurrentPage(page);
     }, []);
-
-    const handleClearFilter = useCallback(() => {
-        // Reset to top CA
-        if (caStats?.top_ca?.name) {
-            setFilterType('issuer');
-            setFilterValue(caStats.top_ca.name);
-        }
-        setCurrentPage(1);
-    }, [caStats]);
 
     // Build download modal filter
     const getActiveFilter = () => {
@@ -480,6 +485,69 @@ export default function CAAnalyticsPage() {
                     </div>
                 </Card>
             </div>
+
+            {/* CA Ranking */}
+            <Card
+                title="CA Ranking"
+                subtitle="Fast ranking from the precomputed CA analysis document"
+                infoTooltip="Higher score uses the notebook formula: core hygiene, crypto health, operational stability, policy compliance, and risk factors for the selected scope. Click a bar to filter certificates by that CA."
+                headerAction={
+                    <button
+                        onClick={() => router.push('/dashboard/ca-ranking')}
+                        className="flex items-center gap-1 text-xs text-primary-blue hover:text-primary-purple font-medium transition-colors"
+                    >
+                        View details
+                        <ChevronRightIcon className="w-4 h-4" />
+                    </button>
+                }
+            >
+                <div className="h-80">
+                    {isRankingLoading ? (
+                        <div className="flex items-center justify-center h-full">
+                            <div className="text-text-muted">Loading...</div>
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={0}>
+                            <BarChart
+                                layout="vertical"
+                                data={caRanking?.items || []}
+                                margin={{ top: 5, right: 36, left: 10, bottom: 5 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                                <XAxis type="number" domain={[0, 100]} stroke="#9ca3af" fontSize={12} />
+                                <YAxis
+                                    type="category"
+                                    dataKey="name"
+                                    stroke="#9ca3af"
+                                    fontSize={11}
+                                    width={140}
+                                    tick={{ fill: '#9ca3af' }}
+                                    tickFormatter={(value) => value.length > 18 ? `${value.slice(0, 16)}...` : value}
+                                />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                    itemStyle={{ color: '#ffffff' }}
+                                    labelStyle={{ color: '#ffffff' }}
+                                    formatter={(value, name) => [
+                                        name === 'score' ? `${Number(value).toFixed(2)} / 100` : Number(value).toLocaleString(),
+                                        name === 'score' ? 'Trust Score' : String(name)
+                                    ]}
+                                />
+                                <Bar
+                                    dataKey="score"
+                                    radius={[0, 4, 4, 0]}
+                                    cursor="pointer"
+                                    onClick={(data) => data?.name && handleCardClick('issuer', data.name)}
+                                >
+                                    {(caRanking?.items || []).map((entry, index) => (
+                                        <Cell key={`ranking-cell-${entry.id}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                </div>
+            </Card>
 
             {/* Certificates Table */}
             <div ref={tableRef}>

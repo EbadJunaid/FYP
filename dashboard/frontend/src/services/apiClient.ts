@@ -184,6 +184,51 @@ export interface IssuerValidationEntry {
     count: number;
 }
 
+export interface CARankingEntry {
+    id: string;
+    name: string;
+    rank: number;
+    marketRank?: number;
+    count: number;
+    percentage: number;
+    score: number;
+    scoreSampleCount?: number;
+    coreHygiene?: number;
+    cryptoHealth?: number;
+    operationalStability?: number;
+    policyCompliance?: number;
+    riskFactors?: number;
+    reachScore?: number;
+    validityScore?: number;
+    cryptoScore?: number;
+    zlintScore?: number;
+    validationScore?: number;
+    transparencyScore?: number;
+    validCount?: number;
+    expiredCount?: number;
+    weakKeyCount?: number;
+    longValidityCount?: number;
+    zlintIssueCount?: number;
+    validationBreakdown: Record<string, number>;
+    color: string;
+}
+
+export interface CARankingResponse {
+    groupBy: string;
+    metricLabel: string;
+    mode?: string;
+    items: CARankingEntry[];
+    summary: {
+        rankedCount: number;
+        topName: string | null;
+        topScore: number;
+        averageScore: number;
+        totalCertificates: number;
+        bestHygieneName: string | null;
+    };
+    formula: Record<string, string>;
+}
+
 // SAN Analytics interfaces
 export interface SANStats {
     total_sans: number;
@@ -497,6 +542,13 @@ class ApiClient {
     // CA Analytics - Issuer x Validation level matrix for heatmap
     async getIssuerValidationMatrix(limit: number = 10): Promise<IssuerValidationEntry[]> {
         return this.fetch<IssuerValidationEntry[]>(`/ca/issuer-validation-matrix/?limit=${limit}`);
+    }
+
+    async getCARanking(limit: number = 20, groupBy: string = 'ca'): Promise<CARankingResponse> {
+        const query = new URLSearchParams();
+        query.append('limit', limit.toString());
+        query.append('group_by', groupBy);
+        return this.fetch<CARankingResponse>(`/ca/ranking/?${query.toString()}`);
     }
 
 

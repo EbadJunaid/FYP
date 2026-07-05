@@ -67,6 +67,9 @@ def build_source_indexes():
         {"name": "idx_domain", "keys": [("domain", ASCENDING)], "options": {"background": True}},
         {"name": "idx_issuer_country", "keys": [("parsed.issuer.country", ASCENDING)], "options": {"background": True}},
         {"name": "idx_issuer_org", "keys": [("parsed.issuer.organization", ASCENDING)], "options": {"background": True}},
+        {"name": "idx_subject_dn", "keys": [("parsed.subject_dn", ASCENDING)], "options": {"background": True}},
+        {"name": "idx_issuer_dn", "keys": [("parsed.issuer_dn", ASCENDING)], "options": {"background": True}},
+        {"name": "idx_basic_constraints_ca", "keys": [("parsed.basic_constraints.ca", ASCENDING)], "options": {"background": True}},
         {"name": "idx_san_dns_names", "keys": [("parsed.extensions.subject_alt_name.dns_names", ASCENDING)], "options": {"background": True}},
         {"name": "idx_san_dns_names_50", "keys": [("parsed.extensions.subject_alt_name.dns_names.50", ASCENDING)], "options": {"background": True}},
         {
@@ -219,6 +222,33 @@ def build_source_indexes():
             "options": {"background": True},
         },
         {
+            "name": "idx_scope_basic_constraints_ca",
+            "keys": [
+                ("scope", ASCENDING),
+                ("parsed.basic_constraints.ca", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_scope_ca_ranking_scan",
+            "keys": [
+                ("scope", ASCENDING),
+                ("parsed.basic_constraints.ca", ASCENDING),
+                ("parsed.issuer.organization", ASCENDING),
+                ("parsed.subject_key_info.fingerprint_sha256", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_ca_ranking_scan",
+            "keys": [
+                ("parsed.basic_constraints.ca", ASCENDING),
+                ("parsed.issuer.organization", ASCENDING),
+                ("parsed.subject_key_info.fingerprint_sha256", ASCENDING),
+            ],
+            "options": {"background": True},
+        },
+        {
             "name": "idx_scope_signature_algo",
             "keys": [
                 ("scope", ASCENDING),
@@ -319,6 +349,8 @@ def build_results_indexes():
             {"name": "idx_ca_analysis_computed_at", "keys": [("computed_at", ASCENDING)], "options": {"background": True}},
             {"name": "idx_ca_analysis_ca_rank", "keys": [("ca-list.rank", ASCENDING)], "options": {"background": True}},
             {"name": "idx_ca_analysis_ca_name", "keys": [("ca-list.name", ASCENDING)], "options": {"background": True}},
+            {"name": "idx_ca_analysis_ca_score_rank", "keys": [("ca-list.scoreRank", ASCENDING)], "options": {"background": True}},
+            {"name": "idx_ca_analysis_ca_score", "keys": [("ca-list.score", DESCENDING)], "options": {"background": True}},
         ],
         "san-analysis": [
             {"name": "idx_san_analysis_scope", "keys": [("scope", ASCENDING)], "options": {"background": True}},

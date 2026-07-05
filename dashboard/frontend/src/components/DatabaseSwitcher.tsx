@@ -218,8 +218,8 @@ export default function DatabaseSwitcher() {
                 disabled={isSwitching}
                 className="flex items-center gap-2 px-3 py-1.5 bg-card-bg border border-card-border rounded-lg text-sm text-text-primary font-medium hover:bg-card-bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <span className="text-xs text-text-muted hidden sm:inline">Database:</span>
-                <span>{isSwitching ? 'Switching...' : currentDb.name}</span>
+                <span className="text-xs text-text-muted hidden sm:inline">Country:</span>
+                <span>{isSwitching ? 'Switching...' : (currentDb.name || '').replace(/\s*domains$/i, '')}</span>
                 {!isSwitching && (
                     <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 )}
@@ -259,8 +259,8 @@ export default function DatabaseSwitcher() {
                                 >
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="min-w-0">
-                                            <div className="truncate text-sm font-medium text-text-primary">{db.name}</div>
-                                            <div className="mt-0.5 truncate text-xs text-text-muted">{db.description}</div>
+                                                        <div className="truncate text-sm font-medium text-text-primary">{db.name.replace(/\s*domains$/i, '')}</div>
+                                                        <div className="mt-0.5 truncate text-xs text-text-muted">{db.description}</div>
                                         </div>
                                         {currentDb.id === db.id && (
                                             <div className="h-2 w-2 shrink-0 rounded-full bg-accent-green"></div>

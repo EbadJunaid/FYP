@@ -7,10 +7,11 @@ interface SmallSearchInputProps {
   value: string;
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
+  shortcutKey?: string;
 }
 
 const SmallSearchInput = React.forwardRef<HTMLInputElement, SmallSearchInputProps>(
-  function SmallSearchInput({ value, onChange, placeholder = '' }, ref) {
+  function SmallSearchInput({ value, onChange, placeholder = '', shortcutKey = 'K' }, ref) {
     return (
       <div className="relative w-full max-w-xs">
         <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
@@ -26,7 +27,7 @@ const SmallSearchInput = React.forwardRef<HTMLInputElement, SmallSearchInputProp
         <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1">
           <kbd className="px-1.5 py-0.5 text-[10px] text-text-muted bg-background border border-card-border rounded">Ctrl</kbd>
           <kbd className="px-1.5 py-0.5 text-[10px] text-text-muted bg-background border border-card-border rounded">Shift</kbd>
-          <kbd className="px-1.5 py-0.5 text-[10px] text-text-muted bg-background border border-card-border rounded">K</kbd>
+          <kbd className="px-1.5 py-0.5 text-[10px] text-text-muted bg-background border border-card-border rounded">{shortcutKey}</kbd>
         </div>
       </div>
     );
