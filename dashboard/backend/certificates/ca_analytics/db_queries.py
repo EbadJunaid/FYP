@@ -3,8 +3,14 @@
 
 from datetime import datetime, timezone
 #from tkinter.font import names
+from math import log2
 from typing import List, Dict, Any, Optional
 from ..db import db, MongoDBClient
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 
 class CAModel:
@@ -16,6 +22,34 @@ class CAModel:
         '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
         '#06b6d4', '#14b8a6', '#6366f1', '#ec4899', '#84cc16',
     ]
+    _critical_lints = {
+        'e_ext_san_missing',
+        'e_subject_common_name_not_from_san',
+        'e_ext_san_not_critical_without_subject',
+        'e_ext_authority_key_identifier_missing',
+        'e_ext_policy_constraints_empty',
+        'e_ext_policy_constraints_not_critical',
+        'e_ext_name_constraints_not_in_ca',
+        'e_ext_name_constraints_not_critical',
+        'e_ext_policy_map_any_policy',
+        'e_ext_key_usage_cert_sign_without_ca',
+        'e_sub_cert_key_usage_cert_sign_bit_set',
+        'e_sub_cert_key_usage_crl_sign_bit_set',
+        'e_serial_number_longer_than_20_octets',
+        'e_sub_cert_valid_time_too_long',
+        'e_rsa_mod_less_than_2048_bits',
+        'e_sub_cert_or_sub_ca_using_sha1',
+        'e_signature_algorithm_not_supported',
+        'e_sub_cert_aia_missing',
+        'e_sub_cert_aia_does_not_contain_ocsp_url',
+        'e_dnsname_bad_character_in_label',
+        'e_dnsname_empty_label',
+        'e_dnsname_label_too_long',
+        'e_ext_san_dns_name_too_long',
+    }
+    _dv_oids = {'2.23.140.1.2.1'}
+    _ov_oids = {'2.23.140.1.2.2'}
+    _ev_oids = {'2.23.140.1.1'}
 
     _ranking_groups = {
         'ca': {
@@ -50,15 +84,258 @@ class CAModel:
             'finalScore': 'mean(core_hygiene, crypto_health, operational_stability, policy_compliance, risk_factors) * 100',
         }
 
-    @classmethod
-    def get_ranking(cls, limit: int = 20, group_by: str = 'ca') -> Dict[str, Any]:
-        group_by = group_by if group_by in cls._ranking_groups else 'ca'
-        limit = max(1, min(int(limit or 20), 5000))
+    @staticmethod
+    def _mean(values) -> float:
+        values = list(values)
+        return sum(values) / len(values) if values else 0.0
 
-        empty_response = {
+    @staticmethod
+    def _percentile(values, percent) -> float:
+        values = sorted(values)
+        if not values:
+            return 0.0
+        if np is not None:
+            return float(np.percentile(values, percent))
+        k = (len(values) - 1) * (percent / 100)
+        low = int(k)
+        high = min(low + 1, len(values) - 1)
+        if low == high:
+            return float(values[low])
+        return float(values[low] + (values[high] - values[low]) * (k - low))
+
+    @staticmethod
+    def _get_safe(data, keys, default=None):
+        current = data
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return default
+        return current
+
+    @classmethod
+    def _ca_name_from_cert(cls, cert: Dict[str, Any]) -> str:
+        issuer_org = cls._get_safe(cert, ['issuer', 'organization'], [])
+        if isinstance(issuer_org, list) and issuer_org:
+            return issuer_org[0]
+        if isinstance(issuer_org, str):
+            return issuer_org
+        return cls._get_safe(cert, ['issuer_dn'], 'Unknown') or 'Unknown'
+
+    @staticmethod
+    def _parse_iso_date(value):
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(str(value).replace('Z', '').replace('z', ''))
+        except ValueError:
+            return None
+
+    @classmethod
+    def _is_leaf_certificate(cls, doc: Dict[str, Any]) -> bool:
+        parsed = doc.get('parsed', {}) or {}
+        basic_constraints = parsed.get('basic_constraints')
+        is_self_subject = parsed.get('subject_dn') and parsed.get('subject_dn') == parsed.get('issuer_dn')
+        is_ca = isinstance(basic_constraints, dict) and basic_constraints.get('ca') is True
+        return not is_self_subject and not is_ca
+
+    @classmethod
+    def _weighted_penalty_from_lints_noncritical(cls, zlint_lints: Dict[str, Any]) -> float:
+        penalty = 0.0
+        for name, entry in (zlint_lints or {}).items():
+            if name in cls._critical_lints:
+                continue
+            result = (entry.get('result') or '').lower() if isinstance(entry, dict) else ''
+            if result == 'error':
+                penalty += 2.0
+            elif result == 'warn':
+                penalty += 1.0
+        return penalty
+
+    @classmethod
+    def _compute_zcs_from_lints(cls, zlint_lints: Dict[str, Any], norm_m: float) -> float:
+        penalty = min(cls._weighted_penalty_from_lints_noncritical(zlint_lints), norm_m)
+        return max(0.0, 1.0 - penalty / norm_m)
+
+    @classmethod
+    def _compute_zhfs(cls, zlint_lints: Dict[str, Any]) -> float:
+        hits = sum(
+            1 for lint_name in cls._critical_lints
+            if (zlint_lints.get(lint_name) or {}).get('result') == 'error'
+        )
+        return 1.0 - (hits / max(1, len(cls._critical_lints)))
+
+    @classmethod
+    def _compute_khs(cls, cert: Dict[str, Any]) -> float:
+        size = (
+            cls._get_safe(cert, ['subject_key_info', 'rsa_public_key', 'length'])
+            or cls._get_safe(cert, ['subject_key_info', 'ecdsa_public_key', 'length'])
+            or 0
+        )
+        algo = (cls._get_safe(cert, ['subject_key_info', 'key_algorithm', 'name'], '') or '').upper()
+        validity_len = cls._get_safe(cert, ['validity', 'length'], 0) or 0
+        age_score = 1.0 - min(validity_len / 825, 1.0)
+        bits_ok = 1.0 if size >= 2048 else 0.0
+        algo_ok = 1.0 if algo in ['RSA', 'ECDSA'] else 0.0
+        return cls._mean([bits_ok, algo_ok, age_score])
+
+    @classmethod
+    def _compute_wklp(cls, cert: Dict[str, Any]) -> float:
+        rsa_len = cls._get_safe(cert, ['subject_key_info', 'rsa_public_key', 'length'])
+        ecdsa_len = cls._get_safe(cert, ['subject_key_info', 'ecdsa_public_key', 'length'])
+        length = rsa_len if rsa_len is not None else (ecdsa_len if ecdsa_len is not None else 2048)
+        return 1.0 if (length is not None and length < 2048) else 0.0
+
+    @classmethod
+    def _compute_kus(cls, cert: Dict[str, Any], seen_keys: set) -> float:
+        key_hash = cls._get_safe(cert, ['subject_key_info', 'fingerprint_sha256'])
+        if not key_hash:
+            return 0.5
+        reused = key_hash in seen_keys
+        seen_keys.add(key_hash)
+        return 0.0 if reused else 1.0
+
+    @staticmethod
+    def _compute_cads(ca_names) -> float:
+        if not ca_names:
+            return 0.0
+        counts = {}
+        for ca in ca_names:
+            counts[ca] = counts.get(ca, 0) + 1
+        if len(counts) <= 1:
+            return 0.0
+        probabilities = [count / len(ca_names) for count in counts.values()]
+        entropy = -sum(probability * log2(probability) for probability in probabilities if probability > 0)
+        return min(1.0, entropy / log2(len(counts)))
+
+    @classmethod
+    def _compute_tsi(cls, certs) -> float:
+        timestamps = []
+        for cert in certs:
+            parsed = cls._parse_iso_date(cls._get_safe(cert, ['validity', 'start']))
+            if parsed:
+                try:
+                    timestamps.append(parsed.timestamp())
+                except (OSError, OverflowError, ValueError):
+                    continue
+        if len(timestamps) < 2:
+            return 0.5
+        if np is not None:
+            std = float(np.std(timestamps))
+        else:
+            avg = cls._mean(timestamps)
+            std = cls._mean([(timestamp - avg) ** 2 for timestamp in timestamps]) ** 0.5
+        return max(0.0, 1.0 - (std / (730 * 24 * 3600)))
+
+    @staticmethod
+    def _compute_iops(issuer_list) -> float:
+        if len(issuer_list) <= 1:
+            return 1.0
+        same_adjacent = sum(1 for index in range(1, len(issuer_list)) if issuer_list[index] == issuer_list[index - 1])
+        return 1.0 - (same_adjacent / (len(issuer_list) - 1))
+
+    @classmethod
+    def _compute_ekuvs(cls, cert: Dict[str, Any]) -> float:
+        eku = cls._get_safe(cert, ['extensions', 'extended_key_usage'], {}) or {}
+        if not eku:
+            return 0.0
+        if eku.get('server_auth') or eku.get('client_auth'):
+            return 1.0 if len(eku) <= 2 else 0.5
+        return 0.0
+
+    @classmethod
+    def _compute_pics(cls, cert: Dict[str, Any]) -> float:
+        policies = cls._get_safe(cert, ['extensions', 'certificate_policies'], []) or []
+        if not isinstance(policies, list):
+            return 0.0
+        oids = {policy.get('id') for policy in policies if isinstance(policy, dict) and policy.get('id')}
+        return 1.0 if (oids & cls._dv_oids or oids & cls._ov_oids or oids & cls._ev_oids) else 0.0
+
+    @staticmethod
+    def _score_dvas_one(cert: Dict[str, Any]) -> float:
+        validation = (cert.get('validation_type') or cert.get('validation_level') or '').upper()
+        if validation == 'EV':
+            return 1.0
+        if validation == 'OV':
+            return 0.75
+        if validation == 'DV':
+            return 0.5
+        return 0.0
+
+    @classmethod
+    def _compute_ncvs(cls, cert: Dict[str, Any]) -> float:
+        return 1.0 if cls._get_safe(cert, ['extensions', 'name_constraints']) else 0.0
+
+    @classmethod
+    def _compute_gns(cls, cert: Dict[str, Any]) -> float:
+        country = cls._get_safe(cert, ['issuer', 'country', 0])
+        return 0.0 if country in {'IR', 'KP', 'SY', 'CU', 'RU'} else 1.0
+
+    @staticmethod
+    def _compute_accs() -> float:
+        return 0.5
+
+    @classmethod
+    def _compute_revps(cls, cert: Dict[str, Any]) -> float:
+        ocsp = cls._get_safe(cert, ['extensions', 'authority_info_access', 'ocsp_urls'], []) or []
+        crl = cls._get_safe(cert, ['extensions', 'crl_distribution_points'], []) or []
+        return 1.0 if (ocsp and crl) else (0.5 if (ocsp or crl) else 0.0)
+
+    @classmethod
+    def _score_certificate_with_notebook_formula(cls, doc: Dict[str, Any], norm_m: float, seen_keys: set) -> Dict[str, float]:
+        cert = doc.get('parsed', {}) or {}
+        zlint_lints = (doc.get('zlint') or {}).get('lints') or {}
+
+        core_hygiene = cls._mean([
+            cls._compute_zcs_from_lints(zlint_lints, norm_m),
+            cls._compute_zhfs(zlint_lints),
+        ])
+        crypto_health = cls._mean([
+            cls._compute_khs(cert),
+            cls._compute_kus(cert, seen_keys),
+            cls._compute_wklp(cert),
+        ])
+        issuer_name = cls._get_safe(cert, ['issuer_dn'])
+        operational_stability = cls._mean([
+            cls._compute_cads([issuer_name]),
+            cls._compute_tsi([cert]),
+            cls._compute_iops([issuer_name]),
+        ])
+        policy_compliance = cls._mean([
+            cls._compute_ekuvs(cert),
+            cls._compute_pics(cert),
+            cls._score_dvas_one(cert),
+            cls._compute_ncvs(cert),
+        ])
+        risk_factors = cls._mean([
+            cls._compute_gns(cert),
+            cls._compute_accs(),
+            cls._compute_revps(cert),
+        ])
+        final_score = cls._mean([
+            core_hygiene,
+            crypto_health,
+            operational_stability,
+            policy_compliance,
+            risk_factors,
+        ]) * 100
+        return {
+            'score': round(final_score, 2),
+            'coreHygiene': round(core_hygiene * 100, 2),
+            'cryptoHealth': round(crypto_health * 100, 2),
+            'operationalStability': round(operational_stability * 100, 2),
+            'policyCompliance': round(policy_compliance * 100, 2),
+            'riskFactors': round(risk_factors * 100, 2),
+        }
+
+    @classmethod
+    def _empty_ranking_response(cls, group_by: str, mode: str) -> Dict[str, Any]:
+        return {
             'groupBy': group_by,
             'metricLabel': cls._ranking_group_config(group_by)['label'],
-            'mode': 'precomputed',
+            'mode': mode,
             'items': [],
             'summary': {
                 'rankedCount': 0,
@@ -71,19 +348,16 @@ class CAModel:
             'formula': cls._notebook_ranking_formula(),
         }
 
-        if group_by != 'ca':
-            return empty_response
-
-        analysis_doc = cls._get_ca_analysis_doc()
-        if not analysis_doc:
-            return empty_response
-
+    @classmethod
+    def _format_ranking_items(cls, ca_list: List[Dict[str, Any]], total_certs: int, limit: int, mode: str, formula: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ca_list = [
-            item for item in analysis_doc.get('ca-list', [])
+            item for item in ca_list
             if item.get('scoreSampleCount', 0) > 0
         ]
         if not ca_list:
-            return {**empty_response, 'summary': {**empty_response['summary'], 'totalCertificates': analysis_doc.get('total_certs', 0)}}
+            empty = cls._empty_ranking_response('ca', mode)
+            empty['summary']['totalCertificates'] = total_certs
+            return empty
 
         ca_list = sorted(ca_list, key=lambda item: item.get('scoreRank') or 999999)
         items = []
@@ -115,18 +389,203 @@ class CAModel:
         return {
             'groupBy': 'ca',
             'metricLabel': 'CA',
-            'mode': 'precomputed',
+            'mode': mode,
             'items': limited,
             'summary': {
                 'rankedCount': len(items),
                 'topName': top.get('name') if top else None,
                 'topScore': top.get('score', 0) if top else 0,
                 'averageScore': round(sum(entry.get('score', 0) for entry in items) / len(items), 2) if items else 0,
-                'totalCertificates': analysis_doc.get('total_certs', 0),
+                'totalCertificates': total_certs,
                 'bestHygieneName': best_hygiene.get('name') if best_hygiene else None,
             },
-            'formula': analysis_doc.get('ranking_formula') or cls._notebook_ranking_formula(),
+            'formula': formula or cls._notebook_ranking_formula(),
         }
+
+    @classmethod
+    def get_ranking_fast(cls, limit: int = 20, group_by: str = 'ca') -> Dict[str, Any]:
+        group_by = group_by if group_by in cls._ranking_groups else 'ca'
+        limit = max(1, min(int(limit or 20), 5000))
+
+        if group_by != 'ca':
+            return cls._empty_ranking_response(group_by, 'precomputed')
+
+        analysis_doc = cls._get_ca_analysis_doc()
+        if not analysis_doc:
+            return cls.get_ranking(limit=limit, group_by=group_by)
+
+        ca_list = analysis_doc.get('ca-list', [])
+        if not any(item.get('scoreSampleCount', 0) > 0 for item in ca_list):
+            return cls.get_ranking(limit=limit, group_by=group_by)
+
+        return cls._format_ranking_items(
+            ca_list=ca_list,
+            total_certs=analysis_doc.get('total_certs', 0),
+            limit=limit,
+            mode='precomputed',
+            formula=analysis_doc.get('ranking_formula') or cls._notebook_ranking_formula(),
+        )
+
+    @classmethod
+    def get_ranking(cls, limit: int = 20, group_by: str = 'ca') -> Dict[str, Any]:
+        group_by = group_by if group_by in cls._ranking_groups else 'ca'
+        limit = max(1, min(int(limit or 20), 5000))
+        if group_by != 'ca':
+            return cls._empty_ranking_response(group_by, 'live')
+
+        total_certs = cls.collection.estimated_document_count()
+        ca_validation_pipeline = [
+            {
+                '$group': {
+                    '_id': {
+                        'issuer': {'$arrayElemAt': ['$parsed.issuer.organization', 0]},
+                        'validationLevel': {'$ifNull': ['$parsed.validation_level', 'Unknown']},
+                    },
+                    'count': {'$sum': 1},
+                }
+            },
+            {'$sort': {'count': -1}},
+        ]
+        validation_results = list(cls.collection.aggregate(ca_validation_pipeline, allowDiskUse=True))
+
+        issuer_map = {}
+        for record in validation_results:
+            issuer = record['_id']['issuer']
+            if not issuer:
+                continue
+            issuer_entry = issuer_map.setdefault(issuer, {
+                'name': issuer,
+                'count': 0,
+                'validationLevel': [],
+            })
+            issuer_entry['count'] += record['count']
+            issuer_entry['validationLevel'].append({
+                'validationlevel_type': record['_id'].get('validationLevel') or 'Unknown',
+                'count': record['count'],
+            })
+
+        ca_records = sorted(issuer_map.values(), key=lambda item: item['count'], reverse=True)
+        total_with_issuer = sum(record['count'] for record in ca_records)
+        ca_score_map = cls._compute_live_ca_scores()
+
+        colors = [
+            '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
+            '#06b6d4', '#14b8a6', '#6366f1', '#ec4899', '#84cc16',
+            '#f97316', '#a855f7', '#22c55e', '#0ea5e9', '#d946ef',
+            '#eab308', '#6b7280',
+        ]
+        ca_list = []
+        for index, record in enumerate(ca_records):
+            score_data = ca_score_map.get(record['name'], {})
+            ca_list.append({
+                'ca_id': f'ca-{index}',
+                'name': record['name'],
+                'count': record['count'],
+                'percentage': round((record['count'] / total_with_issuer) * 100, 1) if total_with_issuer else 0,
+                'color': colors[index % len(colors)],
+                'rank': index + 1,
+                'score': score_data.get('score', 0),
+                'scoreRank': None,
+                'scoreSampleCount': score_data.get('scoreSampleCount', 0),
+                'coreHygiene': score_data.get('coreHygiene', 0),
+                'cryptoHealth': score_data.get('cryptoHealth', 0),
+                'operationalStability': score_data.get('operationalStability', 0),
+                'policyCompliance': score_data.get('policyCompliance', 0),
+                'riskFactors': score_data.get('riskFactors', 0),
+                'validationLevel': sorted(record['validationLevel'], key=lambda item: item['count'], reverse=True),
+            })
+
+        scored_cas = sorted(
+            [item for item in ca_list if item.get('scoreSampleCount', 0) > 0],
+            key=lambda item: item.get('score', 0),
+            reverse=True,
+        )
+        for score_index, item in enumerate(scored_cas, start=1):
+            item['scoreRank'] = score_index
+
+        return cls._format_ranking_items(
+            ca_list=ca_list,
+            total_certs=total_certs,
+            limit=limit,
+            mode='live',
+            formula=cls._notebook_ranking_formula(),
+        )
+
+    @classmethod
+    def _compute_live_ca_scores(cls) -> Dict[str, Dict[str, Any]]:
+        pass1_projection = {
+            'parsed.subject_dn': 1,
+            'parsed.issuer_dn': 1,
+            'parsed.basic_constraints.ca': 1,
+            'zlint.lints': 1,
+        }
+        pass2_projection = {
+            'parsed.issuer.organization': 1,
+            'parsed.issuer_dn': 1,
+            'parsed.subject_dn': 1,
+            'parsed.basic_constraints.ca': 1,
+            'parsed.validity': 1,
+            'parsed.subject_key_info': 1,
+            'parsed.extensions.extended_key_usage': 1,
+            'parsed.extensions.certificate_policies': 1,
+            'parsed.extensions.name_constraints': 1,
+            'parsed.extensions.authority_info_access.ocsp_urls': 1,
+            'parsed.extensions.authority_info_access.issuer_urls': 1,
+            'parsed.extensions.crl_distribution_points': 1,
+            'parsed.validation_level': 1,
+            'parsed.validation_type': 1,
+            'parsed.issuer.country': 1,
+            'zlint.lints': 1,
+        }
+
+        penalty_values = []
+        for doc in cls.collection.find({}, pass1_projection).batch_size(2000):
+            if not cls._is_leaf_certificate(doc):
+                continue
+            zlint_lints = (doc.get('zlint') or {}).get('lints') or {}
+            penalty_values.append(cls._weighted_penalty_from_lints_noncritical(zlint_lints))
+        norm_m = max(cls._percentile(penalty_values, 95), 1.0) if penalty_values else 10.0
+
+        seen_keys = set()
+        ca_scores = {}
+        for doc in cls.collection.find({}, pass2_projection).batch_size(2000):
+            if not cls._is_leaf_certificate(doc):
+                continue
+            cert = doc.get('parsed', {}) or {}
+            ca_name = cls._ca_name_from_cert(cert)
+            if not ca_name or ca_name == 'Unknown':
+                continue
+            score = cls._score_certificate_with_notebook_formula(doc, norm_m, seen_keys)
+            entry = ca_scores.setdefault(ca_name, {
+                'count': 0,
+                'score': 0.0,
+                'coreHygiene': 0.0,
+                'cryptoHealth': 0.0,
+                'operationalStability': 0.0,
+                'policyCompliance': 0.0,
+                'riskFactors': 0.0,
+            })
+            entry['count'] += 1
+            entry['score'] += score['score']
+            entry['coreHygiene'] += score['coreHygiene']
+            entry['cryptoHealth'] += score['cryptoHealth']
+            entry['operationalStability'] += score['operationalStability']
+            entry['policyCompliance'] += score['policyCompliance']
+            entry['riskFactors'] += score['riskFactors']
+
+        formatted = {}
+        for ca_name, data in ca_scores.items():
+            count = data['count']
+            formatted[ca_name] = {
+                'score': round(data['score'] / count, 2),
+                'scoreSampleCount': count,
+                'coreHygiene': round(data['coreHygiene'] / count, 2),
+                'cryptoHealth': round(data['cryptoHealth'] / count, 2),
+                'operationalStability': round(data['operationalStability'] / count, 2),
+                'policyCompliance': round(data['policyCompliance'] / count, 2),
+                'riskFactors': round(data['riskFactors'] / count, 2),
+            }
+        return formatted
 
     # @classmethod
     # def get_ca_stats_fast(cls) -> Dict:

@@ -30,4 +30,4 @@ class CAAnalyticsController:
 
     @staticmethod
     def get_ca_ranking(limit: int = 20, group_by: str = 'ca') -> Dict:
-        return CAModel.get_ranking(limit=limit, group_by=group_by)
+        return CAModel.get_ranking_fast(limit=limit, group_by=group_by)
