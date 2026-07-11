@@ -27,6 +27,6 @@ def ranges_from_apnic(file_in, file_out):
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print("Usage: python apnic_pk_to_cidrs.py nirsoft-ip-range.csv nirsoft.txt")
+        print("Usage: python apnic-pk-to-cidrs.py .csv pk-ip-ranges.csv")
         sys.exit(1)
     ranges_from_apnic(sys.argv[1], sys.argv[2])

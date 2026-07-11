@@ -339,7 +339,7 @@ def build_results_indexes():
             {"name": "idx_validity_analysis_scope", "keys": [("scope", ASCENDING)], "options": {"background": True}},
             {"name": "idx_validity_analysis_computedAt", "keys": [("computedAt", ASCENDING)], "options": {"background": True}},
         ],
-        "geographic-distribution-1": [
+        "geographic-distribution": [
             {"name": "idx_geo_distribution_scope", "keys": [("scope", ASCENDING)], "options": {"background": True}},
             {"name": "idx_geo_distribution_computed_at", "keys": [("computed_at", ASCENDING)], "options": {"background": True}},
             {"name": "idx_geo_distribution_country_rank", "keys": [("countries.rank", ASCENDING)], "options": {"background": True}},

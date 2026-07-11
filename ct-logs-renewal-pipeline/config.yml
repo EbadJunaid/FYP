@@ -25,13 +25,14 @@ prometheus:
 
 general:
   # DisableDefaultLogs indicates whether the default logs used in Google Chrome and provided by Google should be disabled.
-  disable_default_logs: true 
+  disable_default_logs: false 
   
   # This tells the server to ONLY connect to this specific log
-  additional_logs:
-    - url: "https://ct.cloudflare.com/logs/nimbus2026"
-      operator: "Cloudflare"
-      description: "Cloudflare Nimbus 2026"
+  # additional_logs:
+  #   - url: "https://ct.cloudflare.com/logs/nimbus2026"
+  #     operator: "Cloudflare"
+  #     description: "Cloudflare Nimbus 2026"
+  
   # When you want to add logs that are not contained in the log list provided by
   # Google (https://www.gstatic.com/ct/log_list/v3/log_list.json), you can add them here.
   #additional_logs:

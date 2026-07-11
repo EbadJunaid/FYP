@@ -1,9 +1,9 @@
 {
   "databases": [
     {
-      "id": "hugging-face-792k",
-      "main": "hugging-face-792k",
-      "results": "hugging-face-792k-results",
+      "id": "hugging-face-700k",
+      "main": "hugging-face-700k",
+      "results": "hugging-face-700k-results",
       "countries": [
         "ac",
         "ad",

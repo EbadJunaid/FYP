@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 ### This is the crawler which removes the raw field and also adds the scope field
 ### We have not added mongoDB batch writing because of multi threading issues 
 ### if we add multi threading then it makes our crawler more worse so we have not added it 
@@ -15,7 +16,7 @@ import os
 import subprocess
 from datetime import datetime, timedelta
 from pymongo import MongoClient, ASCENDING, ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, BulkWriteError  # <-- ADDED BulkWriteError
 
 # -------------------- Configuration --------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,13 +26,13 @@ _START_TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 CONFIG = {
     'MONGODB_URL': "mongodb://localhost:27017",
-    'DB_NAME': "renew-database-x",
+    'DB_NAME': "hugging-face-701k",
     'STATUS_COLLECTION': "domain_status",
     'CERTIFICATES_COLLECTION': "certificates",
     
     # Paths
-    'CSV_FILE': os.path.join(BASE_DIR, "./new-data.csv"),
-    'ZCERT_BINARY': os.path.join(BASE_DIR, "./zcertificate/zcertificate"),
+    'CSV_FILE': os.path.join(BASE_DIR, "../../../ct-logs-renewal-pipeline/global-dataset.csv"),
+    'ZCERT_BINARY': os.path.join(BASE_DIR, "../zcertificate/zcertificate"),
     'LOG_FILE': os.path.join(BASE_DIR,f"./logs/renew-{_START_TIMESTAMP}.log"),
     'ISSUE_LOG_FILE': os.path.join(BASE_DIR,f"./logs/renew-thread-issues-{_START_TIMESTAMP}.log"),
     'NUM_THREADS': 30,
@@ -133,11 +134,15 @@ def load_csv_if_empty():
         sys.exit(1)
     
     if domains:
+        # -------------------- MODIFIED: Added exception handling --------------------
         try:
             status_coll.insert_many(domains, ordered=False)
             print(f"[INIT] Successfully loaded {len(domains)} domains.")
-        except DuplicateKeyError:
-            pass 
+        except (DuplicateKeyError, BulkWriteError):
+            inserted = status_coll.count_documents({})
+            print(f"[INIT] Loaded with some duplicates skipped. Total in DB: {inserted}")
+            pass
+        # --------------------------------------------------------------------------
 
 # -------------------- Logging Functions (V2 Style) --------------------
 def log_issue(message):

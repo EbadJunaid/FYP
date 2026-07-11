@@ -42,7 +42,7 @@ MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 # Collections each compute script is expected to populate in <results_db>.
 SCRIPT_RESULT_COLLECTIONS: dict[str, list[str]] = {
     "generic-compute-ca-stats.py": ["ca-analysis"],
-    "generic-compute-geographic-distribution.py": ["geographic-distribution-1"],
+    "generic-compute-geographic-distribution.py": ["geographic-distribution"],
     "generic-compute-san-analytics.py": ["san-analysis"],
     "generic-compute-shared-keys.py": ["shared-keys-detailed"],
     "generic-compute-signature-stats.py": ["signature-and-hash"],

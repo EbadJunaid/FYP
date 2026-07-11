@@ -2,7 +2,7 @@
 """
 Generic geographic distribution pre-compute script.
 
-Reads databases.json unless --dbs is provided, and writes to <results_db>.geographic-distribution-1.
+Reads databases.json unless --dbs is provided, and writes to <results_db>.geographic-distribution.
 """
 
 import argparse
@@ -332,7 +332,7 @@ def get_tld_country(domain):
 
 def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False, scope="all"):
     source_collection = client[main_db]["certificates"]
-    target_collection_name = "geographic-distribution-1"
+    target_collection_name = "geographic-distribution"
     target_collection = client[results_db][target_collection_name]
 
     country_groups = {}

@@ -523,7 +523,7 @@
         
 #         try:
 #             # Read from pre-computed collection
-#             geo_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
+#             geo_collection = MongoDBClient.get_results_db()['geographic-distribution']
             
 #             # Get metadata to check freshness
 #             metadata = geo_collection.find_one({'_id': 'metadata'})
@@ -1235,7 +1235,7 @@
 #             print(f"[COUNTRY FILTER] Using pre-computed IDs for: {country}")
 #             try:
 #                 # Get certificate IDs from pre-computed collection
-#                 country_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
+#                 country_collection = MongoDBClient.get_results_db()['geographic-distribution']
 #                 country_doc = country_collection.find_one({'_id': country})
                 
 #                 if not country_doc:

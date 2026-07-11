@@ -368,20 +368,27 @@ export default function SharedKeyDetailPage() {
                                             </div>
                                             <div>
                                                 <div className="text-xs text-text-secondary mb-1">Validity End</div>
+                                                {/* COMMENTED: non-deterministic pre-computed fields
                                                 <div className={`text-sm ${cert.is_expired ? 'text-accent-red' : cert.is_expiring_soon ? 'text-accent-yellow' : 'text-text-primary'}`}>
+                                                */}
+                                                <div className="text-sm text-text-primary">
                                                     {new Date(cert.validity_end).toLocaleDateString()}
+                                                    {/* COMMENTED: is_expired / is_expiring_soon
                                                     {cert.is_expired && ' (EXPIRED)'}
                                                     {!cert.is_expired && cert.is_expiring_soon && ' (Expiring Soon)'}
+                                                    */}
                                                 </div>
                                             </div>
                                             <div>
                                                 <div className="text-xs text-text-secondary mb-1">Validity Period</div>
                                                 <div className="text-sm text-text-primary">{cert.validity_days} days</div>
                                             </div>
+                                            {/* COMMENTED: non-deterministic pre-computed field
                                             <div>
                                                 <div className="text-xs text-text-secondary mb-1">Days Until Expiry</div>
-                                                <div className="text-sm text-text-primary">{cert.days_until_expiry !== null ? cert.days_until_expiry : 'N/A'}</div>
+                                                <div className="text-sm text-text-primary">{cert.days_until_expiry != null ? cert.days_until_expiry : 'N/A'}</div>
                                             </div>
+                                            */}
                                             <div>
                                                 <div className="text-xs text-text-secondary mb-1">Validation Level</div>
                                                 <div className="text-sm text-text-primary">{cert.validation_level}</div>

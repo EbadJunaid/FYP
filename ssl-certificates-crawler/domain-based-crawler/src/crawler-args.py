@@ -27,12 +27,12 @@ _START_TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 CONFIG = {
     'MONGODB_URL': "mongodb://localhost:27017",
-    'DB_NAME': "check-new-1",
+    'DB_NAME': "hugging-face-701k",
     'STATUS_COLLECTION': "domain_status",
     'CERTIFICATES_COLLECTION': "certificates",
     
     # Paths
-    'CSV_FILE': os.path.join(BASE_DIR, "./check-data.csv"),
+    'CSV_FILE': os.path.join(BASE_DIR, "../../../ct-logs-renewal-pipeline/global-dataset.csv"),
     'ZCERT_BINARY': os.path.join(BASE_DIR, "../zcertificate/zcertificate"),
     'LOG_FILE': os.path.join(BASE_DIR,f"./logs/renew-{_START_TIMESTAMP}.log"),
     'ISSUE_LOG_FILE': os.path.join(BASE_DIR,f"./logs/renew-thread-issues-{_START_TIMESTAMP}.log"),

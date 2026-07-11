@@ -8,7 +8,7 @@ Pipeline steps:
      strip leading "www.", write to new-data.csv
   3. Drop "certificates" in "go-server"
   4. Launch  crawler-args.py  as a subprocess and wait for it to finish
-  5. Append documents from "new-dataset"/"certificates" → "hugging-face-792k"/"certificates"
+  5. Append documents from "new-dataset"/"certificates" → "hugging-face-700k"/"certificates"
      Track exactly which domains were successfully inserted using
      parsed.fingerprint_sha256 (unique index) for duplicate detection.
   6. Append ONLY those confirmed-inserted domains into global-dataset.csv
@@ -35,7 +35,7 @@ SOURCE_COLLECTION  = "certificates"
 NEW_CSV            = Path("new-data.csv")
 GLOBAL_CSV         = Path("global-dataset.csv")
 
-TARGET_DB          = "hugging-face-792k"
+TARGET_DB          = "hugging-face-700k"
 TARGET_COLLECTION  = "certificates"
 
 NEW_DATASET_DB         = "new-data"
@@ -184,7 +184,7 @@ def run_main_script() -> None:
 
 def append_certificates(client: MongoClient) -> set:
     """
-    Bulk-insert documents from new-dataset/certificates → hugging-face-792k/certificates.
+    Bulk-insert documents from new-dataset/certificates → hugging-face-700k/certificates.
 
     How duplicate detection works:
     ─────────────────────────────

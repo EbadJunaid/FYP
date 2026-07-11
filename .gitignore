@@ -175,3 +175,6 @@ ct-logs-renewal-pipeline/.pids
 ct-logs-renewal-pipeline/logs/
 
 ssl-certificates-crawler/domain-based-crawler/src/logs/
+
+
+check/

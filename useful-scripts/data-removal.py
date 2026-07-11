@@ -16,7 +16,7 @@ import sys
 #  CONFIGURATION — update these before running
 # ──────────────────────────────────────────────
 MONGO_URI        = "mongodb://localhost:27017"   # your MongoDB connection URI
-DATABASE_NAME    = "hugging-face-792k"          # your database name
+DATABASE_NAME    = "hugging-face-700k"          # your database name
 COLLECTION_NAME  = "certificates"        # your collection name
 # ──────────────────────────────────────────────
 

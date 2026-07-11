@@ -43,7 +43,7 @@ except ImportError:
 # CONFIGURATION — edit these values to match your setup
 # ═══════════════════════════════════════════════════════════════════════════
 MONGO_URI        = "mongodb://localhost:27017"   # Change if using auth: mongodb://user:pass@host:port
-DATABASE_NAME    = "hugging-face-792k"          # ← replace
+DATABASE_NAME    = "hugging-face-700k"          # ← replace
 COLLECTION_NAME  = "certificates"        # ← replace
 DOMAIN_FIELD     = "domain"                      # top-level field in your documents
 

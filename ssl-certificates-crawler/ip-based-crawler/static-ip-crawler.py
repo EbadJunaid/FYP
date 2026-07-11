@@ -20,11 +20,11 @@ import time
 
 # ==================== CONFIGURATION ====================
 MONGODB_URI = "mongodb://localhost:27017/"
-DATABASE_NAME = "ssl-certificates-4"
+DATABASE_NAME = "ip-based-crawler-static"
 COLLECTION_NAME = "pk-certificates"
 
-CSV_FILE = "ip-ranges-1.csv"  # Hardcoded CSV file path
-ZCERTIFICATE_PATH = "./zcertificate"
+CSV_FILE = "pk-ip-ranges-mini.csv"  # Hardcoded CSV file path
+ZCERTIFICATE_PATH = "../domain-based-crawler/zcertificate/zcertificate"
 
 SCAN_TIMEOUT = 3  # seconds
 HTTPS_PORT = 443

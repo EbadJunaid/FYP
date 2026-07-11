@@ -36,14 +36,7 @@ const pageTitles: Record<string, string> = {
     '/dashboard/cas-vs-domains': 'CAs vs Domains',
     '/dashboard/san-analytics': 'SAN Analytics',
     '/dashboard/trends': 'Trends',
-    '/dashboard/type-distribution': 'Type Distribution',
-    '/dashboard/issuer-organizations': 'Issuer Organizations',
     '/dashboard/issuer-countries': 'Issuer Countries',
-    '/dashboard/subject-names': 'Subject Names',
-    // '/dashboard/cas-vs-domains': 'CAs vs Domains',
-    '/dashboard/cas-vs-urls': 'CAs vs URLs',
-    '/dashboard/cas-vs-public-keys': 'CAs vs Public Keys',
-    '/dashboard/shared-public-keys': 'Shared Public Keys',
     '/dashboard/shared-keys': 'Shared Public Keys',
 };
 

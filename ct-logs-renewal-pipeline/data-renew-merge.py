@@ -40,7 +40,7 @@ from pymongo.errors import BulkWriteError, PyMongoError
 # -------------------- Configuration --------------------
 CONFIG = {
     'MAIN_MONGODB_URL': "mongodb://localhost:27017",
-    'MAIN_DB_NAME': "hugging-face-792k",
+    'MAIN_DB_NAME': "hugging-face-700k",
     'MAIN_CERTS_COLLECTION': "certificates",
 
     'RENEW_MONGODB_URL': "mongodb://localhost:27017",

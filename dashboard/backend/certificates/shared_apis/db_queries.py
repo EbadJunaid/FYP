@@ -720,7 +720,7 @@ class SharedModels:
         
         try:
             # Read from pre-computed collection
-            geo_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
+            geo_collection = MongoDBClient.get_results_db()['geographic-distribution']
             scope_filter = MongoDBClient.get_precomputed_scope_filter()
             scoped_doc = geo_collection.find_one(scope_filter)
             if scoped_doc and scoped_doc.get('countries') is not None:
@@ -2070,7 +2070,7 @@ class SharedModels:
         #     print(f"[COUNTRY FILTER] Using pre-computed IDs for: {country}")
         #     try:
         #         # Get certificate IDs from pre-computed collection
-        #         country_collection = MongoDBClient.get_results_db()['geographic-distribution-1']
+        #         country_collection = MongoDBClient.get_results_db()['geographic-distribution']
         #         country_doc = country_collection.find_one({'_id': country})
                 
         #         if not country_doc:
