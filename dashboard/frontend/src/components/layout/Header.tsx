@@ -33,6 +33,7 @@ const pageTitles: Record<string, string> = {
     '/dashboard/validity-analytics': 'Validity Analytics',
     '/dashboard/signature-hash': 'Signature & Hash',
     '/dashboard/ca-analytics': 'CA Analytics',
+    '/dashboard/ca-ranking': 'CA Ranking',
     '/dashboard/cas-vs-domains': 'CAs vs Domains',
     '/dashboard/san-analytics': 'SAN Analytics',
     '/dashboard/trends': 'Trends',
@@ -250,15 +251,15 @@ export default function Header({ onMenuClick, onSearch /*, onNotificationClick *
                     </button>
 
                     {/* Dynamic Breadcrumb */}
-                    <div className="hidden sm:flex items-center gap-2 text-sm">
-                        <span className="text-text-primary font-medium">{currentPageTitle}</span>
-                        {pathname !== '/' && (
-                            <>
-                                <span className="text-text-muted">/</span>
-                                <span className="text-text-muted">Dashboard</span>
-                            </>
-                        )}
-                    </div>
+                                    <div className="hidden sm:flex items-center gap-2 text-sm">
+                                        <span className="text-text-primary font-medium">{currentPageTitle}</span>
+                                        {pathname !== '/' && (
+                                            <>
+                                                <span className="text-text-muted">/</span>
+                                                <span className="text-text-muted">Dashboard</span>
+                                            </>
+                                        )}
+                                    </div>
                 </div>
 
                 {/* Center Section - Search */}

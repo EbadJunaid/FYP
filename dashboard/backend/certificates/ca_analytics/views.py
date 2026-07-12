@@ -29,3 +29,15 @@ class IssuerValidationMatrixView(View):
             return json_response(data)
         except Exception as e:
             return json_response({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CARankingView(View):
+    def get(self, request):
+        try:
+            limit = int(request.GET.get('limit', 20))
+            group_by = request.GET.get('group_by', 'ca')
+            data = CAAnalyticsController.get_ca_ranking(limit=limit, group_by=group_by)
+            return json_response(data)
+        except Exception as e:
+            return json_response({'error': str(e)}, status=500)

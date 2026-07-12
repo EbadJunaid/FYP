@@ -27,3 +27,7 @@ class CAAnalyticsController:
         result = CAModel.get_issuer_validation_matrix_fast(limit=limit)
         cache.set('issuer_validation_matrix', cache_params, result)
         return result
+
+    @staticmethod
+    def get_ca_ranking(limit: int = 20, group_by: str = 'ca') -> Dict:
+        return CAModel.get_ranking_fast(limit=limit, group_by=group_by)

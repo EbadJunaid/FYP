@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
     { id: 'validity-analytics', label: 'Validity Analytics', icon: 'validity', href: '/dashboard/validity-analytics' },
     { id: 'signature-hash', label: 'Signature & Hash', icon: 'signature', href: '/dashboard/signature-hash' },
     { id: 'ca-analytics', label: 'CA Analytics', icon: 'ca', href: '/dashboard/ca-analytics' },
+    { id: 'ca-ranking', label: 'CA Ranking', icon: 'ca', href: '/dashboard/ca-ranking' },
     { id: 'san-analytics', label: 'SAN Analytics', icon: 'san', href: '/dashboard/san-analytics' },
     { id: 'issuer-countries', label: 'Issuer Countries', icon: 'countries', href: '/dashboard/issuer-countries' },
     { id: 'shared-keys', label: 'Shared Public Keys', icon: 'shared', href: '/dashboard/shared-keys' },
