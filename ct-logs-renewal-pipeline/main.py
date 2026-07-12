@@ -43,6 +43,7 @@ near the bottom (kill_go_server / delete_go_server_db / step_7_run_generic)
 Requires: pip install psutil
 """
 
+import json
 import logging
 import subprocess
 import sys
@@ -74,17 +75,22 @@ run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 BASE_DIR = Path(__file__).resolve().parent
 PYTHON = sys.executable  # interpreter used to launch every child script
 
+_CONFIG_PATH = BASE_DIR.parent / "project-config.json"
+with open(_CONFIG_PATH) as _f:
+    _CONFIG_DATA = json.load(_f)["databases"][0]
+_PROJECT_ROOT = _CONFIG_PATH.parent
+
 SCRIPTS = {
     "fetch_domains_names": BASE_DIR / "fetch-domains-names.py",
     "data_renew":       BASE_DIR / "data-renew.py",
     "crawler":      BASE_DIR / "../ssl-certificates-crawler/domain-based-crawler/src/crawler-args.py",
     "data_renew_merge": BASE_DIR / "data-renew-merge.py",
     "new_data":         BASE_DIR / "new-data.py",
-    "generic":          BASE_DIR / "../dashboard/backend/mongo-indexes-pre-compute-scripts/generic/run-generic.py",
+    "generic":          BASE_DIR / "../dashboard/backend/pre-compute-scripts/run-generic.py",
     "go_server": BASE_DIR / "go-server.py",
 }
 
-GLOBAL_DATASET_CSV = BASE_DIR / "global-dataset.csv"
+GLOBAL_DATASET_CSV = _PROJECT_ROOT / _CONFIG_DATA["csv_path"]
 DATA_RENEW_CSV = BASE_DIR / "data-renew.csv"
 NEW_DATA_CSV = BASE_DIR / "new-data.csv"
 

@@ -9,8 +9,15 @@
 ## script and also the data renew logic 
 
 import csv
+import json
 import time
+from pathlib import Path
 from pymongo import MongoClient
+
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "project-config.json"
+with open(_CONFIG_PATH) as _f:
+    _CONFIG_DATA = json.load(_f)["databases"][0]
+_PROJECT_ROOT = _CONFIG_PATH.parent
 
 # ==========================================
 # CONFIGURATION
@@ -19,7 +26,7 @@ MONGO_URI = "mongodb://localhost:27017/"
 DB_NAME = "go-server"
 COLLECTION_NAME = "certificates"
 
-INPUT_CSV = "global-dataset.csv"
+INPUT_CSV = str(_PROJECT_ROOT / _CONFIG_DATA["csv_path"])
 OUTPUT_CSV = "data-renew.csv"
 
 BATCH_SIZE = 5000  

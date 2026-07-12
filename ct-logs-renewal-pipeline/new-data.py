@@ -18,6 +18,7 @@ import csv
 import logging
 import os
 import subprocess
+import json
 import sys
 import time
 from pathlib import Path
@@ -28,14 +29,19 @@ from pymongo.errors import BulkWriteError
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "project-config.json"
+with open(_CONFIG_PATH) as _f:
+    _CONFIG_DATA = json.load(_f)["databases"][0]
+_PROJECT_ROOT = _CONFIG_PATH.parent
+
 MONGO_URL          = "mongodb://localhost:27017"
 SOURCE_DB          = "go-server"
 SOURCE_COLLECTION  = "certificates"
 
 NEW_CSV            = Path("new-data.csv")
-GLOBAL_CSV         = Path("global-dataset.csv")
+GLOBAL_CSV         = _PROJECT_ROOT / _CONFIG_DATA["csv_path"]
 
-TARGET_DB          = "hugging-face-700k"
+TARGET_DB          = _CONFIG_DATA["main"]
 TARGET_COLLECTION  = "certificates"
 
 NEW_DATASET_DB         = "new-data"

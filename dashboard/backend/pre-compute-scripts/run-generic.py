@@ -3,7 +3,7 @@
 Run all generic maintenance scripts for databases listed in databases.json.
 
 Reads databases.json once at startup, then invokes every generic-*.py script in
-the generic/ folder (except this file), passing --dbs and --config to each.
+the  folder (except this file), passing --dbs and --config to each.
 
 Prerequisites:
   pyenv activate SSL-crawler
@@ -35,7 +35,8 @@ from pymongo.errors import ServerSelectionTimeoutError
 from scope_utils import normalize_db_entries
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CONFIG = os.path.join(SCRIPT_DIR, "databases.json")
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+DEFAULT_CONFIG = os.path.join(PROJECT_ROOT, "project-config.json")
 INDEXES_SCRIPT = "generic-create-indexes.py"
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
 

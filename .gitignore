@@ -132,8 +132,8 @@ dashboard/backend/UNDERSTANDING_INDEXES.md
 dashboard/README-old.md
 
 
-dashboard/backend/mongo-indexes-pre-compute-scripts/archive-2
-dashboard/backend/mongo-indexes-pre-compute-scripts/not-used-scripts
+dashboard/backend/pre-compute-scripts/archive-2
+dashboard/backend/pre-compute-scripts/not-used-scripts
 
 helping-material
 reports
@@ -160,16 +160,16 @@ dashboard/frontend/next-env.d.ts
 temp-saving/
 crawler-expr/__pycache__
 
-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
+dashboard/backend/pre-compute-scripts/__pycache__
 Things to discuss.txt
 dashboard/backend/Details.md
 dashboard/backend/Pre-Computed.md
 
 dashboard/data-sample.json
 
-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/__pycache__
+dashboard/backend/pre-compute-scripts/__pycache__
 temp-saving
-dashboard/backend/mongo-indexes-pre-compute-scripts/generic/compare-precompute-results.py
+dashboard/backend/pre-compute-scripts/compare-precompute-results.py
 
 ct-logs-renewal-pipeline/.pids
 ct-logs-renewal-pipeline/logs/
@@ -181,3 +181,8 @@ check/
 dashboard/ca-ranking.md
 
 dashboard/frontend/*.tsbuildinfo
+
+useful-scripts/__pycache__
+ct-logs-renewal-pipeline/__pycache__/
+ssl-certificates-crawler/domain-based-crawler/src/__pycache__/
+PROBLEM-CONFIG-SPRAWL.md

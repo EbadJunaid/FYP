@@ -15,7 +15,9 @@ import os
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from scope_utils import create_index_if_missing
 
-DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "databases.json")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", ".."))
+DEFAULT_CONFIG = os.path.join(_PROJECT_ROOT, "project-config.json")
 
 
 def load_db_entries(config_path):

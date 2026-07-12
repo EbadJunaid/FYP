@@ -2,7 +2,7 @@
 """
 Prepare small test databases by copying the first N certificates.
 
-Defaults:
+For examples :
 - tranco-latest-8-lakh -> test-api-tranco
 - pakistani-domains -> test-api-pakistani
 
@@ -17,8 +17,7 @@ import argparse
 from pymongo import MongoClient
 
 DEFAULT_PAIRS = [
-    ("tranco-latest-8-lakh", "api-tranco"),
-    ("pakistani-domains", "api-pakistani"),
+    ("hugging-face-700k", "hahksk"),
 ]
 
 

@@ -29,18 +29,24 @@ Design notes (read this before changing batch sizes / removing checkpointing):
     so each batch costs exactly one round trip (the bulk_write itself).
 """
 
+import json
 import sys
 import time
 import signal
+from pathlib import Path
 from datetime import datetime
 
 from pymongo import MongoClient, ReplaceOne, ASCENDING
 from pymongo.errors import BulkWriteError, PyMongoError
 
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "project-config.json"
+with open(_CONFIG_PATH) as _f:
+    _CONFIG_DATA = json.load(_f)["databases"][0]
+
 # -------------------- Configuration --------------------
 CONFIG = {
     'MAIN_MONGODB_URL': "mongodb://localhost:27017",
-    'MAIN_DB_NAME': "hugging-face-700k",
+    'MAIN_DB_NAME': _CONFIG_DATA["main"],
     'MAIN_CERTS_COLLECTION': "certificates",
 
     'RENEW_MONGODB_URL': "mongodb://localhost:27017",

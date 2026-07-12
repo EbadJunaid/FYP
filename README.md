@@ -63,8 +63,8 @@ The project is built from three interconnected pillars:
                                └──────────────────┘
 ``` -->
 
-> **Where to start:** To *run the website*, jump to [`dashboard/README.md`](./dashboard/README.md).
-> To *understand the data pipeline*, read [The CT‑logs renewal pipeline](#-the-ct-logs-renewal-pipeline)
+> **Where to start:** To *run the website*, jump to [`dashboard/README-dashboard.md`](./dashboard/README-dashboard.md).
+> To *understand the data pipeline*, read [The CT‑logs renewal pipeline](#-the-ctlogs-renewal-pipeline)
 > and [The certificate crawlers](#-the-certificate-crawlers) below.
 
 ---

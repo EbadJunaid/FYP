@@ -59,12 +59,9 @@ INCLUDE_ACCS = False
 
 
 def get_default_config_path():
-    script_dir = os.path.dirname(__file__)
-    local = os.path.join(script_dir, "databases.json")
-    if os.path.exists(local):
-        return local
-    parent = os.path.abspath(os.path.join(script_dir, "..", "databases.json"))
-    return parent
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+    return os.path.join(project_root, "project-config.json")
 
 
 def load_db_entries(config_path):

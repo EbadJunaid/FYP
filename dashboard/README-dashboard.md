@@ -110,7 +110,7 @@ urls.py  →  views.py  →  controllers.py  →  db_queries.py  →  MongoDB
 ```
 
 To keep pages fast, heavy aggregations are **pre‑computed** into the `*-results` database by the
-scripts in `mongo-indexes-pre-compute-scripts/generic/`. The live API mostly reads those
+scripts in `pre-compute-scripts/`. The live API mostly reads those
 pre‑computed collections instead of scanning millions of documents on every click.
 
 ---
@@ -210,13 +210,13 @@ Open your terminal and navigate to the pre-compute scripts folder inside the rep
 
 **For Windows:**
 ```powershell
-cd dashboard\backend\mongo-indexes-pre-compute-scripts\generic
+cd dashboard\backend\pre-compute-scripts\generic
 python run-generic.py
 ```
 
 **For Linux/macOS:**
 ```bash
-cd dashboard/backend/mongo-indexes-pre-compute-scripts/generic
+cd dashboard/backend/pre-compute-scripts/generic
 python3 run-generic.py
 ```
 
@@ -290,7 +290,7 @@ Changing the database name means every other script that expects the default nam
 
 | # | File | What to change |
 |---|---|---|
-| 1 | `dashboard/backend/mongo-indexes-pre-compute-scripts/generic/databases.json` | `"main"` and `"results"` — all pre-compute scripts read this |
+| 1 | `dashboard/backend/pre-compute-scripts/databases.json` | `"main"` and `"results"` — all pre-compute scripts read this |
 | 2 | `dashboard/backend/certificates/db.py` (lines 24–25) | `_BASE_MAIN_DB` and `_BASE_RESULTS_DB` — the Django backend's primary definition |
 
 **If you also want to keep your data fresh using the [CT-logs renewal pipeline](../ct-logs-renewal-pipeline/README.md):**
@@ -333,13 +333,13 @@ Once the crawler has finished, run the pre-compute script so the analytics datab
 
 **Windows:**
 ```powershell
-cd dashboard\backend\mongo-indexes-pre-compute-scripts\generic
+cd dashboard\backend\pre-compute-scripts\generic
 python run-generic.py
 ```
 
 **macOS / Linux:**
 ```bash
-cd dashboard/backend/mongo-indexes-pre-compute-scripts/generic
+cd dashboard/backend/pre-compute-scripts/generic
 python3 run-generic.py
 ```
 
@@ -525,7 +525,7 @@ Follow [⚠️ The data requirement](#️-the-data-requirement-read-this-first).
 6. **Build indexes + pre‑computed analytics** (do this once after loading data; re‑run whenever the
    data changes). From the backend folder:
    ```powershell
-   cd mongo-indexes-pre-compute-scripts/generic
+   cd pre-compute-scripts/generic
    python run-generic.py
    cd ../..
    ```
@@ -603,7 +603,7 @@ move between pages and the header's **scope switcher** to filter by country.
 | MongoDB connection URI | `backend/certificates/db.py` | `mongodb://localhost:27017/` | MongoDB is remote/non‑default. |
 | Main DB name | `backend/certificates/db.py` → `_BASE_MAIN_DB` | `hugging-face-700k` | your certificates DB is named differently. |
 | Results DB name | `backend/certificates/db.py` → `_BASE_RESULTS_DB` | `hugging-face-700k-results` | your results DB is named differently. |
-| Databases to pre‑compute | `backend/mongo-indexes-pre-compute-scripts/generic/databases.json` | `hugging-face-700k` | adding more datasets/countries. |
+| Databases to pre‑compute | `backend/pre-compute-scripts/databases.json` | `hugging-face-700k` | adding more datasets/countries. |
 | Country scopes | `backend/certificates/Scopes.json` | many | adding/removing scope options in the switcher. |
 | Allowed frontend origin (CORS) | `backend/ssl_dashboard/settings.py` → `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | the frontend runs on another host/port. |
 | Backend port | `python manage.py runserver 0.0.0.0:8000` | `8000` | port 8000 is taken. |
@@ -660,8 +660,8 @@ dashboard/
 │   │   └── <module>/          ← ca_analytics, overview, san_analytics, shared_keys,
 │   │                            signature_hash, trends, validity_analysis, shared_apis
 │   │                            (each: urls.py → views.py → controllers.py → db_queries.py)
-│   ├── mongo-indexes-pre-compute-scripts/
-│   │   └── generic/           ← run-generic.py + index/compute scripts (build the -results DB)
+│   ├── pre-compute-scripts/
+│   │   └──            ← run-generic.py + index/compute scripts (build the -results DB)
 │   └── country-domain-extractors/   ← split certs into per-country databases
 │
 └── frontend/                  ← Next.js 16 app (App Router)

@@ -21,9 +21,11 @@ from django.conf import settings
 # Global variables for current database (can be changed at runtime)
 # _CURRENT_MAIN_DB = 'tranco-latest-8-lakh'
 # _CURRENT_RESULTS_DB = 'tranco-latest-8-lakh-results'
-_BASE_MAIN_DB = 'hugging-face-700k'
-_BASE_RESULTS_DB = 'hugging-face-700k-results'  # Pre-computed results for 792k certificates
-# _BASE_RESULTS_DB = 'temp-7-lakh-results'
+_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "project-config.json"
+with open(_CONFIG_PATH) as _f:
+    _CONFIG_DATA = json.load(_f)["databases"][0]
+_BASE_MAIN_DB = _CONFIG_DATA["main"]
+_BASE_RESULTS_DB = _CONFIG_DATA["results"]
 
 _CURRENT_MAIN_DB = _BASE_MAIN_DB
 _CURRENT_RESULTS_DB = _BASE_RESULTS_DB

@@ -24,6 +24,7 @@ Dependencies:
 
 import argparse
 import csv
+import json
 # import logging       # ← LOGGING DISABLED: comment this back in if you re-enable the logging system
 import sys
 import time
@@ -42,12 +43,17 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION — edit these values to match your setup
 # ═══════════════════════════════════════════════════════════════════════════
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "project-config.json"
+with open(_CONFIG_PATH) as _f:
+    _CONFIG_DATA = json.load(_f)["databases"][0]
+_PROJECT_ROOT = _CONFIG_PATH.parent
+
 MONGO_URI        = "mongodb://localhost:27017"   # Change if using auth: mongodb://user:pass@host:port
-DATABASE_NAME    = "hugging-face-700k"          # ← replace
+DATABASE_NAME    = _CONFIG_DATA["main"]          # ← replaced
 COLLECTION_NAME  = "certificates"        # ← replace
 DOMAIN_FIELD     = "domain"                      # top-level field in your documents
 
-OUTPUT_CSV       = "global-dataset.csv"                 # primary output file
+OUTPUT_CSV       = str(_PROJECT_ROOT / _CONFIG_DATA["csv_path"])
 DEDUP_CSV        = "global-dataset-deduplicated.csv"    # written only if user confirms
 
 BATCH_SIZE       = 1000    # cursor batch size — controls network round-trips
