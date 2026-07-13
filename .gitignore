@@ -59,8 +59,6 @@ reports/zlint-errors-warnings/*
 
 #domain-based-crawler
 ssl-certificates-crawler/domain-based-crawler/logs
-ssl-certificates-crawler/domain-based-crawler/zcertificate/*
-!zcertificate
 
 
 #domain-based-crawler/datasets
@@ -186,3 +184,10 @@ useful-scripts/__pycache__
 ct-logs-renewal-pipeline/__pycache__/
 ssl-certificates-crawler/domain-based-crawler/src/__pycache__/
 PROBLEM-CONFIG-SPRAWL.md
+
+binaries/zcertificate
+binaries/certstream-server-go
+binaries/sample-certificates
+temp-file.py
+archive/global-dataset.csv
+ct-pipline-metrics.md

@@ -327,7 +327,16 @@ def get_tld_country(domain):
     return "Others"
 
 
-def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False, scope="all"):
+def compute_scope_counts(source_collection):
+    """One aggregation returning {scope_value: doc_count} for every scope."""
+    results = source_collection.aggregate(
+        [{"$group": {"_id": "$scope", "n": {"$sum": 1}}}],
+        allowDiskUse=True,
+    )
+    return {row["_id"]: row["n"] for row in results}
+
+
+def compute_geographic_distribution(client, main_db, results_db, limit=None, verify=False, scope="all", scope_counts=None):
     source_collection = client[main_db]["certificates"]
     target_collection_name = "geographic-distribution"
     target_collection = client[results_db][target_collection_name]
@@ -336,10 +345,13 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
     scope_filter = get_scope_filter(scope)
 
     if scope_filter:
-        try:
-            scoped_count = source_collection.count_documents(scope_filter, hint="idx_scope")
-        except Exception:
-            scoped_count = source_collection.count_documents(scope_filter)
+        if scope_counts is not None:
+            scoped_count = scope_counts.get(scope, 0)
+        else:
+            try:
+                scoped_count = source_collection.count_documents(scope_filter, hint="idx_scope")
+            except Exception:
+                scoped_count = source_collection.count_documents(scope_filter)
         if limit:
             scoped_count = min(scoped_count, limit)
         country = TLD_TO_COUNTRY.get(scope, scope.upper())
@@ -357,6 +369,7 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
         if limit:
             cursor = cursor.limit(limit)
 
+        cursor = cursor.batch_size(10000)
         processed_count = 0
 
         for doc in cursor:
@@ -428,12 +441,6 @@ def compute_geographic_distribution(client, main_db, results_db, limit=None, ver
 
     target_collection.replace_one({"scope": scope}, geo_doc, upsert=True)
 
-    create_index_if_missing(target_collection, "scope", name="idx_geo_distribution_scope", background=True)
-    create_index_if_missing(target_collection, "computed_at", name="idx_geo_distribution_computed_at", background=True)
-    create_index_if_missing(target_collection, "countries.rank", name="idx_geo_distribution_country_rank", background=True)
-    create_index_if_missing(target_collection, "countries.count", name="idx_geo_distribution_country_count", background=True)
-    create_index_if_missing(target_collection, "countries.name", name="idx_geo_distribution_country_name", background=True)
-
     if verify:
         stored_doc = target_collection.find_one({"scope": scope})
         if not stored_doc:
@@ -459,6 +466,10 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
+        source_collection = client[target["main"]]["certificates"]
+        # One aggregation covers every country scope; only the "all" scope
+        # still needs the domain scan.
+        scope_counts = compute_scope_counts(source_collection)
         for scope, _country in get_scopes_for_entry(target):
             compute_geographic_distribution(
                 client,
@@ -467,7 +478,15 @@ def main():
                 limit=args.limit,
                 verify=args.verify,
                 scope=scope,
+                scope_counts=scope_counts,
             )
+
+        target_collection = client[target["results"]]["geographic-distribution"]
+        create_index_if_missing(target_collection, "scope", name="idx_geo_distribution_scope", background=True)
+        create_index_if_missing(target_collection, "computed_at", name="idx_geo_distribution_computed_at", background=True)
+        create_index_if_missing(target_collection, "countries.rank", name="idx_geo_distribution_country_rank", background=True)
+        create_index_if_missing(target_collection, "countries.count", name="idx_geo_distribution_country_count", background=True)
+        create_index_if_missing(target_collection, "countries.name", name="idx_geo_distribution_country_name", background=True)
     client.close()
 
 

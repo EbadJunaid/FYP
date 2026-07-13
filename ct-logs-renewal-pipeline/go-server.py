@@ -20,9 +20,7 @@ MAIN_COLLECTION = "certificates"
 META_COLLECTION = "metadata"
 
 # Exact process name of your Go binary
-GO_BINARY_NAME = "./binaries/certstream-server-go_1.9.0_macOS_amd64"
-# Path to execute if it needs to be spawned (assumes current directory, adjust if needed)
-GO_BINARY_EXEC_PATH = f"./{GO_BINARY_NAME}" 
+GO_BINARY_NAME = "../binaries/certstream-server-go"
 
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
@@ -76,7 +74,7 @@ def manage_go_server_startup():
         try:
             # Spawn as a completely separate process group so it doesn't instantly die if python stumbles unexpectedly
             go_process_reference = subprocess.Popen(
-                [GO_BINARY_EXEC_PATH],
+                [GO_BINARY_NAME],
                 stdout=subprocess.DEVNULL, # Mute stdout/stderr to prevent cluttering ingestion terminal logs
                 stderr=subprocess.DEVNULL,
                 preexec_fn=os.setsid
@@ -85,7 +83,7 @@ def manage_go_server_startup():
             time.sleep(2.0)
             print("🚀 Background process successfully initiated.")
         except Exception as e:
-            print(f"❌ Failed to spawn Go binary at {GO_BINARY_EXEC_PATH}: {e}")
+            print(f"❌ Failed to spawn Go binary at {GO_BINARY_NAME}: {e}")
             print("⚠️ Ingestion script terminating due to missing stream dependency.")
             sys.exit(1)
 

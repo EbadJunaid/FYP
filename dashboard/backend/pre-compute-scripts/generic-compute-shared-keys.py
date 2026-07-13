@@ -5,14 +5,19 @@ Generic shared keys analytics pre-compute script.
 Writes:
 - <results_db>.shared-keys-detailed
 - <results_db> metadata in shared-keys-detailed
+
+Optimized: shared key groups for all scopes ("all" + configured countries) are
+found with scope-grouped aggregations, and the certificates of every shared key
+are fetched once (batched $in queries) instead of once per scope per group.
+Output documents keep the exact same shape, ids and index names.
 """
 
 import argparse
 import json
 import os
 from datetime import datetime, timezone
-from pymongo import MongoClient
-from scope_utils import add_scope_match, create_index_if_missing, get_scope_filter, get_scopes_for_entry, merge_scope_query, normalize_db_entries
+from pymongo import MongoClient, ReplaceOne
+from scope_utils import create_index_if_missing, get_scopes_for_entry, normalize_db_entries
 
 
 def log(message):
@@ -80,22 +85,235 @@ def calculate_days_until_expiry(validity_end_str):
         return None
 
 
-def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
-    log(f"Shared keys analytics: {main_db} -> {results_db} scope={scope}")
+CERTIFICATE_PROJECTION = {
+    "_id": 1,
+    "domain": 1,
+    "scope": 1,
+    "scanned_at": 1,
+    "parsed.serial_number": 1,
+    "parsed.fingerprint_sha256": 1,
+    "parsed.issuer": 1,
+    "parsed.issuer_dn": 1,
+    "parsed.subject": 1,
+    "parsed.subject_dn": 1,
+    "parsed.validity": 1,
+    "parsed.subject_key_info": 1,
+    "parsed.signature_algorithm": 1,
+    "parsed.signature.self_signed": 1,
+    "parsed.validation_level": 1,
+    "parsed.extensions.subject_alt_name": 1,
+    "parsed.extensions.extended_key_usage": 1,
+    "parsed.extensions.authority_info_access": 1,
+}
+
+
+def build_certificate_detail(cert):
+    parsed = cert.get("parsed", {})
+    extensions = parsed.get("extensions", {})
+    san_ext = extensions.get("subject_alt_name", {})
+    sans = san_ext.get("dns_names", [])
+
+    issuer_info = parsed.get("issuer", {})
+    issuer_org = issuer_info.get("organization", ["Unknown"])[0] if issuer_info.get("organization") else "Unknown"
+    issuer_cn = issuer_info.get("common_name", ["Unknown"])[0] if issuer_info.get("common_name") else "Unknown"
+    issuer_dn = parsed.get("issuer_dn", "Unknown")
+    issuer_country = issuer_info.get("country", ["Unknown"])[0] if issuer_info.get("country") else "Unknown"
+
+    validity = parsed.get("validity", {})
+    validity_start = validity.get("start", "")
+    validity_end = validity.get("end", "")
+    validity_length_seconds = validity.get("length", 0)
+    validity_days = validity_length_seconds / 86400 if validity_length_seconds else 0
+
+    days_until_expiry = calculate_days_until_expiry(validity_end)
+    is_expired = days_until_expiry is not None and days_until_expiry < 0
+    is_expiring_soon = days_until_expiry is not None and 0 <= days_until_expiry < 30
+
+    subject_info = parsed.get("subject", {})
+    subject_cn = subject_info.get("common_name", ["Unknown"])[0] if subject_info.get("common_name") else "Unknown"
+    subject_dn = parsed.get("subject_dn", "Unknown")
+
+    key_info = parsed.get("subject_key_info", {})
+    key_algo = key_info.get("key_algorithm", {}).get("name", "Unknown")
+    key_size = get_key_size(cert)
+    key_type = f"{key_algo}-{key_size}" if key_size > 0 else key_algo
+
+    signature_info = parsed.get("signature_algorithm", {})
+    signature_algo = signature_info.get("name", "Unknown")
+
+    validation_level = parsed.get("validation_level", "Unknown")
+
+    wildcard_sans = [san for san in sans if "*" in san]
+    has_wildcard = len(wildcard_sans) > 0
+
+    cert_fingerprint = parsed.get("fingerprint_sha256", "Unknown")
+    cert_id = str(cert.get("_id", ""))
+    serial_number = parsed.get("serial_number", "Unknown")
+
+    is_self_signed = parsed.get("signature", {}).get("self_signed", False)
+
+    domain = cert.get("domain", "Unknown")
+
+    scanned_at = cert.get("scanned_at")
+    if scanned_at:
+        scanned_at = scanned_at.isoformat() if hasattr(scanned_at, "isoformat") else str(scanned_at)
+
+    eku = extensions.get("extended_key_usage", {})
+    extended_key_usage = []
+    if eku.get("server_auth"):
+        extended_key_usage.append("serverAuth")
+    if eku.get("client_auth"):
+        extended_key_usage.append("clientAuth")
+
+    aia = extensions.get("authority_info_access", {})
+    ocsp_urls = aia.get("ocsp_urls", [])
+    issuer_urls = aia.get("issuer_urls", [])
+
+    return {
+        "certificate_id": cert_id,
+        "certificate_fingerprint": cert_fingerprint,
+        "certificate_fingerprint_short": cert_fingerprint[:16] if cert_fingerprint != "Unknown" else "Unknown",
+        "domain": domain,
+        "sans": sans,
+        "sans_count": len(sans),
+        "has_wildcard": has_wildcard,
+        "wildcard_sans": wildcard_sans,
+        "subject_cn": subject_cn,
+        "subject_dn": subject_dn,
+        "issuer_organization": issuer_org,
+        "issuer_cn": issuer_cn,
+        "issuer_dn": issuer_dn,
+        "issuer_country": issuer_country,
+        "validity_start": validity_start,
+        "validity_end": validity_end,
+        "validity_days": int(validity_days),
+        "is_expired": is_expired,
+        "days_until_expiry": days_until_expiry,
+        "is_expiring_soon": is_expiring_soon,
+        "validation_level": validation_level,
+        "key_algorithm": key_algo,
+        "key_size": key_size,
+        "key_type": key_type,
+        "signature_algorithm": signature_algo,
+        "is_self_signed": is_self_signed,
+        "serial_number": str(serial_number),
+        "extended_key_usage": extended_key_usage,
+        "ocsp_urls": ocsp_urls,
+        "issuer_urls": issuer_urls,
+        "scanned_at": scanned_at,
+    }, (issuer_org, issuer_cn), domain, sans
+
+
+def build_group_document(scope, public_key_hash, certificates):
+    """Build one shared_key_group document from the certificates sharing a key."""
+    certificate_details = []
+    all_domains = set()
+    all_sans = []
+    issuer_map = {}
+
+    for cert in certificates:
+        try:
+            cert_detail, (issuer_org, issuer_cn), domain, sans = build_certificate_detail(cert)
+        except Exception as exc:
+            log(f"Error processing certificate: {exc}")
+            continue
+
+        if issuer_org not in issuer_map:
+            issuer_map[issuer_org] = {"name": issuer_org, "cn": issuer_cn, "count": 0}
+        issuer_map[issuer_org]["count"] += 1
+
+        all_domains.add(domain)
+        all_sans.extend(sans)
+        certificate_details.append(cert_detail)
+
+    if not certificate_details:
+        return None, 0
+
+    cert_count = len(certificate_details)
+    total_sans = len(set(all_sans))
+
+    if cert_count >= 5 or total_sans >= 20:
+        risk_level = "HIGH"
+    elif cert_count >= 3 or total_sans >= 10:
+        risk_level = "MEDIUM"
+    else:
+        risk_level = "LOW"
+
+    risk_factors = [
+        f"{cert_count} certificates share the same private key",
+        f"{len(all_domains)} different domains affected",
+        f"{total_sans} SANs at risk if private key is compromised",
+    ]
+
+    if len(issuer_map) > 1:
+        risk_factors.append(f"Certificates from {len(issuer_map)} different Certificate Authorities")
+
+    domain_sans_count = {}
+    for cert_detail in certificate_details:
+        domain = cert_detail["domain"]
+        sans_count = cert_detail["sans_count"]
+        if domain not in domain_sans_count or sans_count > domain_sans_count[domain]:
+            domain_sans_count[domain] = sans_count
+
+    most_affected_domain = max(domain_sans_count.items(), key=lambda x: x[1]) if domain_sans_count else ("Unknown", 0)
+
+    key_type = certificate_details[0]["key_type"]
+    key_algo = certificate_details[0]["key_algorithm"]
+    key_size = certificate_details[0]["key_size"]
+
+    issuers_list = [
+        {
+            "organization": issuer_data["name"],
+            "common_name": issuer_data["cn"],
+            "certificate_count": issuer_data["count"],
+        }
+        for issuer_data in issuer_map.values()
+    ]
+    issuers_list.sort(key=lambda x: x["certificate_count"], reverse=True)
+
+    sample_domains = list(all_domains)[:3]
+    unique_sans = list(set(all_sans))
+    sample_sans = unique_sans[:5]
+
+    document = {
+        "_id": f"{scope}:{public_key_hash}",
+        "doc_type": "shared_key_group",
+        "scope": scope,
+        "public_key_hash": public_key_hash,
+        "public_key_hash_short": public_key_hash[:16],
+        "certificate_count": cert_count,
+        "total_domains": len(all_domains),
+        "sample_domains": sample_domains,
+        "total_sans": total_sans,
+        "sample_sans": sample_sans,
+        "unique_sans": unique_sans,
+        "key_algorithm": key_algo,
+        "key_size": key_size,
+        "key_type": key_type,
+        "issuers": issuers_list,
+        "issuer_count": len(issuers_list),
+        "risk_level": risk_level,
+        "risk_factors": risk_factors,
+        "most_affected_domain": {
+            "domain": most_affected_domain[0],
+            "sans_count": most_affected_domain[1],
+        },
+        "certificates": certificate_details,
+        "computed_at": datetime.now(timezone.utc),
+        "last_updated": datetime.now(timezone.utc),
+    }
+    return document, cert_count
+
+
+def compute_shared_keys(client, main_db, results_db, scopes, verify=False):
+    scope_names = [scope for scope, _country in scopes]
+    country_scopes = set(scope_names) - {"all"}
+
+    log(f"Shared keys analytics: {main_db} -> {results_db} scopes={len(scope_names)}")
 
     source_collection = client[main_db]["certificates"]
     target_db = client[results_db]
     detailed_collection = target_db["shared-keys-detailed"]
-
-    scope_filter = get_scope_filter(scope)
-    scoped = bool(scope_filter)
-    if scope_filter:
-        try:
-            total_docs = source_collection.count_documents(scope_filter, hint="idx_scope")
-        except Exception:
-            total_docs = source_collection.count_documents(scope_filter)
-    else:
-        total_docs = source_collection.estimated_document_count()
 
     log("Step 1/4: Clearing old shared keys collections")
     old_collections = [
@@ -109,306 +327,137 @@ def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
     for coll_name in old_collections:
         target_db[coll_name].drop()
 
-    detailed_collection.delete_many({"scope": scope})
+    detailed_collection.delete_many({"scope": {"$in": scope_names}})
 
-    log("Step 2/4: Identifying shared public keys")
     start_time = datetime.now(timezone.utc)
 
-    shared_keys_pipeline = [
-        {"$match": {
-            "parsed.subject_key_info.fingerprint_sha256": {"$exists": True, "$ne": None},
-            "parsed.fingerprint_sha256": {"$exists": True, "$ne": None},
-        }},
+    # Per-scope certificate totals (single aggregation) + estimated for "all".
+    totals = {"all": source_collection.estimated_document_count()}
+    for row in source_collection.aggregate(
+        [{"$group": {"_id": "$scope", "n": {"$sum": 1}}}], allowDiskUse=True
+    ):
+        if row["_id"] in country_scopes:
+            totals[row["_id"]] = row["n"]
+
+    log("Step 2/4: Identifying shared public keys (all scopes)")
+
+    base_match = {"$match": {
+        "parsed.subject_key_info.fingerprint_sha256": {"$exists": True, "$ne": None},
+        "parsed.fingerprint_sha256": {"$exists": True, "$ne": None},
+    }}
+
+    def run_agg(pipeline, hint):
+        if hint:
+            try:
+                return list(source_collection.aggregate(pipeline, hint=hint, allowDiskUse=True))
+            except Exception:
+                pass
+        return list(source_collection.aggregate(pipeline, allowDiskUse=True))
+
+    # Groups for the "all" scope (distinct certificates per public key overall).
+    all_rows = run_agg([
+        base_match,
+        {"$group": {"_id": {
+            "public_key": "$parsed.subject_key_info.fingerprint_sha256",
+            "certificate": "$parsed.fingerprint_sha256",
+        }}},
+        {"$group": {"_id": "$_id.public_key", "distinct_certs": {"$sum": 1}}},
+        {"$match": {"distinct_certs": {"$gt": 1}}},
+    ], "idx_public_key_fingerprint")
+
+    # Groups per country scope (distinct certificates per public key per scope).
+    scoped_rows = run_agg([
+        base_match,
+        {"$group": {"_id": {
+            "scope": "$scope",
+            "public_key": "$parsed.subject_key_info.fingerprint_sha256",
+            "certificate": "$parsed.fingerprint_sha256",
+        }}},
         {"$group": {
-            "_id": {
-                "public_key": "$parsed.subject_key_info.fingerprint_sha256",
-                "certificate": "$parsed.fingerprint_sha256",
-            },
-        }},
-        {"$group": {
-            "_id": "$_id.public_key",
+            "_id": {"scope": "$_id.scope", "public_key": "$_id.public_key"},
             "distinct_certs": {"$sum": 1},
         }},
         {"$match": {"distinct_certs": {"$gt": 1}}},
-    ]
+    ], "idx_scope_public_key_fingerprint")
 
-    shared_key_hint = "idx_scope_public_key_fingerprint" if scoped else "idx_public_key_fingerprint"
-    try:
-        shared_key_groups = list(source_collection.aggregate(
-            add_scope_match(shared_keys_pipeline, scope),
-            hint=shared_key_hint,
-            allowDiskUse=True,
-        ))
-    except Exception:
-        shared_key_groups = list(source_collection.aggregate(add_scope_match(shared_keys_pipeline, scope), allowDiskUse=True))
-    log(f"Found {len(shared_key_groups):,} shared key groups")
+    # scopes_by_key[pk] = list of scopes needing a group document for pk.
+    scopes_by_key = {}
+    group_counts = {s: 0 for s in scope_names}
+    for row in all_rows:
+        scopes_by_key.setdefault(row["_id"], []).append("all")
+        group_counts["all"] += 1
+    for row in scoped_rows:
+        row_scope = row["_id"]["scope"]
+        if row_scope in country_scopes:
+            scopes_by_key.setdefault(row["_id"]["public_key"], []).append(row_scope)
+            group_counts[row_scope] += 1
 
-    if not shared_key_groups:
-        metadata = {
-            "_id": f"metadata:{scope}",
-            "doc_type": "metadata",
-            "scope": scope,
-            "last_computed": datetime.now(timezone.utc),
-            "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
-            "total_shared_groups": 0,
-            "total_certs_at_risk": 0,
-            "total_certificates_scanned": total_docs,
-            "total_public_keys": total_docs,
-            "unique_public_keys": total_docs,
-        }
-        detailed_collection.replace_one({"scope": scope, "doc_type": "metadata"}, metadata, upsert=True)
-        if verify:
-            stored_meta = detailed_collection.find_one({"scope": scope, "doc_type": "metadata"})
-            if not stored_meta:
-                raise RuntimeError("Verification failed: metadata missing")
-        return
+    for s in scope_names:
+        log(f"  scope={s}: {group_counts[s]:,} shared key groups" if group_counts[s] else f"  scope={s}: 0 shared key groups")
+
+    log(f"Found {group_counts['all']:,} shared key groups overall")
 
     log("Step 3/4: Processing shared key groups")
 
-    processed_count = 0
-    total_certs_at_risk = 0
+    processed_count = {s: 0 for s in scope_names}
+    total_certs_at_risk = {s: 0 for s in scope_names}
 
-    for idx, group in enumerate(shared_key_groups):
-        if (idx + 1) % 100 == 0:
-            log(f"Processed {idx + 1:,}/{len(shared_key_groups):,} groups")
+    shared_keys = sorted(scopes_by_key.keys())
+    batch_size = 200
+    write_buffer = []
+    groups_done = 0
 
-        public_key_hash = group["_id"]
+    def flush_writes():
+        if write_buffer:
+            detailed_collection.bulk_write(write_buffer, ordered=False)
+            write_buffer.clear()
 
-        certificate_projection = {
-            "_id": 1,
-            "domain": 1,
-            "scanned_at": 1,
-            "parsed.serial_number": 1,
-            "parsed.fingerprint_sha256": 1,
-            "parsed.issuer": 1,
-            "parsed.issuer_dn": 1,
-            "parsed.subject": 1,
-            "parsed.subject_dn": 1,
-            "parsed.validity": 1,
-            "parsed.subject_key_info": 1,
-            "parsed.signature_algorithm": 1,
-            "parsed.signature.self_signed": 1,
-            "parsed.validation_level": 1,
-            "parsed.extensions.subject_alt_name": 1,
-            "parsed.extensions.extended_key_usage": 1,
-            "parsed.extensions.authority_info_access": 1,
-        }
+    for batch_start in range(0, len(shared_keys), batch_size):
+        batch_keys = shared_keys[batch_start:batch_start + batch_size]
+        query = {"parsed.subject_key_info.fingerprint_sha256": {"$in": batch_keys}}
         try:
-            certificates = list(source_collection.find(
-                merge_scope_query({"parsed.subject_key_info.fingerprint_sha256": public_key_hash}, scope),
-                certificate_projection,
-                hint=shared_key_hint,
-            ))
+            batch_docs = list(source_collection.find(query, CERTIFICATE_PROJECTION, hint="idx_public_key_fingerprint"))
         except Exception:
-            certificates = list(source_collection.find(
-                merge_scope_query({"parsed.subject_key_info.fingerprint_sha256": public_key_hash}, scope),
-                certificate_projection,
-            ))
+            batch_docs = list(source_collection.find(query, CERTIFICATE_PROJECTION))
 
-        if not certificates:
-            continue
+        docs_by_key = {}
+        for doc in batch_docs:
+            pk = doc.get("parsed", {}).get("subject_key_info", {}).get("fingerprint_sha256")
+            docs_by_key.setdefault(pk, []).append(doc)
 
-        certificate_details = []
-        all_domains = set()
-        all_sans = []
-        issuer_map = {}
+        for public_key_hash in batch_keys:
+            certificates = docs_by_key.get(public_key_hash, [])
+            for scope in scopes_by_key[public_key_hash]:
+                if scope == "all":
+                    scope_certs = certificates
+                else:
+                    scope_certs = [c for c in certificates if c.get("scope") == scope]
 
-        for cert in certificates:
-            try:
-                parsed = cert.get("parsed", {})
-                extensions = parsed.get("extensions", {})
-                san_ext = extensions.get("subject_alt_name", {})
-                sans = san_ext.get("dns_names", [])
+                if not scope_certs:
+                    continue
 
-                issuer_info = parsed.get("issuer", {})
-                issuer_org = issuer_info.get("organization", ["Unknown"])[0] if issuer_info.get("organization") else "Unknown"
-                issuer_cn = issuer_info.get("common_name", ["Unknown"])[0] if issuer_info.get("common_name") else "Unknown"
-                issuer_dn = parsed.get("issuer_dn", "Unknown")
-                issuer_country = issuer_info.get("country", ["Unknown"])[0] if issuer_info.get("country") else "Unknown"
+                document, cert_count = build_group_document(scope, public_key_hash, scope_certs)
+                if document is None:
+                    continue
 
-                if issuer_org not in issuer_map:
-                    issuer_map[issuer_org] = {"name": issuer_org, "cn": issuer_cn, "count": 0}
-                issuer_map[issuer_org]["count"] += 1
+                write_buffer.append(ReplaceOne(
+                    {"scope": scope, "public_key_hash": public_key_hash},
+                    document,
+                    upsert=True,
+                ))
+                if len(write_buffer) >= 200:
+                    flush_writes()
 
-                validity = parsed.get("validity", {})
-                validity_start = validity.get("start", "")
-                validity_end = validity.get("end", "")
-                validity_length_seconds = validity.get("length", 0)
-                validity_days = validity_length_seconds / 86400 if validity_length_seconds else 0
+                processed_count[scope] += 1
+                total_certs_at_risk[scope] += cert_count
 
-                days_until_expiry = calculate_days_until_expiry(validity_end)
-                is_expired = days_until_expiry is not None and days_until_expiry < 0
-                is_expiring_soon = days_until_expiry is not None and 0 <= days_until_expiry < 30
+            groups_done += 1
+            if groups_done % 1000 == 0:
+                log(f"Processed {groups_done:,}/{len(shared_keys):,} shared keys")
 
-                subject_info = parsed.get("subject", {})
-                subject_cn = subject_info.get("common_name", ["Unknown"])[0] if subject_info.get("common_name") else "Unknown"
-                subject_dn = parsed.get("subject_dn", "Unknown")
+    flush_writes()
 
-                key_info = parsed.get("subject_key_info", {})
-                key_algo = key_info.get("key_algorithm", {}).get("name", "Unknown")
-                key_size = get_key_size(cert)
-                key_type = f"{key_algo}-{key_size}" if key_size > 0 else key_algo
-
-                signature_info = parsed.get("signature_algorithm", {})
-                signature_algo = signature_info.get("name", "Unknown")
-
-                validation_level = parsed.get("validation_level", "Unknown")
-
-                wildcard_sans = [san for san in sans if "*" in san]
-                has_wildcard = len(wildcard_sans) > 0
-
-                cert_fingerprint = parsed.get("fingerprint_sha256", "Unknown")
-                cert_id = str(cert.get("_id", ""))
-                serial_number = parsed.get("serial_number", "Unknown")
-
-                is_self_signed = parsed.get("signature", {}).get("self_signed", False)
-
-                domain = cert.get("domain", "Unknown")
-                all_domains.add(domain)
-                all_sans.extend(sans)
-
-                scanned_at = cert.get("scanned_at")
-                if scanned_at:
-                    scanned_at = scanned_at.isoformat() if hasattr(scanned_at, "isoformat") else str(scanned_at)
-
-                eku = extensions.get("extended_key_usage", {})
-                extended_key_usage = []
-                if eku.get("server_auth"):
-                    extended_key_usage.append("serverAuth")
-                if eku.get("client_auth"):
-                    extended_key_usage.append("clientAuth")
-
-                aia = extensions.get("authority_info_access", {})
-                ocsp_urls = aia.get("ocsp_urls", [])
-                issuer_urls = aia.get("issuer_urls", [])
-
-                cert_detail = {
-                    "certificate_id": cert_id,
-                    "certificate_fingerprint": cert_fingerprint,
-                    "certificate_fingerprint_short": cert_fingerprint[:16] if cert_fingerprint != "Unknown" else "Unknown",
-                    "domain": domain,
-                    "sans": sans,
-                    "sans_count": len(sans),
-                    "has_wildcard": has_wildcard,
-                    "wildcard_sans": wildcard_sans,
-                    "subject_cn": subject_cn,
-                    "subject_dn": subject_dn,
-                    "issuer_organization": issuer_org,
-                    "issuer_cn": issuer_cn,
-                    "issuer_dn": issuer_dn,
-                    "issuer_country": issuer_country,
-                    "validity_start": validity_start,
-                    "validity_end": validity_end,
-                    "validity_days": int(validity_days),
-                    "is_expired": is_expired,
-                    "days_until_expiry": days_until_expiry,
-                    "is_expiring_soon": is_expiring_soon,
-                    "validation_level": validation_level,
-                    "key_algorithm": key_algo,
-                    "key_size": key_size,
-                    "key_type": key_type,
-                    "signature_algorithm": signature_algo,
-                    "is_self_signed": is_self_signed,
-                    "serial_number": str(serial_number),
-                    "extended_key_usage": extended_key_usage,
-                    "ocsp_urls": ocsp_urls,
-                    "issuer_urls": issuer_urls,
-                    "scanned_at": scanned_at,
-                }
-
-                certificate_details.append(cert_detail)
-
-            except Exception as exc:
-                log(f"Error processing certificate: {exc}")
-                continue
-
-        if not certificate_details:
-            continue
-
-        cert_count = len(certificate_details)
-        total_sans = len(set(all_sans))
-
-        if cert_count >= 5 or total_sans >= 20:
-            risk_level = "HIGH"
-        elif cert_count >= 3 or total_sans >= 10:
-            risk_level = "MEDIUM"
-        else:
-            risk_level = "LOW"
-
-        risk_factors = [
-            f"{cert_count} certificates share the same private key",
-            f"{len(all_domains)} different domains affected",
-            f"{total_sans} SANs at risk if private key is compromised",
-        ]
-
-        if len(issuer_map) > 1:
-            risk_factors.append(f"Certificates from {len(issuer_map)} different Certificate Authorities")
-
-        domain_sans_count = {}
-        for cert_detail in certificate_details:
-            domain = cert_detail["domain"]
-            sans_count = cert_detail["sans_count"]
-            if domain not in domain_sans_count or sans_count > domain_sans_count[domain]:
-                domain_sans_count[domain] = sans_count
-
-        most_affected_domain = max(domain_sans_count.items(), key=lambda x: x[1]) if domain_sans_count else ("Unknown", 0)
-
-        key_type = certificate_details[0]["key_type"]
-        key_algo = certificate_details[0]["key_algorithm"]
-        key_size = certificate_details[0]["key_size"]
-
-        issuers_list = [
-            {
-                "organization": issuer_data["name"],
-                "common_name": issuer_data["cn"],
-                "certificate_count": issuer_data["count"],
-            }
-            for issuer_data in issuer_map.values()
-        ]
-        issuers_list.sort(key=lambda x: x["certificate_count"], reverse=True)
-
-        sample_domains = list(all_domains)[:3]
-        unique_sans = list(set(all_sans))
-        sample_sans = unique_sans[:5]
-
-        document = {
-            "_id": f"{scope}:{public_key_hash}",
-            "doc_type": "shared_key_group",
-            "scope": scope,
-            "public_key_hash": public_key_hash,
-            "public_key_hash_short": public_key_hash[:16],
-            "certificate_count": cert_count,
-            "total_domains": len(all_domains),
-            "sample_domains": sample_domains,
-            "total_sans": total_sans,
-            "sample_sans": sample_sans,
-            "unique_sans": unique_sans,
-            "key_algorithm": key_algo,
-            "key_size": key_size,
-            "key_type": key_type,
-            "issuers": issuers_list,
-            "issuer_count": len(issuers_list),
-            "risk_level": risk_level,
-            "risk_factors": risk_factors,
-            "most_affected_domain": {
-                "domain": most_affected_domain[0],
-                "sans_count": most_affected_domain[1],
-            },
-            "certificates": certificate_details,
-            "computed_at": datetime.now(timezone.utc),
-            "last_updated": datetime.now(timezone.utc),
-        }
-
-        detailed_collection.replace_one(
-            {"scope": scope, "public_key_hash": public_key_hash},
-            document,
-            upsert=True,
-        )
-
-        processed_count += 1
-        total_certs_at_risk += cert_count
-
-    log("Step 4/4: Creating indexes")
+    log("Step 4/4: Creating indexes and writing metadata")
 
     create_index_if_missing(detailed_collection, [("scope", 1), ("doc_type", 1)], name="idx_shared_keys_scope_doc_type", background=True)
     create_index_if_missing(detailed_collection, [("scope", 1), ("public_key_hash", 1)], name="idx_shared_keys_scope_public_key_hash", background=True)
@@ -421,31 +470,47 @@ def compute_shared_keys(client, main_db, results_db, verify=False, scope="all"):
     create_index_if_missing(detailed_collection, [("issuers.organization", 1)], name="idx_shared_keys_issuer_org", background=True)
     create_index_if_missing(detailed_collection, [("computed_at", -1)], name="idx_shared_keys_computed_at", background=True)
 
-    total_public_keys = total_docs - total_certs_at_risk + processed_count
-    unique_public_keys = total_docs - total_certs_at_risk
+    for scope in scope_names:
+        total_docs = totals.get(scope, 0)
+        scope_processed = processed_count[scope]
+        scope_at_risk = total_certs_at_risk[scope]
 
-    metadata = {
-        "_id": f"metadata:{scope}",
-        "doc_type": "metadata",
-        "scope": scope,
-        "last_computed": datetime.now(timezone.utc),
-        "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
-        "total_shared_groups": processed_count,
-        "total_certs_at_risk": total_certs_at_risk,
-        "total_certificates_scanned": total_docs,
-        "total_public_keys": total_public_keys,
-        "unique_public_keys": unique_public_keys,
-    }
+        if group_counts[scope] == 0:
+            metadata = {
+                "_id": f"metadata:{scope}",
+                "doc_type": "metadata",
+                "scope": scope,
+                "last_computed": datetime.now(timezone.utc),
+                "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
+                "total_shared_groups": 0,
+                "total_certs_at_risk": 0,
+                "total_certificates_scanned": total_docs,
+                "total_public_keys": total_docs,
+                "unique_public_keys": total_docs,
+            }
+        else:
+            metadata = {
+                "_id": f"metadata:{scope}",
+                "doc_type": "metadata",
+                "scope": scope,
+                "last_computed": datetime.now(timezone.utc),
+                "computation_duration_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
+                "total_shared_groups": scope_processed,
+                "total_certs_at_risk": scope_at_risk,
+                "total_certificates_scanned": total_docs,
+                "total_public_keys": total_docs - scope_at_risk + scope_processed,
+                "unique_public_keys": total_docs - scope_at_risk,
+            }
 
-    detailed_collection.replace_one({"scope": scope, "doc_type": "metadata"}, metadata, upsert=True)
+        detailed_collection.replace_one({"scope": scope, "doc_type": "metadata"}, metadata, upsert=True)
 
-    if verify:
-        stored_groups = detailed_collection.count_documents({"scope": scope, "doc_type": "shared_key_group"})
-        if stored_groups != processed_count:
-            raise RuntimeError("Verification failed: shared groups count mismatch")
-        stored_meta = detailed_collection.find_one({"scope": scope, "doc_type": "metadata"})
-        if not stored_meta or stored_meta.get("total_shared_groups") != processed_count:
-            raise RuntimeError("Verification failed: metadata shared groups mismatch")
+        if verify:
+            stored_groups = detailed_collection.count_documents({"scope": scope, "doc_type": "shared_key_group"})
+            if stored_groups != scope_processed:
+                raise RuntimeError("Verification failed: shared groups count mismatch")
+            stored_meta = detailed_collection.find_one({"scope": scope, "doc_type": "metadata"})
+            if not stored_meta or stored_meta.get("total_shared_groups") != scope_processed:
+                raise RuntimeError("Verification failed: metadata shared groups mismatch")
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     log(f"Completed {main_db} in {duration:.1f}s")
@@ -463,8 +528,13 @@ def main():
 
     client = MongoClient("mongodb://localhost:27017/")
     for target in targets:
-        for scope, _country in get_scopes_for_entry(target):
-            compute_shared_keys(client, target["main"], target["results"], verify=args.verify, scope=scope)
+        compute_shared_keys(
+            client,
+            target["main"],
+            target["results"],
+            get_scopes_for_entry(target),
+            verify=args.verify,
+        )
     client.close()
 
 

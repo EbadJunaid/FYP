@@ -17,7 +17,7 @@ import argparse
 from pymongo import MongoClient
 
 DEFAULT_PAIRS = [
-    ("hugging-face-700k", "hahksk"),
+    ("hugging-face-792k", "hugging-face-400k"),
 ]
 
 

@@ -210,13 +210,13 @@ Open your terminal and navigate to the pre-compute scripts folder inside the rep
 
 **For Windows:**
 ```powershell
-cd dashboard\backend\pre-compute-scripts\generic
+cd dashboard\backend\pre-compute-scripts\
 python run-generic.py
 ```
 
 **For Linux/macOS:**
 ```bash
-cd dashboard/backend/pre-compute-scripts/generic
+cd dashboard/backend/pre-compute-scripts/
 python3 run-generic.py
 ```
 
@@ -230,7 +230,7 @@ This script rebuilds the pre-computed results from scratch. It processes a large
 ### Option 3 — Run the crawler yourself (most flexible)
 This is the most advanced option. Use this if you want freshly-crawled data instead of a static dump.
 
-The crawler script is `crawler-args.py`. By default, it crawls our list of domains ([`global-dataset.csv`](../ct-logs-renewal-pipeline/global-dataset.csv)) and writes to the default database. You can optionally point it at your own CSV file and/or your own database name using command-line flags — no code editing required for basic use.
+The crawler script is `crawler-args.py`. By default, it crawls our list of domains ([`global-dataset.csv`](../ct-logs-renewal-pipeline/global-dataset.csv)) and writes to the default database.
 
 **Step 1: Move to the crawler folder**
 
@@ -246,8 +246,6 @@ cd ../ssl-certificates-crawler/domain-based-crawler/src
 
 **Step 2: Run the crawler**
 
-Simplest way — crawl our dataset into the default database:
-
 **Windows:**
 ```powershell
 python crawler-args.py
@@ -258,72 +256,19 @@ python crawler-args.py
 python3 crawler-args.py
 ```
 
-**Optional flags:**
-
-| Flag | Purpose | Example |
-|---|---|---|
-| `--db-name` | Use your own database name instead of the default | `--db-name your_db_name` |
-| `--csv-file` | Crawl your own list of domains instead of ours | `--csv-file path/to/your.csv` |
-| *(others)* | Thread count, connection timeout, retry attempts, retry toggle | See `crawler-config-guide.md` |
-
-Example — using both a custom database and your own CSV:
-
-**Windows:**
-```powershell
-python crawler-args.py --db-name your_db_name --csv-file path\to\your.csv
-```
-
-**macOS / Linux:**
-```bash
-python3 crawler-args.py --db-name your_db_name --csv-file path/to/your.csv
-```
+**Optional settings:** if you want to change things like thread count, connection timeout, maximum retry attempts, or retry toggles, see `crawler-config-guide.md` for details.
 
 > ⚠️ **Important:** the crawler needs a MongoDB instance running locally before you start it.
 
 ---
 
-#### ⚠️ If you use `--db-name`, read this
+#### 🔧 Want to use your own database name or your own CSV file?
 
-Changing the database name means every other script that expects the default name also needs to be updated, or things will break. How much you need to update depends on what you plan to use:
+You don't need to edit multiple scripts. Everything is controlled from a single file at the project root:
 
-**Minimum required — just to run the dashboard:**
+Open it and change the values there — for example, your own database name and/or the path to your own CSV file of domains. Every script in this project (the crawler, the pre-compute scripts, the dashboard backend, and the CT-logs renewal pipeline) reads its database name and CSV path from this one file, so a single change here keeps everything in sync automatically.
 
-| # | File | What to change |
-|---|---|---|
-| 1 | `dashboard/backend/pre-compute-scripts/databases.json` | `"main"` and `"results"` — all pre-compute scripts read this |
-| 2 | `dashboard/backend/certificates/db.py` (lines 24–25) | `_BASE_MAIN_DB` and `_BASE_RESULTS_DB` — the Django backend's primary definition |
-
-**If you also want to keep your data fresh using the [CT-logs renewal pipeline](../ct-logs-renewal-pipeline/README.md):**
-
-| # | File | What to change |
-|---|---|---|
-| 3 | `ct-logs-renewal-pipeline/data-renew-merge.py` (line 43) | `MAIN_DB_NAME` |
-| 4 | `ct-logs-renewal-pipeline/new-data.py` (line 38) | `TARGET_DB` |
-| 5 | `ct-logs-renewal-pipeline/fetch-domains-names.py` (line 46) | `DATABASE_NAME` |
-
-**Optional — only if you want every helper script to also work correctly:**
-
-| # | File | What to change |
-|---|---|---|
-| 6 | `ssl-certificates-crawler/domain-based-crawler/src/crawler.py` (line 29) | `DB_NAME` |
-| 7 | `ssl-certificates-crawler/domain-based-crawler/src/crawler-args.py` (line 30) | `DB_NAME` |
-| 8 | `useful-scripts/data-removal.py` (line 19) | `DATABASE_NAME` |
-
-#### ⚠️ If you use `--csv-file`, read this
-
-Similarly, if you crawl your own CSV instead of `global-dataset.csv`, some scripts still reference the default filename directly and need to be updated to point at yours:
-
-| # | File | Line | Variable |
-|---|---|---|---|
-| 1 | `ct-logs-renewal-pipeline/fetch-domains-names.py` | 50 | `OUTPUT_CSV = "global-dataset.csv"` |
-| 2 | `ct-logs-renewal-pipeline/data-renew.py` | 22 | `INPUT_CSV = "global-dataset.csv"` |
-| 3 | `ct-logs-renewal-pipeline/new-data.py` | 36 | `GLOBAL_CSV = Path("global-dataset.csv")` |
-| 4 | `ct-logs-renewal-pipeline/main.py` | 87 | `GLOBAL_DATASET_CSV = BASE_DIR / "global-dataset.csv"` |
-| 5 | `ssl-certificates-crawler/domain-based-crawler/src/crawler.py` | 34 | `CSV_FILE` key |
-| 6 | `ssl-certificates-crawler/domain-based-crawler/src/crawler-args.py` | 35 | `CSV_FILE` key |
-| 7 | `useful-scripts/csv-domain-cleaner.py` | 12 | `open(...)` path |
-
-**Optional settings:** if you want to change thread count, connection timeout, maximum retry attempts, or retry toggles, either pass them as command-line arguments or edit the configuration in the crawler file directly. See `crawler-config-guide.md` for details.
+If you're using your own CSV file, make sure it follows the same column format as [`global-dataset.csv`](../ct-logs-renewal-pipeline/global-dataset.csv).
 
 ---
 
@@ -333,13 +278,13 @@ Once the crawler has finished, run the pre-compute script so the analytics datab
 
 **Windows:**
 ```powershell
-cd dashboard\backend\pre-compute-scripts\generic
+cd dashboard\backend\pre-compute-scripts\
 python run-generic.py
 ```
 
 **macOS / Linux:**
 ```bash
-cd dashboard/backend/pre-compute-scripts/generic
+cd dashboard/backend/pre-compute-scripts/
 python3 run-generic.py
 ```
 
@@ -525,7 +470,7 @@ Follow [⚠️ The data requirement](#️-the-data-requirement-read-this-first).
 6. **Build indexes + pre‑computed analytics** (do this once after loading data; re‑run whenever the
    data changes). From the backend folder:
    ```powershell
-   cd pre-compute-scripts/generic
+   cd pre-compute-scripts/
    python run-generic.py
    cd ../..
    ```

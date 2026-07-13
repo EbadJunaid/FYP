@@ -107,6 +107,7 @@ REQUIRED_CERTIFICATE_INDEXES = [
     "idx_issuer_org_algo_ecdsa_length",
     "idx_scope_issuer_algo_rsa_length",
     "idx_scope_issuer_algo_ecdsa_length",
+    "idx_is_leaf",
 ]
 
 

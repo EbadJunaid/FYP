@@ -2,9 +2,9 @@
   "mongo_uri": "mongodb://localhost:27017",
   "databases": [
     {
-      "id": "hugging-face-10k",
-      "main": "hugging-face-10k",
-      "results": "hugging-face-10k-results",
+      "id": "hugging-face-700k",
+      "main": "hugging-face-700k",
+      "results": "hugging-face-700k-results",
       "csv_path": "ct-logs-renewal-pipeline/global-dataset.csv",
       "countries": [
         "ac",

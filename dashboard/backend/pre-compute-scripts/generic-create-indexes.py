@@ -64,7 +64,7 @@ def build_source_indexes():
         {"name": "idx_self_signed", "keys": [("parsed.signature.self_signed", ASCENDING)], "options": {"background": True}},
         {"name": "idx_scope", "keys": [("scope", ASCENDING)], "options": {"background": True}},
         {"name": "idx_validation_level", "keys": [("parsed.validation_level", ASCENDING)], "options": {"background": True}},
-        {"name": "idx_cert_fingerprint_sha256", "keys": [("parsed.fingerprint_sha256", ASCENDING)], "options": {"background": True ,"unique": True}},
+        {"name": "idx_cert_fingerprint_sha256", "keys": [("parsed.fingerprint_sha256", ASCENDING)], "options": {"background": True}},
         {"name": "idx_public_key_fingerprint", "keys": [("parsed.subject_key_info.fingerprint_sha256", ASCENDING)], "options": {"background": True}},
         {"name": "idx_domain", "keys": [("domain", ASCENDING)], "options": {"background": True}},
         {"name": "idx_issuer_country", "keys": [("parsed.issuer.country", ASCENDING)], "options": {"background": True}},
@@ -248,6 +248,11 @@ def build_source_indexes():
                 ("parsed.issuer.organization", ASCENDING),
                 ("parsed.subject_key_info.fingerprint_sha256", ASCENDING),
             ],
+            "options": {"background": True},
+        },
+        {
+            "name": "idx_is_leaf",
+            "keys": [("is_leaf", ASCENDING)],
             "options": {"background": True},
         },
         {

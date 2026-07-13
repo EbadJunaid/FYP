@@ -29,7 +29,7 @@ CONFIG = {
     
     # Paths
     'CSV_FILE': os.path.join(BASE_DIR, "../datasets/final-dataset-mine/merged-pk-tranco-rapid-x.csv"),
-    'ZCERT_BINARY': os.path.join(BASE_DIR, "../zcertificate/zcertificate"),
+    'ZCERT_BINARY': os.path.join(BASE_DIR, "../../../binaries/zcertificate"),
     'LOG_FILE': os.path.join(BASE_DIR, "../logs/pk-latest-full-1.log"),
     'ISSUE_LOG_FILE': os.path.join(BASE_DIR, "../logs/pk-issue-1.txt"),
     'NUM_THREADS': 30,

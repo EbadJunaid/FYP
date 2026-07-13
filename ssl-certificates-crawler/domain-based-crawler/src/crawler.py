@@ -26,13 +26,13 @@ _START_TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 CONFIG = {
     'MONGODB_URL': "mongodb://localhost:27017",
-    'DB_NAME': "hugging-face-701k",
+    'DB_NAME': "hugging-face-700k",
     'STATUS_COLLECTION': "domain_status",
     'CERTIFICATES_COLLECTION': "certificates",
     
     # Paths
     'CSV_FILE': os.path.join(BASE_DIR, "../../../ct-logs-renewal-pipeline/global-dataset.csv"),
-    'ZCERT_BINARY': os.path.join(BASE_DIR, "../zcertificate/zcertificate"),
+    'ZCERT_BINARY': os.path.join(BASE_DIR, "../../../binaries/zcertificate"),
     'LOG_FILE': os.path.join(BASE_DIR,f"./logs/renew-{_START_TIMESTAMP}.log"),
     'ISSUE_LOG_FILE': os.path.join(BASE_DIR,f"./logs/renew-thread-issues-{_START_TIMESTAMP}.log"),
     'NUM_THREADS': 30,
@@ -222,6 +222,21 @@ def extract_tld(domain):
         return cleaned.rsplit('.', 1)[-1].lower()
     return cleaned.lower()
 
+
+def _compute_is_leaf(parsed_data):
+    """Return True if this certificate is a leaf (not self-signed, not a CA).
+
+    Matches LEAF_EXPR from generic-compute-ca-stats.py exactly.
+    """
+    parsed = parsed_data.get('parsed', {}) or {}
+    subject_dn = parsed.get('subject_dn') or ''
+    issuer_dn = parsed.get('issuer_dn') or ''
+    bc = parsed.get('basic_constraints', {}) or {}
+    is_self_subject = bool(subject_dn) and subject_dn == issuer_dn
+    is_ca = bc.get('ca', False) is True
+    return not is_self_subject and not is_ca
+
+
 # -------------------- Worker Logic --------------------
 def worker_thread(worker_id):
     while not shutdown_event.is_set():
@@ -263,6 +278,7 @@ def worker_thread(worker_id):
                 parsed_data['domain'] = domain
                 parsed_data['scope'] = extract_tld(domain)
                 parsed_data['scanned_at'] = datetime.now()
+                parsed_data['is_leaf'] = _compute_is_leaf(parsed_data)
                 try:
                     certs_coll.insert_one(parsed_data)
                 except DuplicateKeyError:
