@@ -185,9 +185,10 @@ ct-logs-renewal-pipeline/__pycache__/
 ssl-certificates-crawler/domain-based-crawler/src/__pycache__/
 PROBLEM-CONFIG-SPRAWL.md
 
-binaries/zcertificate
-binaries/certstream-server-go
-binaries/sample-certificates
+binaries/*
+!binaries/.gitkeep
+
+
 temp-file.py
 archive/global-dataset.csv
 ct-pipline-metrics.md
