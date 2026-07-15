@@ -173,7 +173,6 @@ ssl-certificates-crawler/domain-based-crawler/src/logs/
 
 
 check/
-dashboard/ca-ranking.md
 
 dashboard/frontend/*.tsbuildinfo
 
