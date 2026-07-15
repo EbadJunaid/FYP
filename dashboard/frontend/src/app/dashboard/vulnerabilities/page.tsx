@@ -126,7 +126,7 @@ export default function VulnerabilitiesPage() {
         setExpandedId(null);
     };
 
-    const pageTitle = 'Vulnerabilities';
+    const pageTitle = 'Risk Analysis';
     const vulnerabilityLabel = (cert: VulnerabilityCertificate) => {
         if (cert.riskLevel) return cert.riskLevel;
         if (cert.vulnerabilityCount.errors > 0) return 'Critical';
@@ -258,7 +258,7 @@ export default function VulnerabilitiesPage() {
                 ))}
             </div>
 
-            <Card title="Vulnerability Details" subtitle={`${activeFilter.label} certificates`}>
+            <Card title="Risk Details" subtitle={`${activeFilter.label} certificates`}>
                 {isLoading ? (
                     <div className="py-20 text-center text-text-muted">Loading vulnerabilities...</div>
                 ) : error ? (

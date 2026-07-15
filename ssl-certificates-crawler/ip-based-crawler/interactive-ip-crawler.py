@@ -36,7 +36,7 @@ DATABASE_NAME = "ip-based-crawler-interactive"
 COLLECTION_NAME = "pk-certificates"
 
 CSV_FILE = "pk-ip-ranges-mini.csv"  # Hardcoded CSV file path
-ZCERTIFICATE_PATH = "../domain-based-crawler/zcertificate/zcertificate"
+ZCERTIFICATE_PATH = "../../binaries/zcertificate"
 
 SCAN_TIMEOUT = 3  # seconds
 HTTPS_PORT = 443

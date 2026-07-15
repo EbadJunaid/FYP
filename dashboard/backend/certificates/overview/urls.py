@@ -10,5 +10,4 @@ urlpatterns = [
     path('future-risk/', FutureRiskView.as_view(), name='future_risk'),
     path('encryption-strength/', EncryptionStrengthView.as_view(), name='encryption_strength'),
     path('vulnerabilities/', VulnerabilitiesView.as_view(), name='vulnerabilities'),
-    path('vulnerablities/', VulnerabilitiesView.as_view(), name='vulnerablities')
 ]

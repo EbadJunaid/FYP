@@ -1,8 +1,25 @@
 ### This code is just the copy of crawler.py and just adds command line arguments 
 ### It has features like does not have raw field , also adds the scope field and also supports CLI args
-### This code also checks for parsed.fingerprint_sha256 means if the google.com and youtube.com has same
-### certificates [because of SAN] then first google is added into db and then when it tries to add 
-### youtube.com it check parsed.fingerprint_sha256 and knows that same certificate is already there 
+
+"""
+Configuration priority for DB name and CSV file name:
+Arguments means the db name and csv file name which is given in project-configuration.json file.
+
+1. No arguments provided:
+   - Both DB name and CSV file name are read from the config file.
+
+2. Only one argument provided from DB name or CSV file name:
+   - The provided value is used.
+   - The missing value is read from the config file.
+
+3. Both arguments[db name or csv file name] provided:
+   - Values from the arguments are used.
+   - The config file is ignored for these values.
+
+4. Arguments are provided but both are empty/not set:
+   - Both DB name and CSV file name are read from the config file.
+"""
+
 
 import csv
 import socket
@@ -55,8 +72,44 @@ status_coll = None
 certs_coll = None
 log_lock = threading.Lock() # Prevents jumbled logs
 
+# -------------------- Config File Loading --------------------
+def _load_config_defaults():
+    """Read project-config.json to override CONFIG defaults for DB_NAME,
+    CSV_FILE, and MONGODB_URL.
+
+    CLI args (applied later in parse_arguments) override these values.
+    Missing or malformed config file is silently ignored.
+    """
+    project_root = os.path.abspath(os.path.join(BASE_DIR, "../../../"))
+    config_path = os.path.join(project_root, "project-config.json")
+    try:
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+
+        mongo_uri = data.get("mongo_uri")
+        if mongo_uri:
+            CONFIG['MONGODB_URL'] = mongo_uri
+
+        dbs = data.get("databases")
+        if dbs and isinstance(dbs, list) and len(dbs) > 0:
+            entry = dbs[0]
+            db_name = entry.get("main")
+            if db_name:
+                CONFIG['DB_NAME'] = db_name
+            csv_path = entry.get("csv_path")
+            if csv_path:
+                CONFIG['CSV_FILE'] = os.path.abspath(os.path.join(project_root, csv_path))
+
+        print(f"[INIT] Loaded config from {config_path}")
+    except FileNotFoundError:
+        pass
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"[WARN] Could not parse {config_path}: {e}")
+
+
 # -------------------- Argument Parsing --------------------
 def parse_arguments():
+    _load_config_defaults()
     parser = argparse.ArgumentParser(description="Hybrid Crawler Configuration")
     
     # Core Database and File Arguments

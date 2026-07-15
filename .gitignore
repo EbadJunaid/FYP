@@ -27,28 +27,28 @@ slides/
 ## Fixing the reports directory :
 # certificate-lifecycle
 
-reports/certificate-lifecycle/*
+archive/reports/certificate-lifecycle/*
 
 # certificate-on-google-drive
-reports/certificate-on-google-drive/*
+archive/reports/certificate-on-google-drive/*
 
 # expired-expiring-soon
-reports/expired-expiring-soon/*
+archive/reports/expired-expiring-soon/*
 
 #hash algorithms
-reports/hash-algorithms/*
+archive/reports/hash-algorithms/*
 
 #san-report 
-reports/san-report/*
+archive/reports/san-report/*
 
 #shared keys 
-reports/shared-keys/*
+archive/reports/shared-keys/*
 
 #signature-algorithm
-reports/signature-algorithm/*
+archive/reports/signature-algorithm/*
 
 #zlint-errors-warnings
-reports/zlint-errors-warnings/*
+archive/reports/zlint-errors-warnings/*
 
 !*.py
 !*.js
@@ -134,9 +134,6 @@ dashboard/backend/pre-compute-scripts/archive-2
 dashboard/backend/pre-compute-scripts/not-used-scripts
 
 helping-material
-reports
-slides
-
 .vscode
 
 
@@ -192,3 +189,4 @@ binaries/*
 temp-file.py
 archive/global-dataset.csv
 ct-pipline-metrics.md
+formula

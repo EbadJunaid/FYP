@@ -584,7 +584,7 @@ class ApiClient {
         params.append('page', page.toString());
         params.append('page_size', pageSize.toString());
         if (riskLevel) params.append('risk_level', riskLevel);
-        return this.fetch(`/overview/vulnerablities/?${params.toString()}`);
+        return this.fetch(`/overview/vulnerabilities/?${params.toString()}`);
     }
 
     async getNotifications(): Promise<NotificationResponse> {
