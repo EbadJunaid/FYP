@@ -1,0 +1,129 @@
+% ===========================================================================
+% CHAPTER 6
+% ===========================================================================
+
+\chapter{Certificate Transparency Renewal and Discovery Pipeline}
+\label{chap:ct-renewal-pipeline}
+
+\section{CT Event Collection}
+\label{sec:ct-collection-configuration}
+
+The Certificate Transparency subsystem supplies domain observations used to
+maintain and expand the certificate dataset. A CertStream-compatible service
+follows configured public CT logs and exposes domain and SAN observations
+through a local WebSocket stream. A consumer removes wildcard markers,
+deduplicates each observed domain set, buffers unique observations, and stores
+them with a processing marker.
+
+Two forms of persisted state support continuation. Per-log indices record the
+progress of CT-log traversal, while ingestion metadata records run time and
+processing counters. The states serve different purposes: log indices support
+continued observation, whereas the processing marker identifies whether a
+domain set has been considered by the renewal or discovery workflow.
+
+Buffered observations are written in batches to reduce the cost of individual
+database operations. Remaining observations are flushed during graceful
+shutdown. This design supports continuous collection, although the in-memory
+buffer is not a durable message queue and does not by itself guarantee
+exactly-once delivery.
+
+\section{Renewal and Discovery Workflow}
+\label{sec:eight-stage-orchestrator}
+
+The maintenance cycle temporarily pauses CT collection and processes the
+accumulated observations through six stages. It prepares the known-domain
+dataset, separates renewal candidates from newly observed domains, crawls both
+candidate groups, merges successful certificate records, refreshes the
+analytical results, and finally resumes CT collection. This ordering ensures
+that every completed cycle produces a coherent dataset and a corresponding
+analytical snapshot.
+
+Known-domain renewal detection compares CT-observed SAN sets with domains
+already present in the dataset, including base-domain and \texttt{www}
+variations. A matched CT observation contributes one representative domain to
+the renewal input and is marked as processed. The domain crawler then performs
+a fresh endpoint observation using the acquisition workflow described in
+Chapter~\ref{chap:certificate-acquisition}.
+
+The discovery path selects a bounded collection of unprocessed CT
+observations, cleans the first candidate domain from each selected SAN set, and
+crawls the resulting endpoints. Only successfully acquired certificate records
+are eligible for insertion into the main dataset and for addition to the
+maintained domain list.
+
+Figure~\ref{fig:ct-renewal-discovery-branches} shows the relationship between
+the two branches.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    box/.style={draw, rounded corners=2pt, align=center, text width=3.45cm, minimum height=0.9cm, fill=black!5},
+    store/.style={draw, cylinder, shape border rotate=90, aspect=0.22, align=center, text width=3.25cm, minimum height=1.0cm, fill=black!8},
+    main/.style={draw, very thick, cylinder, shape border rotate=90, aspect=0.22, align=center, text width=3.35cm, minimum height=1.05cm, fill=black!10},
+    flow/.style={-{Latex[length=2mm]}, line width=0.5pt}
+  ]
+    \node[store] (ct) at (0,0) {Unprocessed CT\\domain observations};
+
+    \node[box] (renew-select) at (-3.8,-1.55) {Match observations with\\known domains};
+    \node[box] (new-select) at (3.8,-1.55) {Select previously unseen\\candidate domains};
+
+    \node[box] (renew-crawl) at (-3.8,-3.05) {Crawl renewal\\candidates};
+    \node[box] (new-crawl) at (3.8,-3.05) {Crawl discovery\\candidates};
+
+    \node[store] (renew-db) at (-3.8,-4.85) {Renewal staging\\certificates};
+    \node[store] (new-db) at (3.8,-4.85) {Discovery staging\\certificates};
+
+    \node[box] (renew-merge) at (-3.8,-6.4) {Checkpointed replacement\\by domain};
+    \node[box] (new-merge) at (3.8,-6.4) {Insert accepted records\\and extend domain list};
+    \node[main] (main-db) at (0,-8.0) {Updated certificate\\dataset};
+
+    \draw[flow] (ct) -- (renew-select);
+    \draw[flow] (ct) -- (new-select);
+    \draw[flow] (renew-select) -- (renew-crawl);
+    \draw[flow] (renew-crawl) -- (renew-db);
+    \draw[flow] (renew-db) -- (renew-merge);
+    \draw[flow] (renew-merge) -- (main-db);
+    \draw[flow] (new-select) -- (new-crawl);
+    \draw[flow] (new-crawl) -- (new-db);
+    \draw[flow] (new-db) -- (new-merge);
+    \draw[flow] (new-merge) -- (main-db);
+  \end{tikzpicture}
+  \caption{Known-domain renewal and new-domain discovery branches}
+  \label{fig:ct-renewal-discovery-branches}
+\end{figure}
+
+\section{Dataset Merge and Analytical Refresh}
+\label{sec:ct-precompute-integration}
+
+Renewal results are merged through batched replacement operations keyed by
+domain. A checkpoint is advanced only after a successful batch, supporting
+continuation after interruption within a stable staging dataset. Discovery
+results use batched insertion, and accepted domains extend the maintained
+domain input for subsequent acquisition cycles.
+
+After the certificate dataset has been updated, the analytics process verifies
+the required indexes and recomputes the six materialized analytical families.
+Detailed certificate and selected time-series queries can observe the main
+dataset directly, whereas materialized dashboards reflect the latest completed
+analytical run. The resulting availability is therefore near real time in the
+sense of following the completed maintenance cycle; it is not an instantaneous
+streaming update for every CT event.
+
+\section{Reliability and Correctness Considerations}
+\label{sec:ct-failure-limitations}
+
+The pipeline provides stage-level recovery through CT-log indices, persistent
+processing markers, acquisition task states, batch checkpoints, process-state
+tracking, and failure logs. These mechanisms allow several interrupted stages
+to be resumed or repeated without restarting the complete dataset.
+
+The complete workflow is not enclosed in one transaction. CT observation,
+temporary staging, domain-list updates, certificate merges, analytical
+recomputation, and service restart remain separate operations. The renewal
+checkpoint must also remain consistent with the lifetime of its staging data,
+and concurrent maintenance cycles require explicit operational coordination.
+Consequently, the platform provides a practical automated maintenance process
+but does not claim global exactly-once processing, instantaneous updates, or
+experimentally measured freshness guarantees.

@@ -1,0 +1,240 @@
+% ==========================================================================
+% CHAPTER 1 ONLY
+% Every technical paragraph is mapped to evidence IDs from
+% docs/analysis/evidence_traceability.md and to concrete repository sources.
+% Inferences I-001, I-002, I-003, I-024, and I-028 were approved as part of
+% the documentation plan; they are phrased as derived framing, not measured
+% implementation facts.
+% ==========================================================================
+
+\chapter{Introduction}
+\label{chap:introduction}
+
+\section{Background and Motivation}
+\label{sec:background-motivation}
+
+% Evidence: V-034. Source: RFC 8446.
+Secure Internet communication is fundamental to the exchange of personal,
+organizational, and governmental information. Transport Layer Security (TLS),
+the successor to Secure Sockets Layer (SSL), protects network communication by
+providing confidentiality, integrity, and endpoint authentication~\cite{rfc8446}.
+In HTTPS, these protections rely on digital certificates that authenticate Web
+servers and support the establishment of encrypted connections.
+
+% Evidence: V-034. Source: RFC 5280.
+Within a Public Key Infrastructure (PKI), trusted Certificate Authorities (CAs)
+issue X.509 certificates that bind identities to public keys. The Internet
+profile of X.509 defines certificate fields, extensions, certification paths,
+and revocation-related structures~\cite{rfc5280}. A deployed certificate may
+therefore describe its subject, issuer, validity period, public-key algorithm
+and size, signature algorithm, certificate policies, and Subject Alternative
+Names (SANs). Collectively, these attributes provide a basis for evaluating
+issuer activity, cryptographic choices, validity practices, domain coverage,
+and other characteristics of the certificate ecosystem. As the number of
+deployed certificates grows, manual inspection becomes increasingly
+impractical, motivating automated collection, structured storage, and analysis.
+
+% Evidence: V-009--V-013, V-034. Source: CT pipeline code/config and RFC 9162.
+Certificate Transparency (CT) improves the visibility of certificate issuance
+through publicly auditable, append-only logs~\cite{rfc9162}. These logs provide
+a valuable source for monitoring issued or observed TLS server certificates;
+however, their scale and continuous growth make systematic analysis difficult.
+Manual review cannot efficiently track changes in validity, issuance patterns,
+or certificate characteristics across extensive and evolving datasets. This
+creates a need for analytical approaches that can process large certificate
+collections while retaining the contextual information required for meaningful
+security assessment.
+
+% Evidence: V-025, V-034. Source: shared-key precompute and committed paper.
+Large certificate collections also reveal relationships that are difficult to
+identify through isolated certificate lookup. Repeated certificates and reused
+RSA public keys have, for example, been observed in large PKI datasets~\cite{nezhadian2025reuse}.
+Such relationships may remain hidden when certificates are examined
+individually because their significance emerges only after comparing records
+across domains, issuers, and time periods. Large-scale analysis is therefore
+important for exposing patterns that warrant further investigation, while
+ensuring that observations such as key reuse are not treated, by themselves,
+as proof of private-key compromise.
+
+% Motivation derived from the approved project scope and problem framing.
+The motivation for this project arises from the limitations of manual and
+lookup-oriented certificate inspection. Examining one certificate at a time may
+answer a narrow operational question, but it does not provide an ecosystem-wide
+view of issuer activity, validity practices, cryptographic algorithms, domain
+coverage, geographic patterns, or certificate-quality concerns. Researchers,
+system administrators, and cybersecurity professionals require a systematic
+means of comparing these properties across large datasets so that significant
+patterns can be distinguished from isolated observations.
+
+Scalable analytics are necessary because the value of certificate data depends
+not only on its availability but also on the ability to organize, summarize,
+and interpret it. Raw records and log entries are difficult to assess directly
+at scale, whereas clear statistical representations and visual summaries can
+make distributions, trends, and unusual relationships easier to investigate.
+This need becomes increasingly important as certificate ecosystems continue to
+change and as security decisions must be informed by current, comprehensible,
+and appropriately contextualized evidence.
+
+These practical challenges motivated the development of the proposed certificate 
+analytics platform. The objective is to transform extensive and continuously evolving
+SSL/TLS certificate data into organized, meaningful, and actionable information that
+supports large-scale security analysis. This naturally leads to the problem addressed
+in the following section
+
+\section{Problem Statement}
+\label{sec:problem-statement}
+
+% Problem framing approved under I-001; consistent with V-001 and V-009--V-026.
+The widespread adoption of HTTPS and the continuing issuance of SSL/TLS
+certificates have produced large and continuously changing collections of
+certificate data, including records made publicly visible through Certificate
+Transparency. Although this information is valuable for assessing the security
+posture of Internet services, manually collecting, organizing, and examining it
+at scale is impractical. Security-relevant conditions---including expired
+certificates, weak cryptographic choices, configuration problems, and public-key
+reuse---may also remain difficult to identify when analysis is limited to
+individual certificates rather than broader patterns across issuers, domains,
+and time periods.
+
+Certificate lookup and monitoring tools support focused inspection, but
+individual-record workflows are insufficient for comprehensive, large-scale
+security analysis. Researchers, system administrators, and cybersecurity
+professionals require a scalable means of organizing and comparing extensive
+certificate datasets, transforming raw certificate attributes into
+interpretable evidence, and presenting significant distributions and
+relationships clearly. Consequently, there is a need for a unified certificate
+analytics platform that supports systematic investigation without relying on
+manual inspection.
+
+\section{Project Objectives}
+\label{sec:objectives}
+
+% Objective framing approved under I-002; each item remains bounded by the
+% verified V-series evidence noted in its source comment.
+The overall objective of this project is to develop a scalable SSL/TLS
+certificate analytics platform that supports the structured collection,
+maintenance, analysis, and presentation of large certificate datasets. The
+project seeks to make certificate ecosystem data more accessible for systematic
+security research, operational monitoring, and informed assessment.
+
+The specific objectives of the project are as follows:
+
+\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
+  \item \textbf{Acquire and organize structured certificate data.} Collect X.509 certificate records from large domain datasets in a form suitable for consistent analysis. % V-004--V-007
+
+  \item \textbf{Maintain an Up-to-Date Certificate Dataset.} Automatically incorporate newly issued and renewed certificates into the analytical dataset to support continuous and up-to-date assessment. % V-009--V-014; freshness is an objective, not a measured outcome
+
+  \item \textbf{Support Multi-Scope Certificate Analytics.} Enable comparative analysis of SSL/TLS certificate ecosystems at both global and country-specific scopes. % V-002--V-003, V-014--V-026
+
+  \item \textbf{Provide Near Real-Time Analytics.} Ensure that newly collected certificate data is reflected in the analytical results with minimal delay, allowing users to monitor continuously evolving certificate ecosystems. % V-004--V-014; timeliness is an objective and is not presented as a measured benchmark
+
+  \item \textbf{Analyze significant certificate characteristics.} Examine validity periods, issuers, cryptographic algorithms, key properties, SANs, and geographic distributions at global and selected country scopes. % V-003, V-014--V-017, V-025--V-026
+
+  \item \textbf{Identify security-relevant patterns.} Surface expiration, weak cryptographic choices, public-key reuse, certificate-quality concerns, and application-defined risk indicators for further investigation. % V-016--V-017, V-025--V-026
+
+  \item \textbf{Support comparative assessment of Certificate Authorities.} Evaluate CA activity and provide comparative rankings using explicitly defined certificate-based metrics. % V-014--V-015; project-defined metrics are not externally calibrated
+
+  \item \textbf{Facilitate interactive certificate analysis.} Present interactive dashboards, statistical summaries, visualizations, search, filtering, and detailed certificate information to facilitate efficient exploration and security analysis. % V-018--V-024
+\end{enumerate}
+
+\section{Project Contributions}
+\label{sec:contributions}
+
+% Inference: I-003 approved. Verified basis: V-001, V-004--V-026.
+The proposed project makes several technical and practical contributions to large-scale
+SSL/TLS certificate collection, maintenance, analysis, and visualization. The
+principal contributions of the developed platform are summarized below.
+
+\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
+  \item \textbf{Intelligent certificate crawling framework.} The project develops automated crawlers that retrieve and structure SSL/TLS certificates for domains obtained from Certificate Transparency (CT) logs and other supported domain sources. The framework combines concurrent domain-based and CT-driven crawling with a separate experimental IP-based crawler, while persistent task states and stale-task recovery mechanisms provide operational recovery support with limited manual intervention.
+
+  \item \textbf{Continuous certificate dataset maintenance.} A Certificate Transparency driven maintenance process identifies certificates associated with newly observed and renewed domains, incorporates successfully acquired records into the analytical dataset, and supports its continued expansion over time.
+
+  \item \textbf{Timely analytical updates.} Certificate acquisition and dataset maintenance are integrated with analytical processing so that refreshed results can be made available after data-update cycles without requiring a separate manual analysis workflow.
+
+  \item \textbf{Global and country-level analytical scoping.} The platform supports consistent exploration of the complete certificate dataset and configured country-level domain scopes, enabling comparative analysis across multiple geographic scopes within a unified framework.
+
+  \item \textbf{Comprehensive certificate analytics.} The analytical capabilities cover validity periods, issuers, cryptographic algorithms, key properties, validation levels, Subject Alternative Names, and domain-based geographic distributions, providing multiple perspectives on SSL/TLS certificate ecosystems.
+
+  \item \textbf{Security-oriented certificate assessment.} The system surfaces expired certificates, weak cryptographic choices, public-key reuse, certificate-quality findings, and application-defined risk indicators to support focused security investigation.
+
+  \item \textbf{Comparative Certificate Authority evaluation.} The platform evaluates Certificate Authorities using explicitly defined, certificate-derived metrics and presents comparative rankings and distribution patterns.
+
+  \item \textbf{Interactive analysis and visualization.} The web-based interface combines statistical summaries, charts, tables, search, filtering, and detailed certificate views to make large-scale certificate information accessible for systematic exploration.
+
+  \item \textbf{Unified certificate intelligence workflow.} By integrating acquisition, dataset maintenance, analytical processing, and interactive presentation, the project converts raw certificate records into structured and interpretable information for cybersecurity research, operational monitoring, and informed assessment.
+\end{enumerate}
+
+\section{Scope and Boundaries}
+\label{sec:scope-boundaries}
+
+% Evidence: V-001, V-008, V-014--V-030.
+This section defines the functional coverage of the developed platform and the
+limits within which its results should be interpreted. It distinguishes the
+capabilities addressed by the project from activities and assurances that fall
+outside its intended purpose.
+
+\subsection{Project Scope}
+
+The project covers the following principal areas:
+
+\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
+  \item \textbf{Certificate acquisition and dataset maintenance.} Automated crawlers collect SSL/TLS certificates for domains obtained from Certificate Transparency logs and other supported domain sources. Newly observed and renewed certificates extend and update the analytical dataset.
+
+  \item \textbf{Certificate and security analytics.} The platform examines validity, issuers, cryptographic properties, validation levels, Subject Alternative Names, and domain-based geographic distributions. It also identifies expiration, weak cryptographic choices, public-key reuse, certificate-quality findings, and project-defined risk indicators.
+
+  \item \textbf{Certificate Authority analysis.} Certificate Authorities are compared using certificate-derived distributions, quality indicators, and project-defined ranking metrics.
+
+  \item \textbf{Global and country-level analysis.} Certificate data can be examined across the complete dataset and configured country-level domain scopes within a consistent analytical framework.
+
+  \item \textbf{Interactive analysis and visualization.} Dashboards, charts, tables, trends, search, filtering, and detailed certificate views support systematic exploration of analytical results.
+
+  \item \textbf{Analytical refresh.} Analytical results can be refreshed after dataset updates so that subsequent analysis reflects the latest completed acquisition cycle.
+\end{enumerate}
+
+\subsection{Project Boundaries}
+
+The project is subject to the following boundaries:
+
+\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
+  \item The dataset does not represent every SSL/TLS certificate deployed on the Internet. Results are limited to certificates acquired from the supported sources.
+
+  \item Security findings are indicators for further investigation, not proof of compromise or confirmed vulnerability. Penetration testing and exploitation of target systems are outside the project scope.
+
+  \item Certificate Authority rankings and risk indicators use project-defined metrics. They are comparative measures rather than official or externally validated security ratings.
+
+  \item Country-level analysis is based on configured domain scopes and does not establish server location, subject jurisdiction, or Certificate Authority location.
+
+  \item Analytical refresh depends on completion of the relevant collection and update cycle. Instantaneous or strictly real-time updates are not claimed.
+
+  \item IP-based certificate acquisition is experimental and remains separate from the primary domain-based analytical dataset.
+
+  \item The platform is intended for research and analytical use; it does not replace production-grade certificate management, threat-intelligence, or formal security-audit services.
+\end{enumerate}
+
+Table~\ref{tab:implemented-scope} summarizes the major areas covered by the
+project and the principal boundary associated with each area.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Summary of project scope and principal boundaries}
+  \label{tab:implemented-scope}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash\hyphenpenalty=10000\exhyphenpenalty=10000}p{0.19\textwidth}>{\RaggedRight\arraybackslash\hyphenpenalty=10000\exhyphenpenalty=10000}X>{\RaggedRight\arraybackslash\hyphenpenalty=10000\exhyphenpenalty=10000}p{0.31\textwidth}@{}}
+    \toprule
+    \textbf{Area} & \textbf{Included scope} & \textbf{Principal boundary} \\
+    \midrule
+    Acquisition & Automated domain-based and CT-guided certificate collection & Coverage is limited to supported sources \\
+    Dataset maintenance & Incorporation of newly observed and renewed certificates & Updates depend on completed acquisition cycles \\
+    Analytics & Certificate attributes, security indicators, CA comparison, and trends & Findings and metrics require bounded interpretation \\
+    Geographic scope & Global and configured country-level domain analysis & Does not establish physical geolocation \\
+    Presentation & Interactive summaries, visualizations, search, filtering, and detailed views & Intended for research and analytical use \\
+    IP exploration & Experimental IP-based certificate acquisition & Separate from the primary analytical dataset \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Report Organization}
+\label{sec:report-organization}
+
+% Inference: I-024 and I-028 approved as documentation structure.
+Following this introduction, Chapter 2 establishes the technical background and compares the three related-work papers committed with the project. Chapter 3 presents repository-derived requirements, constraints, technology choices, and module decomposition. Chapter 4 describes the component, data, scope, indexing, cache, and request-flow design. Chapter 5 examines domain acquisition, dataset preparation, and the experimental IP crawler. Chapter 6 explains the CT renewal and discovery workflow. Chapter 7 documents materialized and live analytics, the Django API, and the Next.js dashboard. Chapter 8 records verification evidence, security observations, implementation limitations, and threats to validity without introducing unsupported benchmark claims. Chapter 9 concludes the report and proposes future work derived from verified repository gaps.

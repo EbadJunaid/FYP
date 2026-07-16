@@ -1,0 +1,245 @@
+% Overleaf-compatible formatting layer reconstructed from the official
+% "FYP-II Report.docx" template supplied on 14 July 2026.
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+% New TX is the closest widely available pdfLaTeX equivalent to Times New Roman.
+\usepackage{newtxtext,newtxmath}
+
+% Verified Word section geometry:
+% A4; left 3.0 cm; top, bottom, and right 2.5 cm;
+% header and footer distance 1.25 cm.
+\usepackage[
+  a4paper,
+  top=2.5cm,
+  bottom=2.5cm,
+  left=3cm,
+  right=2.5cm,
+  headheight=0pt,
+  headsep=0pt,
+  footskip=1.25cm
+]{geometry}
+
+\usepackage{setspace}
+\onehalfspacing
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{etoolbox}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+\usepackage{titlesec}
+\usepackage{tocloft}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+% Keep complete words together across the report. The additional emergency
+% stretch gives TeX enough flexibility to justify paragraphs cleanly without
+% resorting to automatic or explicit-hyphen line breaks.
+\hyphenpenalty=10000
+% Existing compound-word hyphens may be used only when a narrow table column
+% cannot accommodate the complete compound without overflowing.
+\exhyphenpenalty=10000
+\setlength{\emergencystretch}{4em}
+% Narrow table cells are the only exception: normal discretionary breaks are
+% permitted there when keeping a long technical term intact would overflow the
+% column. The higher-than-default penalty still prefers complete words.
+\AtBeginEnvironment{tabular}{\hyphenpenalty=10000\exhyphenpenalty=10000}
+\AtBeginEnvironment{tabularx}{\hyphenpenalty=10000\exhyphenpenalty=10000}
+\AtBeginEnvironment{longtable}{\hyphenpenalty=10000\exhyphenpenalty=10000}
+\renewcommand{\arraystretch}{1.0}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\AtBeginDocument{\justifying}
+
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+
+% The template uses unequal left and right margins. Shift generated list
+% titles by half the margin difference so they are centred on the physical
+% page, not merely within the text block.
+\newcommand{\TemplatePageCenteredGeneratedTitle}[1]{%
+  \hspace*{-0.25cm}\makebox[\textwidth][c]{#1}%
+}
+
+% Babel applies English caption names at \begin{document}; set the template
+% names through the language hook so they are not reset to "Contents" or
+% "Bibliography" during compilation.
+\addto\captionsenglish{%
+  \renewcommand{\contentsname}{\TemplatePageCenteredGeneratedTitle{TABLE OF CONTENTS}}%
+  \renewcommand{\listtablename}{\TemplatePageCenteredGeneratedTitle{LIST OF TABLES}}%
+  \renewcommand{\listfigurename}{\TemplatePageCenteredGeneratedTitle{LIST OF FIGURES}}%
+  \renewcommand{\bibname}{REFERENCES}%
+}
+
+% Reusable chapter opening: the number is written as an uppercase word and the
+% chapter title is centred on a separate line immediately below it.
+\newcommand{\TemplateChapterWord}{%
+  \ifcase\value{chapter}%
+  \or ONE\or TWO\or THREE\or FOUR\or FIVE\or SIX\or SEVEN\or EIGHT\or NINE\or TEN%
+  \else\thechapter\fi
+}
+
+\titleformat{\chapter}[display]
+  {\normalfont\centering\bfseries\setstretch{1}\fontsize{16}{19.2}\selectfont}
+  {CHAPTER \TemplateChapterWord}
+  {6pt}
+  {}
+\titlespacing*{\chapter}{0pt}{0pt}{30pt}
+
+% Unnumbered front-matter headings begin at the top text margin.
+\titleformat{name=\chapter,numberless}[block]
+  {\normalfont\centering\bfseries\setstretch{1}\fontsize{16}{19.2}\selectfont}
+  {}
+  {0pt}
+  {}
+
+% The template guideline specifies 16-point Times New Roman for headings.
+\titleformat{\section}
+  {\normalfont\bfseries\setstretch{1}\fontsize{16}{19.2}\selectfont}
+  {\thesection}{0.75em}{}
+\titlespacing*{\section}{0pt}{18pt}{9pt}
+
+\titleformat{\subsection}
+  {\normalfont\bfseries\setstretch{1}\fontsize{16}{19.2}\selectfont}
+  {\thesubsection}{0.75em}{}
+\titlespacing*{\subsection}{0pt}{15pt}{7.5pt}
+
+\titleformat{\subsubsection}
+  {\normalfont\bfseries\setstretch{1}\fontsize{16}{19.2}\selectfont}
+  {\thesubsubsection}{0.75em}{}
+\titlespacing*{\subsubsection}{0pt}{12pt}{6pt}
+
+% Verified Word caption style: Times New Roman, 9 pt, italic, not bold.
+\captionsetup{
+  font={stretch=1},
+  labelfont=it,
+  textfont=it,
+  justification=justified,
+  singlelinecheck=false,
+  skip=10pt
+}
+\DeclareCaptionFont{templatecaption}{\fontsize{9}{12}\selectfont}
+\captionsetup{font={templatecaption,stretch=1}}
+
+% Verified Word TOC styles: 12 pt regular; levels 2 and 3 indented by
+% 12 pt and 24 pt; 5 pt after each entry. List entries use the same face.
+% tocloft owns the three generated titles, so center them explicitly and use
+% the same 16 pt bold face as every other front-matter heading.
+\renewcommand{\cfttoctitlefont}{\normalfont\bfseries\fontsize{16}{19.2}\selectfont}
+\renewcommand{\cftaftertoctitle}{}
+\renewcommand{\cftlottitlefont}{\normalfont\bfseries\fontsize{16}{19.2}\selectfont}
+\renewcommand{\cftafterlottitle}{}
+\renewcommand{\cftloftitlefont}{\normalfont\bfseries\fontsize{16}{19.2}\selectfont}
+\renewcommand{\cftafterloftitle}{}
+\setlength{\cftbeforetoctitleskip}{30pt}
+\setlength{\cftaftertoctitleskip}{30pt}
+\setlength{\cftbeforelottitleskip}{30pt}
+\setlength{\cftafterlottitleskip}{30pt}
+\setlength{\cftbeforeloftitleskip}{30pt}
+\setlength{\cftafterloftitleskip}{30pt}
+
+% Only numbered main-chapter entries are bold. Front-matter entries inject
+% \normalfont through \TemplateFrontTocEntry below, while section and
+% subsection entries retain their established regular styling.
+\renewcommand{\cftchapfont}{\normalfont\bfseries\fontsize{12}{12}\selectfont}
+\renewcommand{\cftchappagefont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cftsecfont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cftsecpagefont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cftsubsecfont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cftsubsecpagefont}{\normalfont\fontsize{12}{12}\selectfont}
+\setlength{\cftchapindent}{0pt}
+\setlength{\cftsecindent}{12pt}
+\setlength{\cftsubsecindent}{24pt}
+\setlength{\cftsecnumwidth}{3.2em}
+\setlength{\cftsubsecnumwidth}{4.4em}
+\setlength{\cftbeforechapskip}{5pt}
+\setlength{\cftbeforesecskip}{5pt}
+\setlength{\cftbeforesubsecskip}{5pt}
+\renewcommand{\cftfigfont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cftfigpagefont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cfttabfont}{\normalfont\fontsize{12}{12}\selectfont}
+\renewcommand{\cfttabpagefont}{\normalfont\fontsize{12}{12}\selectfont}
+
+% Numbered chapter entries use the requested bold Arabic numeral followed by
+% the existing chapter title. Section and subsection entries remain regular.
+\newcommand{\TemplateTocChapterEntry}[2]{#1\hspace{2em}#2}
+\makeatletter
+% Keep the report class's chapter behaviour intact while writing the visible
+% chapter number as an Arabic numeral to the table of contents.
+\def\@chapter[#1]#2{%
+  \ifnum \c@secnumdepth >\m@ne
+    \refstepcounter{chapter}%
+    \typeout{\@chapapp\space\thechapter.}%
+    \addcontentsline{toc}{chapter}{%
+      \protect\TemplateTocChapterEntry{\thechapter}{#1}}%
+  \else
+    \addcontentsline{toc}{chapter}{#1}%
+  \fi
+  \chaptermark{#1}%
+  \addtocontents{lof}{\protect\addvspace{10\p@}}%
+  \addtocontents{lot}{\protect\addvspace{10\p@}}%
+  \if@twocolumn
+    \@topnewpage[\@makechapterhead{#2}]%
+  \else
+    \@makechapterhead{#2}%
+    \@afterheading
+  \fi
+}
+\makeatother
+
+% Preliminary pages use the empty style. main.tex activates the standard
+% centred-footer plain style when Roman numbering begins at the contents.
+\pagestyle{empty}
+
+\setlist{itemsep=0pt,topsep=6pt,parsep=0pt,partopsep=0pt}
+
+% Reusable front-matter primitives. Measurements correspond to the rendered
+% Word page: logo height 228.8 pt; all content centred unless stated otherwise.
+\newcommand{\TemplateLogo}{%
+  \includegraphics[height=228.8pt,keepaspectratio]{assets/itu-logo.png}%
+}
+\newcommand{\TemplateFrontHeading}[1]{%
+  \vspace*{30pt}%
+  \begingroup
+    \setstretch{1}%
+    \noindent\makebox[\textwidth][c]{%
+      \bfseries\fontsize{16}{19.2}\selectfont #1%
+    }\par
+  \endgroup
+  \vspace{30pt}%
+}
+\newcommand{\TemplateFrontTocEntry}[1]{%
+  \addcontentsline{toc}{chapter}{\protect\normalfont\protect\bfseries #1}%
+}
+\newcommand{\TemplateStudentTable}{%
+  \begingroup
+    \fontsize{12}{16.2}\selectfont
+    \begin{tabular}{@{}l@{\hspace{2.5em}}l@{\hspace{2.5em}}l@{}}
+      \ReportStudent & Roll No: \ReportRegistration & Session: \ReportSession \\
+      \ReportStudentTwo & Roll No: \ReportRegistrationTwo & Session: \ReportSession
+    \end{tabular}%
+  \endgroup
+}
+
+\hypersetup{
+  pdftitle={SSL Guardian: Large-Scale SSL Certificate Analytics Platform},
+  pdfsubject={Final Year Project Report},
+  pdfauthor={Ebad Junaid and Muhammad Arslan Shafi},
+  pdfkeywords={SSL, TLS, X.509, Certificate Transparency, analytics, MongoDB}
+}
+
+\urlstyle{same}
+\clubpenalty=10000
+\widowpenalty=10000
+\displaywidowpenalty=10000

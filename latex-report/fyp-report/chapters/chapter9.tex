@@ -1,0 +1,74 @@
+% ===========================================================================
+% CHAPTER 9
+% ===========================================================================
+
+\chapter{Conclusion and Future Work}
+\label{chap:conclusion-future-work}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+SSL Guardian addresses the challenge of collecting, maintaining, analyzing, and
+presenting large SSL/TLS certificate datasets through one integrated platform.
+The developed system combines concurrent endpoint crawling, structured X.509
+parsing, CT-assisted renewal and new-domain discovery, persistent certificate
+storage, global and country-level analytics, application services, and an
+interactive dashboard.
+
+The acquisition framework uses persistent task states, atomic worker claims,
+concurrent processing, retries, stale-task recovery, certificate parsing, scope
+enrichment, and leaf classification. A separate experimental IP-based crawler
+extends the acquisition work to address-based measurement while remaining
+isolated from the primary domain-based analytical dataset.
+
+The CT pipeline supports continuous dataset development by observing
+CT-derived domain sets, selecting known-domain renewal candidates, discovering
+new domains, crawling their current endpoints, and incorporating successful
+results. Analytical materialization follows completed update cycles, allowing
+the dashboard to reflect newly acquired certificate information with minimal
+operational delay while preserving a clear boundary from strict
+event-by-event real-time processing.
+
+The analytical platform covers validity, issuer and Certificate Authority
+activity, signature and hash algorithms, key properties, SANs, public-key
+reuse, geographic scope, trends, and security-oriented risk indicators.
+Certificate Authority ranking and certificate-risk scoring provide transparent
+comparative views, while the dashboard connects aggregate visualizations to
+filtered lists and detailed certificate records. These scores and labels are
+application-defined analytical aids and should not be interpreted as proof of
+compromise or externally certified security ratings.
+
+The project demonstrates a broad systems-engineering contribution to
+certificate intelligence. Its principal strengths are the integration of
+acquisition, CT-driven dataset maintenance, analytical processing, and
+interactive exploration. The evaluation also identifies limitations in
+production hardening, test automation, request isolation, benchmark coverage,
+and analytical calibration. These boundaries define the present scope and
+provide a clear direction for continued development.
+
+\section{Future Work}
+\label{sec:future-work}
+
+Future development should prioritize the following areas:
+
+\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
+  \item \textbf{Correctness and configuration consolidation.} Establish one validated configuration source, align auxiliary application contracts, enforce the intended certificate-identity rules, and associate renewal checkpoints with explicit processing runs.
+
+  \item \textbf{Security and request isolation.} Replace shared scope state with request-local propagation, add authentication and authorization, externalize secrets, restrict service exposure, and maintain separate development and production settings.
+
+  \item \textbf{Automated verification and reproducibility.} Add unit, integration, API-contract, browser, concurrency, and recovery tests. Define complete dependency versions, native-tool provenance, automated environment setup, and repeatable dataset fixtures.
+
+  \item \textbf{Performance evaluation.} Measure crawler throughput, CT ingestion, update-cycle duration, analytical processing time, indexed query latency, cache behavior, frontend responsiveness, and resource consumption under controlled workloads.
+
+  \item \textbf{Analytical validation.} Evaluate CA, signature-strength, and certificate-risk models against expert-labelled or externally defined baselines. Sensitivity analysis should identify the influence of individual score components and reveal misclassified cases.
+
+  \item \textbf{Extended certificate intelligence.} Incorporate ownership-aware shared-key classification based on the distinctions described in related research~\cite{junaid2025shared}, improve geographic interpretation, and conduct reproducible longitudinal studies of CT-driven dataset freshness.
+
+  \item \textbf{Responsible scanning governance.} Formalize target authorization, rate limits, opt-out procedures, data retention, licensing, and responsible-disclosure practices for repeated Internet-facing acquisition.
+\end{enumerate}
+
+Completing these improvements would strengthen the platform from both an
+engineering and research perspective. The immediate priority is to establish
+correct, isolated, secure, and reproducible operation; subsequent work can then
+quantify performance and validate the analytical meaning of the system's
+security-oriented measures.

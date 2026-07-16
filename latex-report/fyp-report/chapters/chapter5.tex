@@ -1,0 +1,139 @@
+% ===========================================================================
+% CHAPTER 5
+% ===========================================================================
+
+\chapter{Certificate Acquisition and Dataset Construction}
+\label{chap:certificate-acquisition}
+
+\section{Domain Dataset Preparation}
+\label{sec:domain-dataset-preparation}
+
+Certificate acquisition begins with normalized domain inputs. The preparation
+process supports ranked domain lists, supplied country-specific lists, and
+certificate-derived domain sources. Domain names are converted to lowercase,
+validated, deduplicated, and combined into CSV datasets suitable for automated
+processing. Alternative certificate-parsing paths support extraction of domain
+names from large external certificate collections when such data is available.
+
+Table~\ref{tab:committed-input-counts} summarizes the principal acquisition
+inputs included with the project. These values describe input size rather than
+the number of unique or successfully retrieved certificates.
+
+\begin{table}[H]
+  \centering
+  \small
+  \setlength{\tabcolsep}{5pt}
+  \caption{Certificate acquisition input datasets}
+  \label{tab:committed-input-counts}
+  \begin{tabularx}{\textwidth}{@{}Y>{\Centering\arraybackslash}p{0.20\textwidth}Y@{}}
+    \toprule
+    \textbf{Dataset} & \textbf{Records} & \textbf{Purpose} \\
+    \midrule
+    Global domain dataset & 707,084 & Primary domain input for large-scale certificate acquisition \\
+    Pakistan domain dataset & 8,185 & Country-level domain scope used as one supported analytical subset \\
+    Pakistan IPv4 prefix set & 720 prefixes & Input for the separate experimental IP-based acquisition workflow \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The final analytical dataset expands beyond the initial input through
+CT-assisted discovery. Dataset size should therefore be interpreted as an
+operational input characteristic rather than complete coverage of Internet TLS
+deployment.
+
+\section{Domain-Based Certificate Crawling}
+\label{sec:domain-crawler-architecture}
+
+The domain-based crawler is a concurrent acquisition service backed by
+persistent task states. At startup, it validates its inputs, prepares the
+processing state, and records domains as pending tasks. Worker threads
+atomically claim tasks so that a normal task is processed by only one worker at
+a time. Figure~\ref{fig:domain-crawler-flow} summarizes the workflow.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    action/.style={draw, rounded corners=2pt, align=center, text width=2.45cm, minimum height=1.0cm, fill=black!5},
+    state/.style={draw, rounded corners=2pt, align=center, text width=2.45cm, minimum height=1.0cm, fill=black!9},
+    flow/.style={-{Latex[length=2mm]}, line width=0.5pt},
+    recovery/.style={-{Latex[length=2mm]}, line width=0.5pt, dashed}
+  ]
+    \node[action] (preflight) at (-5.8,0) {Validate input and\\supporting services};
+    \node[action] (load) at (-2.9,0) {Create pending\\domain tasks};
+    \node[state] (claim) at (0,0) {Atomic worker claim\\to processing};
+    \node[action] (acquire) at (2.9,0) {TLS retrieval and\\certificate parsing};
+    \node[state] (done) at (5.8,0) {Enrich and store;\\mark completed};
+
+    \node[state] (doctor) at (-2.9,-2.0) {Reset stale tasks\\to pending};
+    \node[state] (retry) at (0,-3.8) {Eligible retry\\after delay};
+    \node[state] (failure) at (2.9,-2.0) {Retrieval or\\parsing failure};
+    \node[state] (failed) at (5.8,-3.8) {Record error and\\mark failed};
+
+    \draw[flow] (preflight) -- (load);
+    \draw[flow] (load) -- (claim);
+    \draw[flow] (claim) -- (acquire);
+    \draw[flow] (acquire) -- (done);
+    \draw[flow] (acquire) -- (failure);
+    \draw[flow] (failure) -- (retry);
+    \draw[flow] (failure) -- (failed);
+    \draw[recovery] (doctor.north) -- (load.south);
+    \draw[recovery] (retry.north) -- (claim.south);
+  \end{tikzpicture}
+  \caption{Concurrent certificate crawling and recovery workflow}
+  \label{fig:domain-crawler-flow}
+\end{figure}
+
+For each claimed domain, the crawler opens a TCP connection to port~443,
+provides the domain through Server Name Indication, and retrieves the peer
+certificate. Hostname and trust validation are disabled during this measurement
+step so that certificates that are expired, self-signed, untrusted, or
+mismatched can still be observed. The retrieved certificate is converted to
+PEM and parsed into structured X.509 and certificate-quality data.
+
+Successful records are enriched with the input domain, acquisition time,
+logical scope, and leaf classification. The leaf rule excludes certificates
+that are self-subject or explicitly marked as Certificate Authorities. This is
+a pragmatic analytical classification rather than complete certification-path
+validation.
+
+Persistent states distinguish pending, processing, completed, and failed
+tasks. Heartbeat timestamps, configurable retries, stale-task reset, monitoring
+statistics, and rescue workers provide stage-level recovery support. These
+mechanisms improve operational continuity but do not constitute an exactly-once
+processing guarantee.
+
+\section{Experimental IP-Based Acquisition}
+\label{sec:experimental-ip-crawler}
+
+The project also includes a separate IP-based certificate crawler for
+experimental measurement. Country-specific APNIC allocation data is converted
+into IPv4 ranges and CIDR prefixes before host addresses are scheduled through
+a worker pool. The crawler supports static and interactive modes, configurable
+timeouts, and scans with an IP, a supplied hostname, or no Server Name
+Indication.
+
+Outcomes distinguish unavailable port~443 services, TCP and TLS timeouts,
+handshake errors, parsing failures, successful certificates, and other errors.
+Successful certificates are parsed and stored with the scanned IP and
+connection context. This workflow uses a separate dataset and is not combined
+with the domain-based analytics dashboard, preventing experimental IP
+observations from being interpreted as part of the primary certificate
+dataset.
+
+\section{Acquisition Limitations and Ethical Considerations}
+\label{sec:acquisition-limitations}
+
+Acquisition results depend on network conditions, DNS, endpoint availability,
+port~443 accessibility, TLS behavior, parser execution, and processing
+infrastructure. A failed acquisition therefore represents an observed failure
+category rather than proof that a domain has no certificate. Similarly,
+successful collection does not imply browser trust.
+
+Internet-scale scanning must operate within an authorized and controlled
+research environment. Responsible operation requires documented target
+authorization, rate limits, opt-out procedures, data-retention rules, and
+responsible-disclosure practices. The resulting datasets must also be
+interpreted as bounded observations rather than complete or statistically
+representative measurements of global TLS deployment.
