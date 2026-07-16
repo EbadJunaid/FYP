@@ -8,108 +8,168 @@
 \section{Stakeholders and Use Cases}
 \label{sec:stakeholders-use-cases}
 
-SSL Guardian is intended primarily for certificate analysts, cybersecurity
-researchers, and system operators. Analysts use the platform to examine
-certificate distributions, filter records, compare global and country-level
-scopes, and investigate individual certificates or shared-key groups. System
-operators prepare acquisition inputs, monitor collection processes, maintain
-the certificate dataset, and refresh analytical results.
+SSL Guardian is intended for four primary stakeholder groups:
+\textbf{cybersecurity researchers}, \textbf{security analysts},
+\textbf{system administrators}, and \textbf{students and educators}. These
+users are interested in understanding SSL/TLS certificate ecosystems,
+investigating certificate characteristics, identifying security-relevant
+patterns, and conducting large-scale certificate analysis. The platform supports 
+these objectives by providing an interactive environment for exploring 
+certificate information, analyzing security-relevant characteristics, and 
+performing comparative SSL/TLS certificate analysis
 
-The principal use cases are:
+\begin{table}[H]
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Primary Stakeholders and Their Objectives}
+  \label{tab:primary-stakeholders}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.28\textwidth}Y@{}}
+    \toprule
+    \textbf{Stakeholder} & \textbf{Primary Objective} \\
+    \midrule
+    Cybersecurity researchers & Study SSL/TLS certificate ecosystems, deployment trends, and security characteristics. \\
+    Security analysts & Investigate expiration, weak cryptographic configurations, public-key reuse, and other security indicators. \\
+    System administrators & Examine certificate deployments and lifecycle information to support operational awareness. \\
+    Students and educators & Explore SSL/TLS certificates and Public Key Infrastructure concepts for learning and research. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
-  \item acquire and structure certificates presented by TLS endpoints;
-  \item identify newly observed and renewed certificates through CT-assisted monitoring;
-  \item analyze validity, cryptographic, issuer, SAN, geographic, and shared-key characteristics;
-  \item compare Certificate Authorities using certificate-derived metrics;
-  \item search, filter, and inspect certificate records through an interactive interface; and
-  \item examine selected results at global and configured country-level scopes.
-\end{enumerate}
+The primary use cases involve searching, filtering, and inspecting certificate
+records; examining validity, issuer, cryptographic, Subject Alternative Name,
+and shared-key characteristics; identifying security-related indicators; and
+comparing Certificate Authorities using certificate-derived measures. Users
+may also explore trends and visual summaries across global and configured
+country-level scopes. Together, these activities support research,
+investigation, operational awareness, and education, and establish the
+user-oriented expectations formalized in the following functional
+requirements.
 
+\clearpage
 \section{Functional Requirements}
 \label{sec:derived-functional-requirements}
 
-Table~\ref{tab:derived-functional-requirements} summarizes the principal
-functional requirements of the developed system.
+The functional requirements define the principal services and observable 
+capabilities that the developed platform must provide to satisfy stakeholder 
+needs. They describe the major functions expected from the system while 
+remaining independent of the underlying implementation.
 
 \begin{table}[htbp]
   \centering
   \small
   \setlength{\tabcolsep}{4pt}
-  \caption{Functional requirements}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Functional Requirements of the Proposed System}
   \label{tab:derived-functional-requirements}
   \begin{tabularx}{\textwidth}{@{}>{\Centering\arraybackslash}p{0.10\textwidth}Y@{}}
     \toprule
-    \textbf{ID} & \textbf{Requirement} \\
+    \textbf{ID} & \textbf{Functional Requirement} \\
     \midrule
-    FR-01 & The system shall accept domain datasets and maintain persistent acquisition states. \\
-    FR-02 & The system shall retrieve peer certificates from TLS endpoints and convert them into structured X.509 records. \\
-    FR-03 & The system shall retain domain, scan-time, scope, leaf-classification, fingerprint, parsed-certificate, and certificate-quality information. \\
-    FR-04 & The system shall consume CT-derived domain observations and distinguish renewal candidates from newly observed domains. \\
-    FR-05 & The system shall incorporate successfully acquired renewal and discovery results into the certificate dataset and refresh analytical results. \\
-    FR-06 & The system shall compute global and country-level analytics for validity, geography, SANs, shared keys, signatures, hashes, and Certificate Authorities. \\
-    FR-07 & The system shall provide searchable and filterable certificate lists, detailed records, analytical summaries, and time-based views. \\
-    FR-08 & The system shall present the results through an interactive web-based dashboard. \\
+    FR-01 & The system shall accept supported domain datasets and perform automated SSL/TLS certificate acquisition for target domains. \\
+    FR-02 & The system shall retrieve SSL/TLS certificates presented by target domains and transform them into structured X.509 certificate records. \\
+    FR-03 & The system shall retain structured certificate information together with the metadata required for analysis, search, and visualization. \\
+    FR-04 & The system shall process Certificate Transparency observations to distinguish newly observed domains from certificate renewal candidates. \\
+    FR-05 & The system shall maintain the certificate dataset by incorporating newly acquired and renewed certificates and refreshing analytical results after each update cycle. \\
+    FR-06 & The system shall generate analytical results for major certificate characteristics, Certificate Authorities, and supported global and country-level scopes. \\
+    FR-07 & The system shall identify and present expired certificates, weak cryptographic configurations, public-key reuse, and certificate-quality findings as analytical indicators for further investigation. \\
+    FR-08 & The system shall provide certificate search, filtering, detailed inspection, analytical summaries, and trend visualization capabilities. \\
+    FR-09 & The system shall present certificate information and analytical results through an interactive web-based dashboard. \\
     \bottomrule
   \end{tabularx}
 \end{table}
+
 
 \section{Non-Functional Requirements and Constraints}
 \label{sec:derived-quality-attributes}
 
-The principal non-functional requirements concern processing capacity,
-recoverability, data currency, responsiveness, usability, and maintainability.
-Table~\ref{tab:derived-quality-attributes} summarizes the corresponding design
-mechanisms and evaluation boundaries.
+Non-functional requirements describe the quality attributes expected from the
+platform and define how well it should perform under its intended operating
+conditions. They complement the functional requirements by specifying
+performance and quality expectations without prescribing implementation
+mechanisms.
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
-  \small
+  \footnotesize
   \setlength{\tabcolsep}{4pt}
-  \caption{Non-functional requirements and constraints}
+  \renewcommand{\arraystretch}{1.05}
+  \caption{Non-Functional Requirements of the Proposed System}
   \label{tab:derived-quality-attributes}
-  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.21\textwidth}>{\RaggedRight\arraybackslash}p{0.40\textwidth}Y@{}}
+  \begin{tabularx}{\textwidth}{@{}>{\Centering\arraybackslash}p{0.11\textwidth}Y@{}}
     \toprule
-    \textbf{Attribute} & \textbf{Supporting design} & \textbf{Constraint} \\
+    \textbf{ID} & \textbf{Non-Functional Requirement} \\
     \midrule
-    Processing capacity & Concurrent acquisition, batch writes, indexes, pagination, and materialized analytics & Performance remains dependent on workload and infrastructure \\
-    Recoverability & Persistent task states, retries, stale-task recovery, checkpoints, and failure logs & Stage-level recovery does not provide a system-wide transaction \\
-    Data currency & Continuous CT observation and periodic renewal/discovery processing & Refresh is cycle-based rather than instantaneous \\
-    Responsiveness & Indexed queries, precomputed summaries, bounded result sets, and optional caching & No fixed latency guarantee is assumed \\
-    Usability and maintainability & Feature-oriented views, shared filters, typed data contracts, modular services, and reusable components & Production hardening and formal usability evaluation remain outside the project scope \\
+    NFR-01 & The system should support efficient processing of large and continuously growing SSL/TLS certificate datasets. \\
+    NFR-02 & The system should provide reliable certificate acquisition and analytical operation despite temporary interruptions. \\
+    NFR-03 & The system should make newly acquired certificate information available for analysis after each completed update cycle. \\
+    NFR-04 & The system should provide practical response times for interactive search, filtering, and dashboard exploration. \\
+    NFR-05 & The system should provide an intuitive interface with clear navigation, search, filtering, visualizations, and detailed certificate views. \\
+    NFR-06 & The system should maintain a modular design that supports future maintenance and extension. \\
+    NFR-07 & The system should apply analytical metrics, filtering behaviour, and scope definitions consistently throughout the platform. \\
+    NFR-08 & The system should support responsible certificate analysis by presenting security indicators as evidence for further investigation rather than confirmed compromise. \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-Certificate acquisition intentionally records presented certificates even when
-normal trust or hostname validation would reject the connection. The platform
-is consequently an analytical measurement system rather than a certificate
-validation authority. Its current operational model is most appropriate for a
-controlled research environment rather than an exposed multi-user service.
+The developed platform also operates under practical constraints that affect
+the coverage, timeliness, and interpretation of its analytical results. The
+principal constraints are summarized below.
 
+\begin{table}[H]
+  \centering
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.05}
+  \caption{Principal Operational Constraints}
+  \label{tab:principal-operational-constraints}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.23\textwidth}Y@{}}
+    \toprule
+    \textbf{Constraint} & \textbf{Description} \\
+    \midrule
+    Dataset coverage & Analytical results are limited to certificates successfully acquired from supported sources and do not represent every SSL/TLS certificate deployed on the Internet. \\
+    Update model & Analytical results become available after each completed update cycle rather than through instantaneous refresh. \\
+    Geographic scope & Country-level analysis is derived from configured domain scopes and should not be interpreted as verified physical server location. \\
+    Analytical interpretation & Security indicators, Certificate Authority rankings, and project-defined metrics support investigation and comparison but do not constitute externally validated security ratings or confirmed compromise. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\clearpage
 \section{Technology Stack}
 \label{sec:technology-stack}
 
-Table~\ref{tab:technology-stack} presents the principal technologies and their
-roles within the platform.
+The platform integrates complementary technologies for certificate
+acquisition, certificate processing, data storage, analytics, server-side
+services, and interactive visualization. Each technology was selected
+according to its suitability for a specific role, compatibility with the
+surrounding components, and support for maintainable development.
+Table~\ref{tab:technology-stack} summarizes the verified principal
+technologies used by the platform.
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
-  \small
+  \footnotesize
   \setlength{\tabcolsep}{4pt}
-  \caption{Technology stack}
+  \renewcommand{\arraystretch}{1.07}
+  \caption{Technology Stack of the Proposed Platform}
   \label{tab:technology-stack}
-  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.22\textwidth}>{\RaggedRight\arraybackslash}p{0.31\textwidth}Y@{}}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.20\textwidth}>{\RaggedRight\arraybackslash}p{0.26\textwidth}Y@{}}
     \toprule
-    \textbf{Layer} & \textbf{Technology} & \textbf{Role} \\
+    \textbf{Layer} & \textbf{Technology} & \textbf{Purpose / Reason for Selection} \\
     \midrule
-    Web interface & Next.js, React, TypeScript, Tailwind CSS, Recharts & Interactive pages, typed client logic, responsive presentation, and charts \\
-    Application service & Django & Routing, middleware, request handling, serialization, and JSON responses \\
-    Data platform & MongoDB and PyMongo & Certificate storage, processing state, CT staging, and analytical results \\
-    Optional cache & Redis & Scope-aware reuse of serialized analytical responses \\
-    Certificate acquisition & Python networking, TLS, and concurrency libraries & Endpoint communication, task processing, and recovery control \\
-    Certificate parsing & \texttt{zcertificate} and ZLint output & Structured X.509 parsing and certificate-quality findings \\
-    CT processing & CertStream-compatible service and WebSocket client & CT-domain observation, renewal detection, and discovery input \\
+    Programming language & Python & Supports certificate acquisition, processing, analytics, and server-side services through a mature networking and data-processing ecosystem. \\
+    Programming language & TypeScript & Supports maintainable web-interface development through static typing and strong integration with the selected frontend framework. \\
+    Backend framework & Django & Provides a mature Python framework for organizing server-side application services and was selected for its reliability and extensibility. \\
+    Frontend framework & Next.js & Provides the structure and routing required for the web application while supporting modern React-based development. \\
+    User-interface library & React & Enables reusable, state-driven interface components suitable for an interactive analytical platform. \\
+    Styling technology & Tailwind CSS & Provides consistent and responsive presentation through a utility-based styling approach. \\
+    Database & MongoDB & Stores structured and nested certificate information using a document model suited to heterogeneous X.509 data. \\
+    Optional cache & Redis & Provides low-latency reuse of selected analytical responses while allowing the platform to operate when caching is unavailable. \\
+    Certificate parsing & ZCertificate & Converts retrieved X.509 certificates into structured machine-readable records for subsequent analysis. \\
+    Certificate Transparency & CertStream & Supplies a source of public CT observations and was selected to support continuing certificate visibility. \\
+    Visualization & Recharts & Provides reusable chart components that integrate directly with React for interactive analytical presentation. \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -117,20 +177,77 @@ roles within the platform.
 \section{System Components and Context}
 \label{sec:system-context}
 
-The system is organized into five cooperating component groups:
+The platform is organized into five cooperating logical components that connect
+Internet certificate sources with user-facing analytical results. Their
+principal responsibilities are summarized below.
 
-\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
-  \item \textbf{Certificate acquisition} retrieves, parses, enriches, and stores certificates from domain-based inputs.
-  \item \textbf{CT-assisted maintenance} observes CT-derived domains, identifies renewal and discovery candidates, and updates the certificate dataset.
-  \item \textbf{Analytics processing} creates indexed global and country-level summaries while retaining live access to detailed records and trends.
-  \item \textbf{Application services} expose filtered certificate data and analytical results through structured request and response interfaces.
-  \item \textbf{Interactive presentation} provides dashboards, charts, tables, search, filtering, and certificate drill-down.
-\end{enumerate}
+\noindent\textbf{Certificate Acquisition.}
+Obtains and structures SSL/TLS certificates from supported domain inputs and
+Internet TLS endpoints.
 
-Internet TLS endpoints and CT logs act as external data sources. The certificate
-parser provides structured X.509 and certificate-quality information, while
-MongoDB forms the main persistence and integration boundary. Analysts interact
-with the system through the dashboard, and operators manage acquisition and
-analytical refresh activities. The experimental IP-based crawler remains a
-separate acquisition capability and does not feed the primary dashboard
-dataset.
+\noindent\textbf{CT-Assisted Dataset Maintenance.}
+Uses public Certificate Transparency observations to identify newly observed
+and renewed domain candidates and maintain dataset freshness.
+
+\noindent\textbf{Analytics Processing.}
+Produces global and country-level summaries, trends, Certificate Authority
+comparisons, and security-relevant indicators.
+
+\noindent\textbf{Application Services.}
+Makes certificate records and analytical results available for search,
+filtering, detailed inspection, and presentation.
+
+\noindent\textbf{Interactive Dashboard.}
+Enables stakeholders to explore certificate records, summaries, comparisons,
+tables, and visualizations.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\small,
+    >=Latex,
+    component/.style={draw, rounded corners=3pt, align=center, text width=2.8cm, minimum height=1.0cm, fill=black!5, line width=0.65pt},
+    data/.style={draw, rounded corners=3pt, align=center, text width=3.25cm, minimum height=1.05cm, fill=black!12, line width=0.9pt},
+    external/.style={draw, dashed, rounded corners=3pt, align=center, text width=2.65cm, minimum height=0.92cm, line width=0.65pt},
+    flow/.style={-{Latex[length=2.4mm]}, line width=0.7pt},
+    interaction/.style={{Latex[length=2.4mm]}-{Latex[length=2.4mm]}, line width=0.7pt}
+  ]
+    \draw[dashed, rounded corners=4pt, line width=0.65pt]
+      (-5.35,1.75) rectangle (5.25,-1.75);
+    \node[fill=white, inner xsep=4pt, font=\small\bfseries] at (-0.05,1.75)
+      {SSL/TLS Certificate Analytics Platform};
+
+    \node[external] (tls) at (-3.65,3.0) {Internet TLS\\Endpoints};
+    \node[external] (ct) at (3.65,3.0) {Certificate\\Transparency};
+
+    \node[component] (acquisition) at (-3.65,0.55) {Certificate\\Acquisition};
+    \node[data] (dataset) at (0,0.45) {Maintained\\Certificate Dataset};
+    \node[component] (maintenance) at (3.65,0.55) {CT-Assisted Dataset\\Maintenance};
+
+    \node[component] (analytics) at (-3.65,-1.05) {Analytics\\Processing};
+    \node[component] (services) at (0,-1.05) {Application\\Services};
+    \node[component] (dashboard) at (3.65,-1.05) {Interactive\\Dashboard};
+    \node[external] (users) at (6.75,-1.05) {Researchers, Analysts,\\Administrators, and Students};
+
+    \draw[flow] (tls) -- (acquisition);
+    \draw[flow] (ct) -- (maintenance);
+    \draw[flow] (acquisition) -- (dataset);
+    \draw[flow] (maintenance) -- (dataset);
+    \draw[flow] (dataset) -- (analytics);
+    \draw[flow] (dataset) -- (services);
+    \draw[flow] (analytics) -- (services);
+    \draw[flow] (services) -- (dashboard);
+    \draw[interaction] (dashboard) -- (users);
+  \end{tikzpicture}
+  \caption{Logical components and system context of the platform}
+  \label{fig:system-context}
+\end{figure}
+
+Internet TLS endpoints supply certificates for domain-based acquisition, while
+Certificate Transparency provides observations for dataset maintenance. The
+collected information supports analytics and application services, and users
+access the results through the dashboard. The experimental IP-based certificate
+crawler operates independently and does not contribute to the primary
+domain-based dashboard dataset. The detailed architecture, data flow, component
+interactions, and data design are presented in
+Chapter~\ref{chap:architecture-data-design}.

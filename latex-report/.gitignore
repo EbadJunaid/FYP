@@ -16,5 +16,9 @@ Thumbs.db
 *.toc
 *.pdf
 
+# Required report asset: this vector image is included by the acknowledgement
+# page and must remain available in fresh clones and Overleaf builds.
+!fyp-report/assets/bismillah.pdf
+
 # Exception: Allow the official template PDF in the analysis folder
 !analysis/official-template-reference.pdf
