@@ -33,7 +33,22 @@ $ErrorActionPreference = 'Stop'
 # Config — adjust these if your project layout / ports differ
 # ----------------------------------------------------------------------
 $ScriptDir    = $PSScriptRoot
-$ProjectRoot  = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path   # dashboard\scripts -> dashboard -> project root
+if (-not $ScriptDir -and $MyInvocation.MyCommand.Path) {
+    $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if (-not $ScriptDir) {
+    Write-Host "ERROR: Could not determine this script's own folder. Launch it as a file, e.g.:" -ForegroundColor Red
+    Write-Host "       powershell -ExecutionPolicy Bypass -File .\setup-and-run.ps1"           -ForegroundColor Red
+    exit 1
+}
+# quickstart -> dashboard -> project root (FYP)
+$ProjectRoot  = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+if (-not (Test-Path (Join-Path $ProjectRoot "dashboard"))) {
+    Write-Host "ERROR: Resolved project root '$ProjectRoot' does not look like the FYP repo" -ForegroundColor Red
+    Write-Host "       (no 'dashboard' folder found there). Aborting so the ~1.2 GB dataset"  -ForegroundColor Red
+    Write-Host "       is not downloaded to the wrong location." -ForegroundColor Red
+    exit 1
+}
 Set-Location $ProjectRoot
 
 $BackendDir   = Join-Path $ProjectRoot "dashboard\backend"
@@ -48,6 +63,13 @@ $FrontendPort = 3000
 $MainArchive    = "hugging-face-700k.archive.gz"
 $ResultsArchive = "hugging-face-700k-results.archive.gz"
 $HfBaseUrl      = "https://huggingface.co/datasets/EbadJunaid/hugging-face-700k-ssl-certificates-data/resolve/main"
+
+# Force Python to UTF-8 mode for every python/pip process this script starts
+# (inherited by child processes, including the Django backend). Without this,
+# a backend whose stdout is redirected to backend.log falls back to the legacy
+# Windows charmap codec, and any print() containing Unicode (e.g. emoji) raises
+# UnicodeEncodeError — which surfaced as 500s from otherwise-healthy APIs.
+$env:PYTHONUTF8 = "1"
 
 $DefaultMongoUri   = "mongodb://localhost:27017"
 $DefaultMainDb     = "hugging-face-700k"
@@ -100,6 +122,37 @@ function Get-InstallHint {
     }
 }
 
+# Minimum Python the dashboard supports — matches dashboard/README.md ("Python 3.11+")
+# and safely clears Django's >=5.0 requirement (Python 3.10+). Change it here only.
+$MinPython = [version]"3.11"
+
+# Find a usable Python 3 interpreter. Order matters: try `python` first so an active
+# conda / venv / uv / pyenv-win environment on PATH wins, then `python3`, and only
+# fall back to the `py -3` launcher for a bare system install with nothing active.
+# A candidate that reports Python 2.x (or older than $MinPython) is skipped, not
+# accepted. Returns { Path = <real sys.executable>; Version = <version> } or $null.
+function Resolve-Python3 {
+    $candidates = @(
+        @{ Exe = "python";  Args = @() },
+        @{ Exe = "python3"; Args = @() },
+        @{ Exe = "py";      Args = @("-3") }
+    )
+    $probe = "import sys; print('%d.%d.%d' % sys.version_info[:3]); print(sys.executable)"
+    foreach ($c in $candidates) {
+        if (-not (Test-CommandExists $c.Exe)) { continue }
+        $exe = $c.Exe; $pyArgs = $c.Args
+        try {
+            $out = & $exe @pyArgs -c $probe 2>$null
+        } catch { continue }
+        if (-not $out -or @($out).Count -lt 2) { continue }
+        try { $ver = [version]($out[0].Trim()) } catch { continue }
+        if ($ver.Major -eq 3 -and $ver -ge $MinPython) {
+            return [pscustomobject]@{ Path = $out[1].Trim(); Version = $ver }
+        }
+    }
+    return $null
+}
+
 # ========================================================================
 # PHASE 1 — Prerequisites
 # ========================================================================
@@ -107,12 +160,13 @@ Write-Phase "Phase 1/7 -- Checking prerequisites"
 
 $Missing = $false
 
-if (Test-CommandExists "python") {
-    $pyver = (python --version) 2>&1
-    Write-Success "python found ($pyver)"
+$Python = Resolve-Python3
+if ($Python) {
+    Write-Success "Python found (Python $($Python.Version) at $($Python.Path))"
 } else {
-    Write-ErrMsg "python not found."
-    Write-Host "   Install with: $(Get-InstallHint python)"
+    Write-ErrMsg "Python $MinPython+ not found (checked: python, python3, py -3)."
+    Write-Host "   An interpreter may exist but be too old (e.g. Python 2.7). Install 3.11+:"
+    Write-Host "   $(Get-InstallHint python)"
     $Missing = $true
 }
 
@@ -142,8 +196,11 @@ if (Test-CommandExists "mongorestore") {
 
 # Redis is optional — never block on it.
 if (Test-CommandExists "redis-cli") {
-    $pong = (redis-cli ping) 2>$null
-    if ($pong -eq "PONG") {
+    # try/catch because under $ErrorActionPreference='Stop' a non-zero exit from
+    # redis-cli (Redis down) is promoted to a terminating NativeCommandError that
+    # 2>$null alone does not suppress — Redis is optional and must never abort setup.
+    $pong = try { (redis-cli ping 2>$null) } catch { $null }
+    if ("$pong".Trim() -eq "PONG") {
         Write-Success "Redis is running (optional caching enabled)"
     } else {
         Write-Warn "Redis is installed but not running."
@@ -195,7 +252,7 @@ if (-not (Test-Path $BackendDir)) {
 
 if (-not (Test-Path $VenvDir)) {
     Write-Info "Creating virtual environment..."
-    python -m venv $VenvDir
+    & $Python.Path -m venv $VenvDir
 } else {
     Write-Info "Virtual environment already exists, reusing it."
 }
@@ -286,8 +343,22 @@ if ($DatasetCheck -eq "READY") {
     New-Item -ItemType Directory -Force -Path $DatasetDir | Out-Null
     Set-Location $DatasetDir
 
+    # Absolute paths for the archives. PowerShell's Set-Location does NOT change the
+    # process working directory that .NET file APIs and native tools (mongorestore)
+    # resolve relative paths against — that stays at the folder the script was launched
+    # from (e.g. dashboard\quickstart). Using absolute paths keeps the download, the
+    # restore, and the cleanup all pointing at the same file inside $DatasetDir.
+    $MainArchivePath    = Join-Path $DatasetDir $MainArchive
+    $ResultsArchivePath = Join-Path $DatasetDir $ResultsArchive
+
     function Get-FileWithProgress {
         param([string]$Url, [string]$OutFile)
+
+        # Anchor to an absolute path so the .NET stream below (which uses the process
+        # CWD, not PowerShell's $PWD) writes to exactly where the later cmdlets read.
+        if (-not [System.IO.Path]::IsPathRooted($OutFile)) {
+            $OutFile = Join-Path (Get-Location).Path $OutFile
+        }
 
         if (Test-Path $OutFile) {
             Write-Info "$OutFile already downloaded, skipping."
@@ -295,56 +366,101 @@ if ($DatasetCheck -eq "READY") {
         }
         Write-Info "Downloading $OutFile ..."
 
-        $webClient = New-Object System.Net.WebClient
-        $state = [hashtable]::Synchronized(@{ Done = $false; HadError = $false })
+        # Make sure TLS 1.2 is available (Hugging Face needs it on Windows PowerShell 5.1).
+        try {
+            [System.Net.ServicePointManager]::SecurityProtocol = `
+                [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+        } catch { }
 
-        $progressSub = Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -Action {
-            $recv  = [math]::Round($EventArgs.BytesReceived / 1MB, 1)
-            $total = [math]::Round($EventArgs.TotalBytesToReceive / 1MB, 1)
-            if ($EventArgs.TotalBytesToReceive -gt 0) {
-                Write-Host -NoNewline ("`r    {0} MB / {1} MB  ({2}%)   " -f $recv, $total, $EventArgs.ProgressPercentage)
-            } else {
-                Write-Host -NoNewline ("`r    {0} MB downloaded...   " -f $recv)
+        # Download into a .part file and only rename to the real name once the
+        # transfer is verified complete, so an interrupted run can never leave a
+        # truncated archive that a later run would wrongly "skip" and try to restore.
+        $tmpFile = "$OutFile.part"
+        if (Test-Path $tmpFile) { Remove-Item -Force $tmpFile -ErrorAction SilentlyContinue }
+
+        $resp = $null; $inStream = $null; $outStream = $null
+        try {
+            $req = [System.Net.HttpWebRequest]::Create($Url)
+            $req.UserAgent         = "setup-and-run.ps1"
+            $req.AllowAutoRedirect = $true      # HF redirects to its CDN
+            $req.Timeout           = 60000      # 60s to establish the connection
+            $req.ReadWriteTimeout  = 300000     # 5 min stall timeout on the stream
+
+            $resp    = $req.GetResponse()
+            $total   = $resp.ContentLength      # -1 if the server doesn't report it
+            $totalMB = if ($total -gt 0) { [math]::Round($total / 1MB, 1) } else { 0 }
+
+            $inStream  = $resp.GetResponseStream()
+            $outStream = [System.IO.File]::Create($tmpFile)
+
+            $buffer     = New-Object byte[] (1MB)
+            $received   = 0L
+            $lastReport = 0L
+
+            # Synchronous read loop on THIS thread: the number printed is exactly
+            # what has been written to disk, so the bar can never run behind (or
+            # ahead of) the real download the way the old event-queue version did.
+            while (($read = $inStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $outStream.Write($buffer, 0, $read)
+                $received += $read
+
+                # Redraw at most every ~4 MB so console I/O doesn't throttle the loop.
+                if (($received - $lastReport) -ge 4MB) {
+                    $lastReport = $received
+                    $recvMB = [math]::Round($received / 1MB, 1)
+                    if ($total -gt 0) {
+                        $pct = [int][math]::Floor(($received / $total) * 100)
+                        Write-Host -NoNewline ("`r    {0} MB / {1} MB  ({2}%)   " -f $recvMB, $totalMB, $pct)
+                    } else {
+                        Write-Host -NoNewline ("`r    {0} MB downloaded...   " -f $recvMB)
+                    }
+                }
             }
+
+            $outStream.Flush(); $outStream.Close(); $outStream = $null
+            $inStream.Close();  $inStream  = $null
+            $resp.Close();      $resp      = $null
+
+            $recvMB = [math]::Round($received / 1MB, 1)
+            if ($total -gt 0) {
+                Write-Host ("`r    {0} MB / {1} MB  (100%)   " -f $recvMB, $totalMB)
+            } else {
+                Write-Host ("`r    {0} MB downloaded...   " -f $recvMB)
+            }
+
+            if ($total -gt 0 -and $received -lt $total) {
+                throw "incomplete download -- got $received of $total bytes."
+            }
+
+            Move-Item -Force $tmpFile $OutFile
         }
-
-        $completeSub = Register-ObjectEvent -InputObject $webClient -EventName DownloadFileCompleted -Action {
-            $Event.MessageData.Done = $true
-            if ($EventArgs.Error) { $Event.MessageData.HadError = $true }
-        } -MessageData $state
-
-        $webClient.DownloadFileAsync([Uri]$Url, $OutFile)
-
-        while (-not $state.Done) {
-            Start-Sleep -Milliseconds 300
-        }
-        Write-Host ""
-
-        Unregister-Event -SourceIdentifier $progressSub.Name -ErrorAction SilentlyContinue
-        Unregister-Event -SourceIdentifier $completeSub.Name -ErrorAction SilentlyContinue
-        $webClient.Dispose()
-
-        if ($state.HadError -or -not (Test-Path $OutFile)) {
-            Write-ErrMsg "Download of $OutFile failed."
+        catch {
+            Write-Host ""
+            if ($outStream) { $outStream.Close() }
+            if ($inStream)  { $inStream.Close() }
+            if ($resp)      { $resp.Close() }
+            if (Test-Path $tmpFile) { Remove-Item -Force $tmpFile -ErrorAction SilentlyContinue }
+            Write-ErrMsg "Download of $OutFile failed: $($_.Exception.Message)"
             exit 1
         }
+
         $sizeMB = [math]::Round((Get-Item $OutFile).Length / 1MB, 1)
         Write-Success "$OutFile downloaded ($sizeMB MB)."
     }
 
     if ($NeedMain) {
-        Get-FileWithProgress -Url "$HfBaseUrl/$MainArchive" -OutFile $MainArchive
+        Get-FileWithProgress -Url "$HfBaseUrl/$MainArchive" -OutFile $MainArchivePath
         Write-Info "Restoring main certificate database..."
-        mongorestore --archive="$MainArchive" --gzip
+        mongorestore "--archive=$MainArchivePath" --gzip
         Write-Success "Main dataset restored."
     } else {
         Write-Info "Main database already exists -- skipping."
     }
 
     if ($NeedResults) {
-        Get-FileWithProgress -Url "$HfBaseUrl/$ResultsArchive" -OutFile $ResultsArchive
+        Get-FileWithProgress -Url "$HfBaseUrl/$ResultsArchive" -OutFile $ResultsArchivePath
         Write-Info "Restoring pre-computed analytics database..."
-        mongorestore --archive="$ResultsArchive" --gzip
+        mongorestore "--archive=$ResultsArchivePath" --gzip
         Write-Success "Analytics dataset restored."
     } else {
         Write-Info "Analytics database already exists -- skipping."
@@ -353,8 +469,8 @@ if ($DatasetCheck -eq "READY") {
     if ($NeedMain -or $NeedResults) {
         $Reply = Read-Host "Delete downloaded archive files to save disk space? [Y/n]"
         if ("$Reply" -notmatch '^[Nn]') {
-            if ($NeedMain)    { Remove-Item -Force $MainArchive -ErrorAction SilentlyContinue }
-            if ($NeedResults) { Remove-Item -Force $ResultsArchive -ErrorAction SilentlyContinue }
+            if ($NeedMain)    { Remove-Item -Force $MainArchivePath -ErrorAction SilentlyContinue }
+            if ($NeedResults) { Remove-Item -Force $ResultsArchivePath -ErrorAction SilentlyContinue }
             Write-Success "Archive files deleted."
         } else {
             Write-Info "Archive files kept in $DatasetDir"

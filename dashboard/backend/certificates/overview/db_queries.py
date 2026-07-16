@@ -138,7 +138,9 @@ class OverviewModels:
             })
         
         elapsed = time.time() - start
-        print(f"[ENCRYPTION] ✅ Completed ALL exact counts in {elapsed:.2f}s")
+        # ASCII only: when stdout is redirected to a log file on Windows it uses the
+        # legacy charmap codec, and printing emoji raises UnicodeEncodeError -> API 500.
+        print(f"[ENCRYPTION] OK - Completed ALL exact counts in {elapsed:.2f}s")
         
         return encryption_data
 

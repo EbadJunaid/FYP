@@ -663,7 +663,9 @@ class SharedModels:
             health_status = 'CRITICAL'
         
         elapsed = time.time() - start_time
-        print(f"[METRICS] ✅ All queries completed in {elapsed:.2f} seconds")
+        # ASCII only: when stdout is redirected to a log file on Windows it uses the
+        # legacy charmap codec, and printing emoji raises UnicodeEncodeError -> API 500.
+        print(f"[METRICS] OK - All queries completed in {elapsed:.2f} seconds")
         print(f"[METRICS] Results - Total: {total}, Expired: {expired_count}, Expiring: {expiring_count}, Vulns: {critical_vulns}")
         
         return {
