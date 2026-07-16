@@ -34,7 +34,7 @@ The project is built from three interconnected pillars:
 
 | Folder | What's inside |
 |---|---|
-| **`dashboard/`** | The full‑stack analytics web app: Django backend (`backend/`) + Next.js frontend (`frontend/`). Reads certificates from MongoDB and renders them as interactive dashboard which shows all of the security analytics
+| **`dashboard/`** | The full‑stack analytics web app: Django backend (`backend/`) + Next.js frontend (`frontend/`). Reads certificates from MongoDB and renders them as interactive dashboard which shows all of the security analytics. 
 | **`ct‑logs‑renewal‑pipeline/`** | The automation that keeps the dataset fresh by streaming Certificate Transparency logs, detecting certificate renewals, and discovering new domains.
 | **`ssl-certificates-crawler/`** | The collectors. `domain-based-crawler/` connects to domains on port 443; `ip-based-crawler/` scans Pakistan's IP ranges. Both parse certs with [zcertificate](https://github.com/zmap/zcertificate) and store them in MongoDB. 
 | **`binaries/`** | Pre-compiled executables required by the project. The certificate crawlers use [zcertificate](https://github.com/zmap/zcertificate) to parse SSL/TLS certificates, while the CT Logs Renewal Pipeline uses [certstream-server-go](https://github.com/d-Rickyy-b/certstream-server-go/releases) to stream Certificate Transparency (CT) logs. Download the executable for your operating system, place it in this `binaries/` folder, and rename it exactly to `zcertificate` and `certstream-server-go`.<br><br>**Linux/macOS only:** After downloading, make both binaries executable:<br><code>chmod +x binaries/zcertificate</code><br><code>chmod +x binaries/certstream-server-go</code><br><br>Windows users can skip this executable step. |
