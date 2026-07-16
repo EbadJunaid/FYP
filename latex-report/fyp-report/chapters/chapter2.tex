@@ -274,137 +274,75 @@ measurement.
 \section{Related Work and Research Gap}
 \label{sec:related-work-comparison}
 
-SSL/TLS certificates, \textbf{Certificate Transparency (CT)}, and the broader
-Web Public Key Infrastructure have been studied extensively through active
-scanning, passive observation, public log analysis, and longitudinal
-measurement. Previous work generally falls into three overlapping categories:
-\textbf{Internet-scale certificate measurement}, \textbf{CT monitoring}, and
-\textbf{certificate search and analysis platforms}. Collectively, these
-efforts have improved visibility into certificate deployment, trust
-relationships, issuance quality, cryptographic practices, and changes in the
-certificate ecosystem. Table~\ref{tab:related-work-comparison} summarizes
-representative studies most relevant to large-scale certificate analytics.
+SSL/TLS certificates, \textbf{Certificate Transparency (CT)}, and
+Internet-scale certificate ecosystems have been studied extensively over the
+past decade. Previous research has examined Internet-wide certificate
+measurement, publicly auditable CT logs, certificate quality, public-key
+reuse, and certificate lifecycle behaviour. These studies have revealed
+deployment patterns, issuance errors, shared-key risks, and changes in the
+certificate ecosystem, thereby substantially improving understanding of the
+\textbf{Web Public Key Infrastructure (Web PKI)}.
 
 \begin{table}[H]
   \centering
-  \caption{Representative Studies on SSL/TLS Certificate Analysis}
+  \caption{Representative Studies Related to SSL/TLS Certificate Analysis}
   \label{tab:related-work-comparison}
   \begingroup
   \scriptsize
-  \renewcommand{\arraystretch}{1.12}
+  \renewcommand{\arraystretch}{1.08}
   \setlength{\tabcolsep}{3pt}
   \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.17\textwidth}>{\RaggedRight\arraybackslash}p{0.18\textwidth}>{\RaggedRight\arraybackslash}p{0.27\textwidth}>{\RaggedRight\arraybackslash}X@{}}
     \toprule
     \textbf{Study} & \textbf{Primary Focus} & \textbf{Major Contribution} & \textbf{Relevance to This Work} \\
     \midrule
-    Holz et al.~\cite{holz2011ssl}
-    & Active and passive measurement
-    & Characterized X.509 deployment and trust using complementary observation methods.
-    & Establishes the value of ecosystem-wide certificate measurement. \\
-
-    Durumeric et al.~\cite{durumeric2013https}
-    & Longitudinal HTTPS measurement
-    & Used repeated Internet-wide scans to examine CA relationships, deployment practices, and configuration problems.
-    & Motivates large-scale and time-aware certificate analytics. \\
-
     Laurie et al.~\cite{rfc9162}
     & Certificate Transparency
-    & Formalized publicly auditable logs for observing certificate issuance and detecting suspect activity.
-    & Provides the foundation for CT-based discovery and dataset freshness. \\
+    & Defined publicly auditable logs for observing certificate issuance and identifying suspect activity.
+    & Establishes the basis for CT-assisted discovery and dataset freshness. \\
 
-    VanderSloot et al.~\cite{vandersloot2016complete}
-    & Measurement coverage
-    & Compared CT logs, active scans, domain crawls, and passive observations, showing that the sources provide complementary views.
-    & Supports combining public observations with endpoint measurement. \\
+    Durumeric et al.~\cite{durumeric2013https}
+    & Internet-wide HTTPS measurement
+    & Used repeated scans to characterize CA relationships, deployment practices, and configuration problems.
+    & Demonstrates the value of large-scale and time-aware certificate analysis. \\
 
     Kumar et al.~\cite{kumar2018misissuance}
     & Certificate quality and CA behaviour
-    & Introduced ZLint and measured certificate conformance with technical and policy requirements.
-    & Supports certificate-quality indicators and comparative issuer analysis. \\
+    & Introduced ZLint to measure certificate conformance with technical standards and policy requirements.
+    & Supports certificate-quality indicators and issuer-oriented assessment. \\
+
+    Junaid and Janjua~\cite{junaid2025shared}
+    & Public-key sharing and domain ownership
+    & Analysed shared keys and used domain-ownership relationships to distinguish legitimate and potentially unsafe cases.
+    & Provides context for shared-key detection and cautious interpretation of reuse patterns. \\
 
     Ma et al.~\cite{ma2023stale}
-    & Certificate lifecycle
-    & Examined valid but operationally stale certificates and the security implications of prolonged key validity.
-    & Motivates validity, lifetime, and freshness analysis. \\
-
-    Nezhadian et al.~\cite{nezhadian2025reuse}
-    & Public-key reuse
-    & Measured the propagation of reused RSA certificates and keys across large PKI datasets.
-    & Supports fingerprint-based analysis of shared public keys. \\
+    & Certificate lifecycle and staleness
+    & Examined valid but operationally stale certificates and risks associated with prolonged key validity.
+    & Motivates certificate lifetime, renewal, and freshness analysis. \\
     \bottomrule
   \end{tabularx}
   \endgroup
 \end{table}
 
-Public platforms complement academic measurement by making Internet and
-certificate observations searchable. \textbf{crt.sh} primarily supports
-certificate search and CT-log exploration~\cite{crtsh}; \textbf{Censys}
-combines Internet-wide observations with searchable certificate records,
-derived fields, and statistical reporting~\cite{durumeric2015censys,censyscerts}; and
-\textbf{Shodan} indexes Internet-connected services and exposes TLS
-certificate fields through search, filters, facets, reports, and
-maps~\cite{shodan,shodanct}. These services are valuable for discovery, monitoring, and
-targeted investigation, although their analytical emphasis and presentation
-differ. Table~\ref{tab:platform-comparison} therefore uses descriptive
-capability levels rather than treating the platforms as directly equivalent.
+Existing platforms make certificate and Internet observations accessible to
+researchers and practitioners. \textbf{crt.sh} supports certificate search and
+CT-log exploration~\cite{crtsh}; \textbf{Censys} combines Internet-wide host
+discovery with searchable certificate records and security-related
+metadata~\cite{durumeric2015censys,censyscerts}; and \textbf{Shodan} provides
+Internet-connected service discovery, TLS certificate filtering, CT lookup,
+and security monitoring~\cite{shodan,shodanct}. These platforms have become
+important resources for certificate discovery, infrastructure measurement,
+and targeted security investigation.
 
-\begin{table}[H]
-  \centering
-  \caption{Comparison of Representative SSL/TLS Certificate Platforms}
-  \label{tab:platform-comparison}
-  \begingroup
-  \scriptsize
-  \renewcommand{\arraystretch}{1.14}
-  \setlength{\tabcolsep}{2.5pt}
-  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.14\textwidth}>{\RaggedRight\arraybackslash}X>{\RaggedRight\arraybackslash}X>{\RaggedRight\arraybackslash}X>{\RaggedRight\arraybackslash}X>{\RaggedRight\arraybackslash}X@{}}
-    \toprule
-    \textbf{Platform} & \textbf{Certificate Search} & \textbf{CT Support} & \textbf{Security Analytics} & \textbf{Continuous Dataset Updates} & \textbf{Interactive Visualization} \\
-    \midrule
-    crt.sh
-    & Certificate and domain queries
-    & Primary focus
-    & Certificate details and lint findings
-    & Continuous CT-log monitoring
-    & Search and record views \\
-
-    Censys
-    & Structured certificate search
-    & CT and scan-derived records
-    & Trust, validation, lint, and host context
-    & Ongoing CT ingestion and Internet scans
-    & Search and statistical reports \\
-
-    Shodan
-    & TLS fields within service search
-    & Separate CT lookup support
-    & TLS filters, facets, and selected exposure indicators
-    & Recurring Internet-wide observations
-    & Reports, maps, and search views \\
-
-    SSL Guardian
-    & Certificate search, filtering, and detail views
-    & CT-assisted discovery
-    & Certificate indicators, shared-key analysis, and CA comparison
-    & Cycle-based acquisition and analytical refresh
-    & Certificate-focused dashboards, charts, tables, and drill-down \\
-    \bottomrule
-  \end{tabularx}
-  \endgroup
-\end{table}
-
-Existing studies commonly address a specific measurement question, data
-source, security property, or issuer behaviour, while public platforms
-primarily emphasize certificate lookup, Internet asset search, CT visibility,
-or general-purpose monitoring. Several platforms already combine substantial
-parts of this functionality; therefore, the remaining gap is not the absence
-of certificate-search or Internet-measurement tools. Rather, relatively
-limited attention has been given to a certificate-focused analytical
-environment that brings together \textbf{automated certificate acquisition},
-\textbf{CT-assisted dataset maintenance}, \textbf{large-scale descriptive
-analytics}, \textbf{security-oriented indicators}, \textbf{Certificate
-Authority comparison}, and \textbf{interactive visualization} within one
-coherent workflow. This systems-integration gap provides the motivation for
-SSL Guardian while preserving an important distinction: its analytical
-indicators support comparative exploration and further investigation, rather
-than replacing formal certificate validation, security auditing, or
-externally calibrated risk assessment.
+Previous studies and existing platforms have significantly advanced
+certificate measurement, CT monitoring, certificate discovery, quality
+assessment, and Internet-scale security research. However, existing work
+often concentrates on a specific measurement question, data source, or
+security characteristic, while relatively few certificate-focused analytical
+environments integrate \textbf{automated certificate acquisition},
+\textbf{continuous dataset maintenance}, \textbf{CT-based dataset freshness},
+\textbf{comprehensive certificate analytics}, \textbf{Certificate Authority
+comparison}, \textbf{security-oriented indicators}, and \textbf{interactive
+visualization}. This systems-integration gap motivates the development of the
+proposed SSL/TLS certificate analytics platform described in the subsequent
+chapters.
