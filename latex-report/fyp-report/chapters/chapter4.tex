@@ -8,75 +8,90 @@
 \section{Architectural Overview and Data Flow}
 \label{sec:architectural-overview}
 
-SSL Guardian follows a data-intensive, component-based architecture that
-separates acquisition, dataset maintenance, analytical processing, application
-services, and presentation. These components execute independently and
-communicate primarily through persisted certificate and analytical data.
-Figure~\ref{fig:overall-architecture} presents the end-to-end architecture.
+SSL Guardian follows a layered, data-centric architecture that separates data
+sources, certificate acquisition and maintenance, persistent data, analytical
+processing, application services, and presentation. The persistent datasets
+form the principal exchange boundary between these subsystems, allowing each
+stage to perform a distinct architectural role. Figure~\ref{fig:overall-architecture}
+presents the overall organization and high-level data flow.
 
 \begin{figure}[H]
   \centering
   \begin{tikzpicture}[
     font=\small,
     >=Latex,
-    box/.style={draw, rounded corners=2pt, align=center, text width=3.65cm, minimum height=1.0cm, fill=black!4},
-    store/.style={draw, cylinder, shape border rotate=90, aspect=0.22, align=center, text width=3.25cm, minimum height=1.05cm, fill=black!7},
-    primary/.style={draw, very thick, rounded corners=2pt, align=center, text width=3.65cm, minimum height=1.05cm, fill=black!9},
-    flow/.style={-{Latex[length=2.2mm]}, line width=0.55pt},
-    exchange/.style={{Latex[length=2.2mm]}-{Latex[length=2.2mm]}, line width=0.55pt}
+    source/.style={draw, dashed, rounded corners=3pt, align=center, text width=3.0cm, minimum height=0.92cm, line width=0.65pt},
+    process/.style={draw, rounded corners=3pt, align=center, text width=3.45cm, minimum height=1.02cm, fill=black!5, line width=0.7pt},
+    store/.style={draw, rounded corners=3pt, align=center, text width=3.35cm, minimum height=1.02cm, fill=black!12, line width=0.9pt},
+    optional/.style={draw, dashed, rounded corners=3pt, align=center, text width=3.05cm, minimum height=0.92cm, fill=black!2, line width=0.65pt},
+    flow/.style={-{Latex[length=2.4mm]}, line width=0.7pt},
+    exchange/.style={{Latex[length=2.4mm]}-{Latex[length=2.4mm]}, line width=0.7pt}
   ]
-    \node[box] (domain-input) at (-3.65,4.0) {Domain datasets and\\Internet TLS endpoints};
-    \node[box] (ct-input) at (3.65,4.0) {Certificate Transparency\\domain observations};
+    \node[source] (domains) at (-5.25,7.0) {Domain\\Datasets};
+    \node[source] (tls) at (-1.7,7.0) {Internet TLS\\Endpoints};
+    \node[source] (ct) at (3.8,7.0) {Certificate\\Transparency Logs};
 
-    \node[primary] (crawler) at (-3.65,2.25) {Certificate crawler\\TLS retrieval and parsing};
-    \node[primary] (ct-pipeline) at (3.65,2.25) {CT-assisted renewal\\and domain discovery};
+    \node[process] (acquisition) at (-3.8,5.25) {Domain Certificate\\Acquisition and Processing};
+    \node[process] (maintenance) at (3.8,5.25) {CT-Assisted Dataset\\Maintenance};
 
-    \node[store] (main) at (-3.65,-0.10) {Main certificate\\dataset};
-    \node[store] (staging) at (3.65,-0.10) {Processing-state and\\staging data};
+    \node[store] (primary-data) at (-3.8,3.25) {Primary Certificate\\Dataset};
+    \node[process] (analytics) at (0,3.25) {Analytics\\Processing};
+    \node[store] (results) at (3.8,3.25) {Analytical Results\\Dataset};
 
-    \node[primary] (precompute) at (-3.65,-2.25) {Index creation and\\analytical processing};
-    \node[store] (results) at (3.65,-2.25) {Global and scoped\\analytical results};
-    \node[primary] (api) at (0,-4.05) {Application service\\filtered and analytical data};
+    \node[process] (services) at (0,1.35) {Application\\Services};
+    % \node[optional] (cache) at (4.15,1.35) {Optional Response\\Cache};
+    \node[process] (dashboard) at (0,-0.35) {Interactive\\Dashboard};
+    \node[source] (users) at (4.15,-0.35) {Platform\\Users};
 
-    \node[box] (redis) at (3.65,-4.15) {Optional response\\cache};
-    \node[primary] (dashboard) at (0,-5.70) {Interactive dashboard\\filters, tables, and charts};
+    \draw[dashed, rounded corners=4pt, line width=0.65pt]
+      (-5.9,-1.75) rectangle (5.85,-3.55);
+    \node[font=\small\bfseries] at (0,-1.48)
+      {Independent Experimental Path};
+    \node[source] (ip-input) at (-4.0,-2.65) {IP Address\\Ranges};
+    \node[process] (ip-acquisition) at (0,-2.65) {Experimental IP\\Certificate Acquisition};
+    \node[store] (ip-data) at (4.0,-2.65) {Separate IP\\Dataset};
 
-    \draw[exchange] (domain-input) -- (crawler);
-    \draw[flow] (ct-input) -- (ct-pipeline);
-    \draw[flow] (crawler) -- (main);
-    \draw[exchange] (ct-pipeline) -- (staging);
-    \draw[flow] (staging) -- (main);
-    \draw[flow] (main) -- (precompute);
-    \draw[flow] (precompute) -- (results);
-    \draw[flow] (main.west) -- ++(-0.45,0) |- (api.west);
-    \draw[flow] (results) -- (api);
-    \draw[exchange] (api) -- (redis);
-    \draw[exchange] (api) -- (dashboard);
+    \draw[flow] (domains) -- (acquisition);
+    \draw[flow] (tls) -- (acquisition);
+    \draw[flow] (ct) -- (maintenance);
+    \draw[flow] (maintenance.west) -- node[above, font=\scriptsize, align=center]
+      {new and renewal\\domain candidates} (acquisition.east);
+    \draw[flow] (acquisition) -- (primary-data);
+    \draw[flow] (primary-data) -- (analytics);
+    \draw[flow] (analytics) -- (results);
+    \draw[flow] (primary-data) -- (services);
+    \draw[flow] (results) -- (services);
+    % \draw[exchange] (services) -- (cache);
+    \draw[flow] (services) -- (dashboard);
+    \draw[exchange] (dashboard) -- (users);
+    \draw[flow] (ip-input) -- (ip-acquisition);
+    \draw[flow] (ip-acquisition) -- (ip-data);
   \end{tikzpicture}
-  \caption{End-to-end architecture of SSL Guardian}
+  \caption{End-to-end Architecture of the SSL/TLS Certificate Analytics Platform}
   \label{fig:overall-architecture}
 \end{figure}
 
-Initial acquisition begins with a domain dataset. Concurrent workers claim
-domains, establish TLS connections, retrieve peer certificates, invoke the
-certificate parser, enrich the resulting records, and store them in the main
-dataset. CT-assisted maintenance provides a second input path. Observed domains
-are classified as possible renewals or new discoveries, crawled through the
-same acquisition capability, and incorporated after successful processing.
+The acquisition layer follows two coordinated paths. Domain datasets provide
+targets for certificate retrieval from Internet TLS endpoints, while
+Certificate Transparency observations identify new and renewal candidates for
+the same acquisition capability. Both paths therefore converge on the primary
+certificate dataset. The experimental IP-based acquisition path remains
+architecturally separate, and its dataset is not consumed by the primary
+analytics or dashboard workflow.
 
-Analytical processing transforms the main dataset into six materialized result
-families covering validity, geography, signatures and hashes, SANs, shared
-keys, and Certificate Authorities. Detailed certificate views, selected
-counts, and time-series operations can also query the main dataset directly.
-The application service combines these sources, optionally reuses cached
-responses, and returns structured results to the dashboard.
+The analytical layer transforms primary certificate data into global and
+country-level analytical results. The service layer accesses both primary
+records and analytical results, with an optional cache alongside it for selected
+responses. The presentation layer obtains this information through the
+application services and exposes it through the interactive dashboard, which
+forms the system boundary presented to users.
 
 \section{Certificate Data and Scope Model}
 \label{sec:mongodb-data-model}
 
-The canonical certificate record contains the parsed X.509 object together with
+Each primary certificate record contains the parsed X.509 object together with
 attributes introduced during acquisition. Table~\ref{tab:main-certificate-fields}
-summarizes the field groups required by the analytical platform.
+summarizes the principal field groups used by the analytical platform.
 
 \begin{table}[H]
   \centering
@@ -84,69 +99,82 @@ summarizes the field groups required by the analytical platform.
   \setlength{\tabcolsep}{4pt}
   \caption{Principal certificate data fields}
   \label{tab:main-certificate-fields}
-  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.30\textwidth}>{\RaggedRight\arraybackslash}p{0.22\textwidth}Y@{}}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.23\textwidth}>{\RaggedRight\arraybackslash}p{0.29\textwidth}Y@{}}
     \toprule
     \textbf{Field group} & \textbf{Representative content} & \textbf{Analytical purpose} \\
     \midrule
-    Acquisition context & Domain, scope, scan time, and leaf classification & Search, scoping, dataset maintenance, and CA analysis \\
-    Certificate identity & Serial number and certificate fingerprints & Record identity, lookup, and duplicate correlation \\
+    Acquisition context & Domain, derived scope, scan time, and leaf classification & Search, scope filtering, and acquisition tracking \\
+    Certificate identity & Serial number and certificate fingerprints & Lookup, deduplication, and certificate correlation \\
     Validity & Start time, end time, and lifetime & Current status, expiry windows, and validity distributions \\
-    Issuer and subject & Distinguished-name attributes and organizations & CA, identity, and issuer analysis \\
-    Public key & Algorithm, size, and public-key fingerprint & Cryptographic analysis and shared-key grouping \\
-    Signature & Signature algorithm and hash information & Algorithm, hash-strength, and compliance views \\
-    Extensions & SANs, key usage, policies, constraints, AIA, and CRL information & Name, validation, policy, and scoring analysis \\
-    Certificate-quality findings & ZLint flags and issue categories & Quality indicators, grading, and risk context \\
+    Issuer and subject & Distinguished names and organization attributes & Identity, issuer, and CA analysis \\
+    Public key & Algorithm, key length, and SPKI fingerprint & Cryptographic distributions and shared-key detection \\
+    Signature & Signature algorithm and hash information & Algorithm, hash-strength, and compliance analysis \\
+    Extensions & SANs, key usages, policies, constraints, AIA, and CRL data & SAN analysis, usage analysis, and CA policy scoring \\
+    Certificate-quality findings & ZLint flags and issue categories & Quality grading, risk indicators, and CA comparison \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-Data passes through three logical lifecycle groups, illustrated in
-Figure~\ref{fig:logical-data-model}. Staging records retain CT observations,
-task states, temporary crawl results, and recovery information. Canonical
-certificate records form the primary analytical dataset. Materialized results
-contain per-scope summaries and shared-key group documents used by analytical
-views.
+The platform maintains three related logical data groups, illustrated in
+Figure~\ref{fig:logical-data-model}. Processing and staging data retains CT
+observations, acquisition state, temporary results, and recovery metadata; it
+supports CT-assisted maintenance but is not a mandatory precursor to direct
+domain acquisition. Primary certificate records provide the detailed
+analytical source, while analytical results store scope-tagged summaries and
+shared-key groups derived from that source.
 
 \begin{figure}[H]
   \centering
   \begin{tikzpicture}[
-    font=\small,
+    font=\scriptsize,
     >=Latex,
-    doc/.style={draw, rounded corners=2pt, align=left, text width=4.25cm, minimum height=3.3cm, fill=black!4, inner sep=7pt},
-    main/.style={draw, very thick, rounded corners=2pt, align=left, text width=4.25cm, minimum height=3.3cm, fill=black!9, inner sep=7pt},
-    flow/.style={-{Latex[length=2.2mm]}, line width=0.6pt}
+    source/.style={draw, dashed, rounded corners=2pt, align=center, text width=1.65cm, minimum height=0.65cm, inner sep=3pt, line width=0.55pt},
+    process/.style={draw, rounded corners=2pt, align=center, text width=1.65cm, minimum height=0.82cm, inner sep=3pt, fill=black!3, line width=0.6pt},
+    data/.style={draw, rounded corners=2pt, align=center, text width=3.1cm, minimum height=2.45cm, fill=black!7, inner sep=3pt, line width=0.65pt},
+    primary/.style={data, very thick, fill=black!11},
+    flow/.style={-{Latex[length=2.0mm]}, line width=0.6pt}
   ]
-    \node[doc] (staging) at (-5.0,0) {\textbf{Processing and staging}\\[3pt]
-      CT domain/SAN observations\\
-      acquisition task states\\
-      temporary certificate results\\
-      checkpoints and run metadata};
+    \node[data] (staging) at (-5.55,0) {\textbf{Processing \& Staging Data}\\[2pt]
+      CT observations/candidates\\
+      Task state\\
+      Temporary results\\
+      Recovery/run metadata};
 
-    \node[main] (canonical) at (0,0) {\textbf{Canonical certificates}\\[3pt]
-      acquisition context\\
-      parsed X.509 attributes\\
-      certificate/key fingerprints\\
-      certificate-quality findings};
+    \node[process] (acquisition) at (-2.75,0) {Certificate\\Acquisition};
 
-    \node[doc] (materialized) at (5.0,0) {\textbf{Analytical results}\\[3pt]
-      validity and geography\\
-      SAN and signature/hash\\
-      CA and shared-key analytics\\
-      scope and computation metadata};
+    \node[primary] (certificates) at (0,0) {\textbf{Primary Certificate Records}\\[2pt]
+      Acquisition context and scope\\
+      Parsed X.509 data\\
+      Certificate/key fingerprints\\
+      Certificate-quality findings};
 
-    \draw[flow] (staging) -- (canonical);
-    \draw[flow] (canonical) -- (materialized);
+    \node[process] (analytics) at (2.75,0) {Analytics\\Processing};
+
+    \node[data] (results) at (5.55,0) {\textbf{Analytical Results}\\[2pt]
+      Scoped summaries\\
+      Certificate analytics\\
+      CA/shared-key analytics\\
+      Computation metadata};
+
+    \node[source] (domain-inputs) at (-2.75,1.75) {Domain Inputs};
+
+    \draw[flow] (staging.east) -- (acquisition.west);
+    \draw[flow] (domain-inputs.south) -- (acquisition.north);
+    \draw[flow] (acquisition.east) -- (certificates.west);
+    \draw[flow] (certificates.east) -- (analytics.west);
+    \draw[flow] (analytics.east) -- (results.west);
   \end{tikzpicture}
-  \caption{Logical certificate data lifecycle}
+  \caption{Logical Organization of Certificate and Analytical Data}
   \label{fig:logical-data-model}
 \end{figure}
 
-The system uses one main analytical dataset while exposing global and
-country-level logical scopes. During acquisition, the final domain label is
-stored as a scope value. Global analysis omits this filter, whereas a
-country-level request selects records and materialized results associated with
-the configured scope. This classification represents domain namespace rather
-than verified server location, issuer jurisdiction, or certificate-subject
+The \texttt{scope} field stores the final label of the acquired domain; it can
+therefore contain a generic TLD such as \texttt{com} or a country-code TLD such
+as \texttt{pk}. Global analysis applies no scope filter to primary records and
+uses results tagged \texttt{all}. Configured country views map each displayed
+country to its ccTLD and apply that value consistently to primary queries and
+materialized results. These scopes are domain-based classifications and do not
+establish server location, issuer jurisdiction, or certificate-subject
 geography.
 
 \section{Indexing, Caching, and Request Processing}
@@ -156,47 +184,65 @@ Indexes support the principal access patterns for scope, domain, certificate
 identity, public-key fingerprints, validity dates, cryptographic attributes,
 issuer information, SANs, certificate-quality flags, and leaf
 classification. Analytical result documents are indexed by scope and by the
-feature-specific fields required for sorting and filtering. Materialization
-reduces repeated aggregation for frequently requested summaries, while
-pagination and bounded reference lists limit response size.
+feature-specific fields required for sorting and filtering. Frequently
+requested aggregate views are served from scope-tagged, precomputed analytical
+results, whereas certificate search, selected metrics, and fallback paths use
+indexed primary records. Pagination and capped sample-identifier lists keep
+the returned data appropriately bounded.
 
-The optional cache stores serialized analytical responses under keys that
-include the active scope and normalized request parameters. If caching is
-unavailable, the request continues through the data-access path. This makes the
-cache an optimization rather than a required source of correctness.
+For applicable request paths, the optional Redis cache stores serialized
+responses under keys derived from the active scope and request parameters. A
+cache hit avoids repeated data access; on a miss, or when Redis is unavailable,
+the service obtains the required information from the primary certificate data
+or the materialized analytical results and may cache the resulting response.
+Caching therefore improves repeated access without becoming a requirement for
+correct operation.
 
-Figure~\ref{fig:request-sequence} presents the common request and response
-sequence.
+A dashboard request supplies the selected scope and relevant filters, which
+are applied before the service selects the appropriate data-access path. The
+result is structured and returned to the dashboard, as summarized in
+Figure~\ref{fig:request-sequence}.
 
 \begin{figure}[H]
   \centering
   \begin{tikzpicture}[
     font=\scriptsize,
     >=Latex,
-    participant/.style={draw, rounded corners=2pt, align=center, text width=2.25cm, minimum height=0.75cm, fill=black!5},
+    participant/.style={draw, rounded corners=2pt, align=center, text width=1.95cm, minimum height=0.75cm, fill=black!5},
     life/.style={densely dashed, black!60},
     call/.style={-{Latex[length=2mm]}, line width=0.5pt},
     return/.style={-{Latex[length=2mm]}, line width=0.5pt, dashed},
-    msg/.style={fill=white, inner sep=1.3pt, align=center}
+    msg/.style={fill=white, inner sep=1.2pt, align=center},
+    branch/.style={draw=black!45, densely dashed, rounded corners=2pt}
   ]
     \node[participant] (ui) at (0,0) {Dashboard};
-    \node[participant] (mw) at (3,0) {Scope handling};
-    \node[participant] (ctrl) at (6,0) {Application service};
-    \node[participant] (cache) at (9,0) {Optional cache};
-    \node[participant] (data) at (12,0) {Certificate and\\analytical data};
+    \node[participant] (mw) at (2.55,0) {Scope handling};
+    \node[participant] (ctrl) at (5.10,0) {Application service};
+    \node[participant] (cache) at (7.65,0) {Optional cache};
+    \node[participant] (primary) at (10.20,0) {Primary certificate\\data};
+    \node[participant] (results) at (12.75,0) {Materialized\\analytical results};
 
-    \foreach \n in {ui,mw,ctrl,cache,data}{\draw[life] (\n.south) -- ++(0,-6.6);}
+    \foreach \n in {ui,mw,ctrl,cache,primary,results}{\draw[life] (\n.south) -- ++(0,-7.55);}
 
-    \draw[call] (0,-1.0) -- node[msg,above] {request, filters, and scope} (3,-1.0);
-    \draw[call] (3,-1.75) -- node[msg,above] {validated scoped request} (6,-1.75);
-    \draw[call] (6,-2.5) -- node[msg,above] {scope-aware cache lookup} (9,-2.5);
-    \draw[return] (9,-3.2) -- node[msg,above] {cached result, if available} (6,-3.2);
-    \draw[call] (6,-3.95) -- node[msg,above] {live or materialized query} (12,-3.95);
-    \draw[return] (12,-4.7) -- node[msg,above] {records or aggregates} (6,-4.7);
-    \draw[call] (6,-5.45) -- node[msg,above] {serialize and optionally cache} (9,-5.45);
-    \draw[return] (6,-6.15) -- node[msg,above] {structured response} (0,-6.15);
+    \draw[call] (0,-0.90) -- node[msg,above] {request, filters, and scope} (2.55,-0.90);
+    \draw[call] (2.55,-1.60) -- node[msg,above] {scoped request} (5.10,-1.60);
+
+    \draw[branch] (4.72,-1.98) rectangle (8.08,-3.28);
+    \node[anchor=west, fill=white, inner sep=1pt, font=\scriptsize\itshape] at (4.86,-1.98) {cache-enabled paths};
+    \draw[call] (5.10,-2.38) -- node[msg,above] {scope-aware lookup} (7.65,-2.38);
+    \draw[return] (7.65,-3.00) -- node[msg,above] {hit or miss} (5.10,-3.00);
+
+    \draw[branch] (4.72,-3.55) rectangle (13.22,-6.23);
+    \node[anchor=west, fill=white, inner sep=1pt, font=\scriptsize\itshape] at (4.86,-3.55) {cache miss or uncached request; source selected as required};
+    \draw[call] (5.10,-4.12) -- node[msg,above] {indexed live query} (10.20,-4.12);
+    \draw[return] (10.20,-4.78) -- node[msg,above] {certificate records} (5.10,-4.78);
+    \draw[call] (5.10,-5.36) -- node[msg,above] {scoped result query} (12.75,-5.36);
+    \draw[return] (12.75,-5.96) -- node[msg,above] {analytical result} (5.10,-5.96);
+
+    \draw[call] (5.10,-6.67) -- node[msg,above] {store result, if enabled} (7.65,-6.67);
+    \draw[return] (5.10,-7.30) -- node[msg,above] {structured response} (0,-7.30);
   \end{tikzpicture}
-  \caption{Scoped request and response sequence}
+  \caption{Scoped dashboard request and response sequence}
   \label{fig:request-sequence}
 \end{figure}
 
@@ -204,15 +250,18 @@ sequence.
 \label{sec:architectural-constraints}
 
 The developed platform is configured as a locally operated research system.
-MongoDB is the primary shared store, Redis is optional, and the CT service and
-certificate parser operate as supporting processes. No production cluster or
-multi-tenant deployment is assumed.
+MongoDB provides the primary persistent data store, Redis serves as an optional
+response cache, and Certificate Transparency observation and certificate-parsing
+processes operate as supporting components. The deployment model does not
+assume a production cluster or multi-tenant operation.
 
-Several boundaries affect interpretation. Scope selection is maintained as
-shared application state and therefore requires redesign for strongly isolated
-concurrent users. Certificate acquisition disables normal trust and hostname
-validation because the objective is to observe presented certificates.
-Temporary dataset updates and analytical refresh operations do not share a
-single transaction, so recovery is provided at individual stages rather than
-as a global exactly-once guarantee. These limitations are considered further
-in Chapter~\ref{chap:verification-security-discussion}.
+Several architectural boundaries follow from this model. Scope selection is
+maintained as shared application state, so strongly isolated concurrent users
+would require additional request-level separation. Certificate acquisition
+intentionally bypasses ordinary trust-chain and hostname verification because
+its purpose is to observe certificates presented by TLS endpoints rather than
+to establish browser-like trust. Dataset updates and analytical refreshes occur
+in separate processing stages, with recovery handled within individual stages
+rather than by one atomic transaction spanning the complete workflow. These
+limitations and their implications are discussed further in
+Chapter~\ref{chap:verification-security-discussion}.
