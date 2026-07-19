@@ -17,7 +17,7 @@ interactive dashboard.
 
 The acquisition framework uses persistent task states, atomic worker claims,
 concurrent processing, retries, stale-task recovery, certificate parsing, scope
-enrichment, and leaf classification. A separate experimental IP-based crawler
+enrichment, and leaf classification. A separate IP-based crawler
 extends the acquisition work to address-based measurement while remaining
 isolated from the primary domain-based analytical dataset.
 
@@ -49,26 +49,52 @@ provide a clear direction for continued development.
 \section{Future Work}
 \label{sec:future-work}
 
-Future development should prioritize the following areas:
+Future engineering work should strengthen the platform through systematic
+unit, integration, recovery, service-contract, and interface testing, supported
+by reproducible datasets and explicit dependency versioning. Unified
+configuration, externalized secrets, environment-specific settings,
+authentication, role-based authorization, request-level scope isolation,
+automated deployment, and operational monitoring would further support secure
+and reproducible use beyond a locally operated research environment.
 
-\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
-  \item \textbf{Correctness and configuration consolidation.} Establish one validated configuration source, align auxiliary application contracts, enforce the intended certificate-identity rules, and associate renewal checkpoints with explicit processing runs.
+Larger deployments would benefit from distributed crawling, durable task
+coordination, resource-aware scheduling, backpressure, and idempotent
+processing. Incremental or distributed analytics could reduce repeated
+full-dataset computation as the certificate dataset grows. Controlled
+benchmarks should accompany these changes to evaluate acquisition throughput,
+update latency, query responsiveness, and resource consumption across larger
+datasets and analytical scopes.
 
-  \item \textbf{Security and request isolation.} Replace shared scope state with request-local propagation, add authentication and authorization, externalize secrets, restrict service exposure, and maintain separate development and production settings.
+Certificate intelligence may be extended through certificate-chain and trust
+path analysis, deeper examination of certificate policies and name constraints,
+and active OCSP or CRL status assessment. Retaining historical certificate
+versions would enable lifecycle, renewal, key-rotation, issuer-migration, and
+stale-deployment studies. Certificate Authority evaluation could consequently
+incorporate transparent longitudinal measures, while ownership-aware analysis
+could distinguish legitimate shared infrastructure from concerning public-key
+reuse~\cite{junaid2025shared}.
 
-  \item \textbf{Automated verification and reproducibility.} Add unit, integration, API-contract, browser, concurrency, and recovery tests. Define complete dependency versions, native-tool provenance, automated environment setup, and repeatable dataset fixtures.
+Certificate Transparency processing could progress from scheduled new-domain
+and renewal updates toward continuous, long-term ecosystem observation.
+Durable per-log progress, event histories, and incremental correlation with
+acquired certificates could improve renewal detection and reveal unusual
+changes in issuers, public keys, SAN coverage, validity profiles, or issuance
+frequency. Such anomalies should remain explainable investigative indicators.
 
-  \item \textbf{Performance evaluation.} Measure crawler throughput, CT ingestion, update-cycle duration, analytical processing time, indexed query latency, cache behavior, frontend responsiveness, and resource consumption under controlled workloads.
+Machine learning and artificial intelligence offer a complementary research
+direction when sufficient history and reliable labels become available.
+Certificate attributes, CT observations, issuer behaviour, renewal history,
+cryptographic properties, quality findings, and analytical indicators could
+support anomaly detection, risk estimation, suspicious-certificate
+prioritization, and analyst triage. Models would require calibration,
+interpretability, bias assessment, and concept-drift monitoring; they should
+not be claimed to detect hacked websites directly or predict attacks.
 
-  \item \textbf{Analytical validation.} Evaluate CA, signature-strength, and certificate-risk models against expert-labelled or externally defined baselines. Sensitivity analysis should identify the influence of individual score components and reveal misclassified cases.
-
-  \item \textbf{Extended certificate intelligence.} Incorporate ownership-aware shared-key classification based on the distinctions described in related research~\cite{junaid2025shared}, improve geographic interpretation, and conduct reproducible longitudinal studies of CT-driven dataset freshness.
-
-  \item \textbf{Responsible scanning governance.} Formalize target authorization, rate limits, opt-out procedures, data retention, licensing, and responsible-disclosure practices for repeated Internet-facing acquisition.
-\end{enumerate}
-
-Completing these improvements would strengthen the platform from both an
-engineering and research perspective. The immediate priority is to establish
-correct, isolated, secure, and reproducible operation; subsequent work can then
-quantify performance and validate the analytical meaning of the system's
-security-oriented measures.
+Further extensions may integrate governed threat intelligence, including
+trust-store, passive-DNS, reputation, and known malicious infrastructure data,
+with clear provenance and licensing controls. IPv6
+measurement, broader deployment environments, and richer longitudinal and
+comparative visualizations would expand research utility. Collectively, these
+directions reinforce the platform as a foundation for large-scale SSL/TLS
+certificate intelligence, cybersecurity research, and advanced analytical
+systems.
