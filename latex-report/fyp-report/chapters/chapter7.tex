@@ -5,18 +5,28 @@
 \chapter{Certificate Analytics and Dashboard}
 \label{chap:analytics-api-dashboard}
 
+This chapter describes how the platform transforms raw certificate data into
+analytical insights through a combination of pre-computed materialized results
+and live queries. It presents the six analytical families computed by the
+processing framework, the security-oriented risk assessment model that ranks
+individual certificates by observable risk signals, the Certificate Authority
+ranking formula that compares issuer-level certificate quality, and the
+interactive dashboard that exposes these capabilities through structured API
+endpoints and visual pages.
+
 \section{Analytics Processing Framework}
 \label{sec:generic-precomputation-framework}
 
 The analytical layer combines materialized result documents with live queries
-over the certificate dataset. Materialized processing creates the indexes
-required by the analytical workloads and then computes six scope-aware result
-families. Live queries support certificate lists, detailed records, selected
-counts, risk candidates, and time-series views that depend on the current
-dataset.
-
-Figure~\ref{fig:analytics-materialization-flow} illustrates the relationship
-between the two query paths.
+over the certificate dataset. Materialized processing first creates the
+database indexes required by the analytical workloads and then computes
+six scope-aware analytical result families, which are stored separately 
+for efficient retrieval. Live queries complement these precomputed results
+by accessing the main certificate dataset directly whenever current certificate
+records, detailed views, selected counts, risk candidates, or time-series
+information are required. Figure~\ref{fig:analytics-materialization-flow}
+illustrates the relationship between the materialized analytics pipeline and
+the live query path.
 
 \begin{figure}[H]
   \centering
@@ -24,43 +34,52 @@ between the two query paths.
     font=\scriptsize,
     >=Latex,
     box/.style={draw, rounded corners=2pt, align=center, text width=2.55cm, minimum height=0.8cm, fill=black!5},
-    job/.style={draw, rounded corners=2pt, align=center, text width=1.55cm, minimum height=0.75cm, fill=black!3},
+    job/.style={draw, rounded corners=2pt, align=center, text width=1.8cm, minimum height=0.75cm, fill=black!3},
     store/.style={draw, cylinder, shape border rotate=90, aspect=0.22, align=center, text width=3.2cm, minimum height=1.0cm, fill=black!8},
     flow/.style={-{Latex[length=2mm]}, line width=0.5pt},
     live/.style={-{Latex[length=2mm]}, line width=0.5pt, dashed}
   ]
     \node[store] (source) at (0,0) {Main certificate\\dataset};
-    \node[box] (indexes) at (0,-1.35) {Create and verify\\analytical indexes};
+    \node[box] (indexes) at (0,-1.55) {Create indexes and \\compute analytics};
 
-    \node[job] (ca) at (-5.0,-2.8) {CA};
-    \node[job] (geo) at (-3.0,-2.8) {Geography};
-    \node[job] (san) at (-1.0,-2.8) {SAN};
-    \node[job] (keys) at (1.0,-2.8) {Shared\\keys};
-    \node[job] (sig) at (3.0,-2.8) {Signature/\\hash};
-    \node[job] (valid) at (5.0,-2.8) {Validity};
+    \node[job] (ca)    at (-5.6,-3.0) {CA};
+    \node[job] (geo)   at (-3.3,-3.0) {Geography};
+    \node[job] (san)   at (-1,-3.0) {SAN};
+    \node[job] (keys)  at (1.3,-3.0) {Shared keys};
+    \node[job] (sig)   at (3.6,-3.0) {Signature/hash};
+    \node[job] (valid) at (5.9,-3.0) {Validity};
 
-    \node[store] (results) at (0,-4.35) {Materialized global and\\country-level results};
-    \node[box] (api) at (0,-5.85) {Application queries\\and filtering};
-    \node[box] (ui) at (0,-7.2) {Interactive dashboard\\and drill-down};
+    \node[store] (results) at (0,-4.9) {Materialized \\analytical database};
+    \node[box] (api) at (0,-6.5) {Application queries\\and filtering};
+    \node[box] (ui) at (0,-7.9) {Interactive dashboard\\and drill-down};
 
     \draw[flow] (source) -- (indexes);
     \foreach \n in {ca,geo,san,keys,sig,valid} {
-      \draw[flow] (indexes) -- (\n);
+      \draw[flow] (indexes.south) -- (\n.north);
       \draw[flow] (\n) -- (results);
     }
     \draw[flow] (results) -- (api);
     \draw[flow] (api) -- (ui);
-    \draw[live] (source.east) -- ++(2.3,0) |- node[pos=0.72,right,align=left]{live records, counts,\\risk, and trends} (api.east);
+    \draw[live] (source.east) -- ++(5.5,0) |- node[pos=0.72,right,fill=white,inner sep=4pt]{Live queries} (api.east);
   \end{tikzpicture}
   \caption{Materialized and live analytics paths}
   \label{fig:analytics-materialization-flow}
 \end{figure}
 
-Materialized results represent the latest completed analytical refresh, while
-live queries can observe the current main dataset independently. All analytical
-families support a global view and configured country-level domain scopes.
+The precomputation framework is a single orchestrator script that sequences
+the creation of database indexes followed by the execution of six independent
+analytical modules. Each module reads from the main certificate collection,
+computes its aggregations, and writes the results into a dedicated results
+database. Because the materialized results are recomputed on a fixed cycle
+rather than updated incrementally, they represent a coherent point-in-time
+snapshot of each analytical family. All analytical families support a global
+view and configured country-level domain scopes. Live queries complement these
+snapshots by reading directly from the main dataset for views that require
+current data, such as recent issuance activity and near-expiry windows.
 Table~\ref{tab:analytics-family-contracts} summarizes the principal
 capabilities.
+
+\renewcommand{\arraystretch}{1.3}
 
 \begin{table}[H]
   \centering
@@ -83,10 +102,16 @@ capabilities.
   \end{tabularx}
 \end{table}
 
-\section{Certificate and Security Analytics}
-\label{sec:validity-geographic-analytics}
+\renewcommand{\arraystretch}{1}
 
-\textbf{Validity and geographic analysis.}
+\section{Certificate and Security Analytics}
+\label{sec:cert-analytics}
+
+This section describes the certificate-level analytical families computed by
+the processing framework.
+
+\subsection{Validity and Geographic Analysis}
+
 Validity processing converts the encoded certificate lifetime into days and
 calculates average, minimum, maximum, and duration-group statistics. It also
 supports issuance and expiration timelines together with live 7-, 30-, and
@@ -94,7 +119,8 @@ supports issuance and expiration timelines together with live 7-, 30-, and
 suffix through a configured mapping. They describe domain namespace and must
 not be interpreted as verified physical location.
 
-\textbf{Signature, hash, and encryption analysis.}
+\subsection{Signature, Hash, and Encryption Analysis}
+
 Certificates are grouped by signature algorithm, hash family, key algorithm,
 and key size. SHA-1 is treated as deprecated, while MD5 and MD2 are treated as
 critical hash choices. Live encryption views count selected RSA and ECDSA
@@ -102,34 +128,82 @@ algorithm-size combinations. The resulting score and strength labels are
 project-defined analytical indicators rather than standardized security
 ratings.
 
-\textbf{SAN analysis.}
+\subsection{SAN Analysis}
+
 The SAN family calculates total and average SAN counts, single-name and
 multi-name distributions, wildcard occurrence, count buckets, and common
 suffix groups. Bounded certificate references connect aggregate groups to
 paginated certificate drill-down.
 
-\textbf{Shared-key analysis.}
-Shared-key detection first collapses repeated observations of the same
-certificate fingerprint and then retains a public-key fingerprint only when it
-is associated with more than one distinct certificate fingerprint. Each group
-records affected certificates, domains, SANs, issuers, key characteristics,
-and summary counts. Exposure labels use the number of certificates and SANs to
-support prioritization, but a shared key does not by itself establish
-private-key compromise or unsafe cross-owner use.
+\subsection{Shared-Key Analysis}
 
-\textbf{Trend analysis.}
-Live aggregations present recent issuance activity, upcoming encoded expiry
-dates, signature-algorithm adoption, validation levels, and selected key-size
-series. Expiration views group scheduled \texttt{notAfter} values; they are not
-predictive models.
+Shared-key analysis identifies public keys that appear in more than one
+distinct certificate. When multiple certificates share the same public-key
+fingerprint, they are grouped together. Each group records affected
+certificates, domains, SANs, issuers, key characteristics, and summary counts.
+Exposure labels use the number of certificates and SANs to support
+prioritization, but a shared key does not by itself establish private-key
+compromise or unsafe cross-owner use.
+
+\subsection{Trend Analysis}
+
+Trend analysis tracks how certificate characteristics evolve over time.
+Issuance and expiration timelines show the number of certificates created and
+scheduled to expire in each period. Signature-algorithm adoption charts how
+usage has shifted, for instance from SHA-1 toward SHA-256. Validation-level
+trends compare the adoption of Domain Validation (DV), Organization Validation
+(OV), and Extended Validation (EV) over time. Key-size series plot the
+distribution of RSA modulus lengths across the dataset. Expiration views group
+certificates by their \texttt{notAfter} dates and are not predictive models.
+
+\section{Security-Oriented Risk Assessment}
+\label{sec:vulnerability-risk-model}
+
+Beyond the aggregate analytics families, the platform maintains a
+certificate-level risk view that ranks individual certificates by the number
+and severity of observable security signals. The view forms a bounded union of
+certificates matching security-relevant signals, removes duplicate records,
+applies the score in Table~\ref{tab:vulnerability-score}, and ranks the
+resulting candidates.
+
+\begin{table}[H]
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \caption{Application-defined certificate risk score}
+  \label{tab:vulnerability-score}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.33\textwidth}>{\Centering\arraybackslash}p{0.11\textwidth}Y@{}}
+    \toprule
+    \textbf{Signal} & \textbf{Points} & \textbf{Condition} \\
+    \midrule
+    Expired certificate & $+30$ & Certificate status is expired \\
+    Shared public key & $+30$ & Public-key fingerprint belongs to a shared-key group \\
+    Weak encryption & $+20$ & RSA modulus length is below 2,048 bits \\
+    Long validity & $+10$ & Encoded certificate lifetime exceeds 398 days \\
+    Certificate-quality findings & $+1$ to $+10$ & One point per ZLint error and one point per two warnings, capped at ten \\
+    Positive characteristic & $-5$ each & Current validity, strong key, shorter lifetime, and absence of lint findings \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The final value is clamped to the interval $[0,100]$ and classified as
+\texttt{Critical} (85 or above), \texttt{High} (70--84),
+\texttt{Medium} (40--69), or \texttt{Low} (1--39). Scores of zero are not
+returned, meaning a certificate must exhibit at least one risk factor to appear
+in the view. Because candidate queries are bounded and the weights are defined
+by the application, the result is a prioritization aid rather than proof of
+vulnerability, compromise, or exhaustive risk coverage.
 
 \section{Certificate Authority Analytics and Ranking}
 \label{sec:ca-analytics-ranking}
 
-Certificate Authority analysis groups leaf certificates by issuer
-organization, validation level, self-signed status, and issuer-related
-characteristics. Comparative ranking is based on five component groups shown
-in Table~\ref{tab:ca-score-components}.
+The Certificate Authority (CA) view aggregates the analytics above to the
+issuer level. CA analysis groups leaf certificates by issuer organization,
+validation level, self-signed status, and issuer-related characteristics.
+Comparative ranking is based on five component groups shown in
+Table~\ref{tab:ca-score-components}. Each component is computed as the mean of
+several sub-metrics, ensuring that no single factor dominates the overall
+score.
 
 \begin{table}[H]
   \centering
@@ -141,8 +215,8 @@ in Table~\ref{tab:ca-score-components}.
     \toprule
     \textbf{Component} & \textbf{Principal inputs} & \textbf{Purpose} \\
     \midrule
-    Core hygiene & ZLint errors, warnings, and selected critical findings & Measures certificate-quality findings \\
-    Cryptographic health & Key characteristics, algorithm hygiene, and public-key reuse & Represents cryptographic and key-management indicators \\
+    Core hygiene & Weighted ZLint errors and warnings plus selected critical findings & Measures certificate-quality findings \\
+    Cryptographic health & Key length, algorithm family, and public-key reuse & Represents cryptographic and key-management indicators \\
     Operational stability & Certificate authority and operational indicator values & Captures operational characteristics defined by the model \\
     Policy compliance & Extended key usage, policy identifiers, validation level, and name constraints & Represents policy-related certificate attributes \\
     Risk factors & Issuer-country category, authority-access information, and revocation-service presence & Adds contextual risk and revocation indicators \\
@@ -166,52 +240,20 @@ certificates contributing to the ranking and the component averages. The
 formula supports transparent comparison within the platform but has not been
 externally calibrated as an industry security rating.
 
-\section{Security-Oriented Risk Assessment}
-\label{sec:vulnerability-risk-model}
-
-The risk view forms a bounded union of certificates matching security-relevant
-signals, removes duplicate records, applies the score in
-Table~\ref{tab:vulnerability-score}, and ranks the resulting candidates.
-
-\begin{table}[H]
-  \centering
-  \small
-  \setlength{\tabcolsep}{4pt}
-  \caption{Application-defined certificate risk score}
-  \label{tab:vulnerability-score}
-  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.31\textwidth}>{\Centering\arraybackslash}p{0.15\textwidth}Y@{}}
-    \toprule
-    \textbf{Signal} & \textbf{Points} & \textbf{Condition} \\
-    \midrule
-    Expired certificate & $+30$ & Certificate status is expired \\
-    Shared public key & $+30$ & Public-key fingerprint belongs to a shared-key group \\
-    Weak encryption & $+20$ & RSA modulus length is below 2,048 bits \\
-    Long validity & $+10$ & Encoded certificate lifetime exceeds 398 days \\
-    Certificate-quality findings & $+1$ to $+10$ & Errors and warnings contribute up to ten points \\
-    Positive characteristic & $-5$ each & Current validity, strong key, shorter lifetime, and absence of lint findings \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
-
-The final value is clamped to the interval $[0,100]$ and classified as
-\texttt{Critical}, \texttt{High}, \texttt{Medium}, or \texttt{Low}. Because
-candidate queries are bounded and the weights are defined by the application,
-the result is a prioritization aid rather than proof of vulnerability,
-compromise, or exhaustive risk coverage.
-
 \section{API and Interactive Dashboard}
 \label{sec:django-api-design-filtering}
 
-The application service exposes structured access to dashboard summaries,
-scope selection, certificate lists and details, filters, analytical families,
-shared-key groups, risk candidates, and trends. Certificate-list filtering
-supports combinations of status, issuer, country scope, text search,
-cryptographic attributes, validity windows, SAN characteristics, shared-key
-membership, and risk signals.
+The Django backend exposes a JSON API that serves all dashboard views. Each
+API endpoint maps to one or more analytical queries, supporting configurable
+country scope, pagination, and certificate-level filtering by status, issuer,
+text search, cryptographic attributes, validity windows, SAN characteristics,
+shared-key membership, and risk signals.
 
-The dashboard uses a typed client and shared state to coordinate scope,
-filters, search, pagination, theme, loading state, and drill-down navigation.
-Figure~\ref{fig:frontend-component-flow} summarizes the presentation
+The frontend consumes these endpoints through a typed API client that handles
+request construction and response parsing. A global SWR provider manages data
+fetching with automatic deduplication, revalidation, and caching, while React
+contexts coordinate scope, search, theme, and dashboard state across pages.
+Figure~\ref{fig:frontend-component-flow} summarises the presentation
 architecture.
 
 \begin{figure}[H]
@@ -247,9 +289,41 @@ architecture.
   \label{fig:frontend-component-flow}
 \end{figure}
 
-Major views cover platform health, active and expired certificates, validity,
-signature and hash distributions, CA analysis and ranking, SAN analysis,
-shared-key groups, trends, country-level exploration, security-oriented risk,
-and detailed certificate inspection. Aggregate charts and tables link to
-filtered certificate lists or individual records, providing a consistent path
-from high-level observations to supporting certificate data.
+Users navigate the dashboard through a sidebar that lists each analytical
+family as a dedicated page. The landing page presents a platform overview with
+total, active, expiring-soon, and expired certificate counts alongside a
+searchable certificate table. A scope switcher in the header allows users to
+filter all views by country-level domain scope without leaving the current
+page.
+
+The dashboard is organised into three broad categories. Health and status
+views provide a quick pulse on the dataset---the overview page for summary
+counts, and the active-versus-expired page for a deeper breakdown by
+certificate state. Certificate analytics pages cover validity periods,
+Subject Alternative Name distributions, signature and hash algorithm
+analysis, geographic breakdown by issuer country, and the relationship
+between Certificate Authorities and the domains they cover. Security-oriented
+views highlight shared-key reuse groups, the ranked risk assessment for
+individual certificates, and the comparative CA ranking based on certificate
+quality metrics.
+
+Every analytical page displays summary cards, distribution charts, and
+pagination tables designed for exploration. Clicking a chart segment or a
+table row navigates to a filtered certificate list or to the full certificate
+detail page, which displays the complete set of parsed fields including
+issuer, subject, validity, fingerprints, SANs, key usage, and ZLint results.
+This linking creates a consistent path from high-level trends down to
+individual certificate evidence.
+
+\section{Chapter Summary}
+
+This chapter presented the analytical framework that converts the collected
+certificate dataset into actionable insights. The precomputation engine
+materializes six analytical families on a fixed cycle, while live queries
+handle views that require current data. The risk assessment model provides a
+transparent, rule-based scoring system for certificate triage, and the CA
+ranking formula enables comparative evaluation of issuer-level certificate
+quality. The interactive dashboard ties these capabilities together through a
+unified interface with scope-aware filtering and drill-down navigation. The
+following chapter evaluates the overall platform against its design objectives
+and discusses the quality of the collected dataset.

@@ -40,7 +40,7 @@ in `../analysis/template_format_audit.md`.
 The two supplied students are Ebad Junaid (22046) and Muhammad Arslan Shafi
 (22100), both in session BSCS 2022--2026. The supervisor is Dr. Muhammad Umar
 Jangua. The committee members are Dr.
-Mohammad Ali Humayun, Mr. Faizan Ali Khan, and Mr. Shoieb Majeed; the Head of
+Mr Kashif Junaid and Mr. Shoaib Majeed; the Head of
 Department is Dr. Ali Ahmed. The declaration retains a dotted date field because
 no fixed submission date was requested.
 The acknowledgement and dedication contain the text supplied after the initial

@@ -41,20 +41,12 @@
 \usepackage{tocloft}
 \usepackage{url}
 \usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0pt}
-% Keep complete words together across the report. The additional emergency
-% stretch gives TeX enough flexibility to justify paragraphs cleanly without
-% resorting to automatic or explicit-hyphen line breaks.
-\hyphenpenalty=10000
-% Existing compound-word hyphens may be used only when a narrow table column
-% cannot accommodate the complete compound without overflowing.
-\exhyphenpenalty=10000
-\setlength{\emergencystretch}{4em}
-% Narrow table cells are the only exception: normal discretionary breaks are
-% permitted there when keeping a long technical term intact would overflow the
-% column. The higher-than-default penalty still prefers complete words.
+\hyphenpenalty=500
+\exhyphenpenalty=500
 \AtBeginEnvironment{tabular}{\hyphenpenalty=10000\exhyphenpenalty=10000}
 \AtBeginEnvironment{tabularx}{\hyphenpenalty=10000\exhyphenpenalty=10000}
 \AtBeginEnvironment{longtable}{\hyphenpenalty=10000\exhyphenpenalty=10000}
