@@ -13,7 +13,7 @@ import Card from '@/components/Card';
 import MetricCard from '@/components/dashboard/MetricCard';
 import DataTable from '@/components/DataTable';
 import Pagination from '@/components/Pagination';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import {
     ChartPieIcon, ShieldIcon, ClockIcon, CertificateIcon, AlertIcon, KeyIcon
 } from '@/components/icons/Icons';
@@ -22,6 +22,7 @@ import apiClient, {
     AlgorithmAdoptionEntry, ValidationLevelTrendsEntry, KeySizeTimelineEntry
 } from '@/services/apiClient';
 import { fetchCertificates } from '@/controllers/pageController';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 const STORAGE_KEY = 'trends-analytics-state';
 
@@ -118,7 +119,6 @@ export default function TrendsAnalyticsPage() {
     const [filterValue, setFilterValue] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const [isRestoring, setIsRestoring] = useState(true);
-    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
     const { searchQuery, setSearchQuery } = useSearch();
 
@@ -547,17 +547,13 @@ export default function TrendsAnalyticsPage() {
                                 Expiring 30d
                             </button>
                             <div className="w-px h-5 bg-border-default mx-1" />
-                    {/*
-                            <button
-                                onClick={() => setIsDownloadModalOpen(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                            </button>
-                    */}
+                            <ExportButton
+                                serverUrl={buildExportUrl(getActiveFilter())}
+                                columns={CERTIFICATE_COLUMNS}
+                                filename="trends-certificates"
+                                filterLabel="Trends certificates"
+                                totalCount={certsData?.pagination?.total || 0}
+                            />
                         </div>
                     }
                 >
@@ -583,14 +579,6 @@ export default function TrendsAnalyticsPage() {
                     )}
                 </Card>
             </div>
-
-            <DownloadModal
-                isOpen={isDownloadModalOpen}
-                onClose={() => setIsDownloadModalOpen(false)}
-                currentPageData={certsData?.certificates || []}
-                activeFilter={getActiveFilter()}
-                totalCount={certsData?.pagination?.total}
-            />
         </div>
     );
 }

@@ -165,6 +165,37 @@ class CertificateDownloadView(View):
         elif country:
             filename = f'{country.lower()}_certificates'
         
+        output_format = request.GET.get('format', 'csv')
+
+        if output_format == 'json':
+            data = self._generate_json(
+                status=status,
+                country=country,
+                issuer=issuer,
+                search=search,
+                encryption_type=encryption_type,
+                has_vulnerabilities=has_vulnerabilities if has_vulnerabilities else None,
+                expiring_month=expiring_month,
+                expiring_year=expiring_year,
+                expiring_start=expiring_start,
+                expiring_end=expiring_end,
+                issued_month=issued_month,
+                issued_year=issued_year,
+                weak_hash=weak_hash if weak_hash else None,
+                self_signed=self_signed if self_signed else None,
+                signature_algorithm=signature_algorithm,
+                hash_type=hash_type,
+                validity_bucket=validity_bucket,
+                expiring_days=expiring_days,
+                issued_within_days=issued_within_days,
+                validation_level=validation_level,
+                san_tld=san_tld,
+                san_type=san_type,
+                san_count_min=san_count_min,
+                san_count_max=san_count_max
+            )
+            return JsonResponse(data, safe=False)
+
         response = StreamingHttpResponse(
             self._generate_csv(
                 status=status,
@@ -198,36 +229,41 @@ class CertificateDownloadView(View):
         response['Cache-Control'] = 'no-cache'
         return response
     
-    def _generate_csv(self, **filters):
-        """Generator for streaming CSV rows - handles millions without memory issues"""
+    def _cert_row(self, cert):
+        """Extract export fields from a serialized certificate"""
+        return {
+            'Domain': cert.get('domain', 'N/A'),
+            'Start Date': cert.get('validFrom', 'N/A'),
+            'End Date': cert.get('validTo', 'N/A'),
+            'SSL Grade': cert.get('sslGrade', 'N/A'),
+            'Encryption': cert.get('encryptionType', 'N/A'),
+            'Issuer': cert.get('issuer', 'N/A'),
+            'Country': cert.get('country', 'N/A'),
+            'Status': cert.get('status', 'N/A'),
+            'Vulnerabilities': cert.get('vulnerabilityCount', 0),
+        }
+
+    def _iter_certificates(self, **filters):
+        """Shared generator: yields cert row dicts for CSV/JSON export"""
         from .models import CertificateModel
+        from .shared_apis.db_queries import SharedModels
         from datetime import datetime, timezone, timedelta
         from calendar import monthrange
-        import csv
-        from io import StringIO
-        
-        # Yield header row
-        yield self._csv_row([
-            'Domain', 'Start Date', 'End Date', 'SSL Grade', 
-            'Encryption', 'Issuer', 'Country', 'Status', 'Vulnerabilities'
-        ])
-        
-        # Build query (reuse logic from get_all)
+
         query = {}
         now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         now_plus_30 = (datetime.now(timezone.utc) + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        
+
         if filters.get('search'):
             search = filters['search']
             query['$or'] = [
                 {'parsed.subject.common_name': {'$regex': search, '$options': 'i'}},
                 {'domain': {'$regex': search, '$options': 'i'}}
             ]
-        
+
         if filters.get('issuer'):
             issuer = filters['issuer']
             if issuer.lower() == 'others':
-                # Get top 10 CAs and exclude them
                 top_ca_pipeline = [
                     {'$project': {'issuer_org': {'$arrayElemAt': ['$parsed.issuer.organization', 0]}}},
                     {'$match': {'issuer_org': {'$exists': True, '$ne': None}}},
@@ -245,7 +281,7 @@ class CertificateDownloadView(View):
                 })
             else:
                 query['parsed.issuer.organization'] = {'$regex': issuer, '$options': 'i'}
-        
+
         if filters.get('status'):
             status_upper = filters['status'].upper()
             if status_upper == 'EXPIRED':
@@ -254,7 +290,7 @@ class CertificateDownloadView(View):
                 query['parsed.validity.end'] = {'$gte': now, '$lte': now_plus_30}
             elif status_upper == 'VALID':
                 query['parsed.validity.end'] = {'$gt': now}
-        
+
         if filters.get('encryption_type'):
             parts = filters['encryption_type'].split()
             if len(parts) >= 1:
@@ -269,49 +305,41 @@ class CertificateDownloadView(View):
                             query['parsed.subject_key_info.ecdsa_public_key.length'] = key_length
                     except ValueError:
                         pass
-        
+
         if filters.get('expiring_month') and filters.get('expiring_year'):
             _, last_day = monthrange(filters['expiring_year'], filters['expiring_month'])
             month_start = f"{filters['expiring_year']}-{filters['expiring_month']:02d}-01T00:00:00Z"
             month_end = f"{filters['expiring_year']}-{filters['expiring_month']:02d}-{last_day:02d}T23:59:59Z"
             query['parsed.validity.end'] = {'$gte': month_start, '$lte': month_end}
-        
-        # Filter by custom expiration range (e.g. for weekly view)
+
         if filters.get('expiring_start') and filters.get('expiring_end'):
-             query['parsed.validity.end'] = {
+            query['parsed.validity.end'] = {
                 '$gte': filters['expiring_start'],
                 '$lte': filters['expiring_end']
             }
 
         if filters.get('has_vulnerabilities'):
             query['zlint.errors_present'] = True
-        
-        # Signature page specific filters
-        
-        # Filter by issued month/year
+
         if filters.get('issued_month') and filters.get('issued_year'):
             _, last_day = monthrange(filters['issued_year'], filters['issued_month'])
             month_start = f"{filters['issued_year']}-{filters['issued_month']:02d}-01T00:00:00Z"
             month_end = f"{filters['issued_year']}-{filters['issued_month']:02d}-{last_day:02d}T23:59:59Z"
             query['parsed.validity.start'] = {'$gte': month_start, '$lte': month_end}
-        
-        # Filter by weak hash (SHA-1, MD5)
+
         if filters.get('weak_hash'):
             if '$or' not in query:
                 query['$or'] = [
                     {'parsed.signature_algorithm.name': {'$regex': '^SHA1|^SHA-1', '$options': 'i'}},
                     {'parsed.signature_algorithm.name': {'$regex': '^MD5', '$options': 'i'}}
                 ]
-        
-        # Filter by self-signed
+
         if filters.get('self_signed'):
             query['parsed.signature.self_signed'] = True
-        
-        # Filter by exact signature algorithm (e.g., "SHA256-RSA")
+
         if filters.get('signature_algorithm'):
             query['parsed.signature_algorithm.name'] = filters['signature_algorithm']
-        
-        # Filter by hash type (e.g., "SHA-256")
+
         if filters.get('hash_type'):
             hash_patterns = {
                 'SHA-256': '^SHA256',
@@ -322,11 +350,8 @@ class CertificateDownloadView(View):
             }
             pattern = hash_patterns.get(filters['hash_type'], f"^{filters['hash_type'].replace('-', '')}")
             query['parsed.signature_algorithm.name'] = {'$regex': pattern, '$options': 'i'}
-        
-        # Filter by validity bucket (duration in days)
-        # Using aggregation pipeline similar to get_all for consistency and accuracy
+
         validity_bucket = filters.get('validity_bucket')
-        
         if validity_bucket:
             bucket_ranges = {
                 '0-90': (0, 90),
@@ -338,9 +363,7 @@ class CertificateDownloadView(View):
                 min_days, max_days = bucket_ranges[validity_bucket]
                 min_ms = min_days * 86400000
                 max_ms = max_days * 86400000
-                
-                # Use aggregation pipeline for duration-based filtering
-                # This overrides the simple find loop, similar to san_count
+
                 pipeline = [
                     {'$match': query if query else {}},
                     {'$addFields': {
@@ -354,56 +377,38 @@ class CertificateDownloadView(View):
                         'durationMs': {'$gte': min_ms, '$lt': max_ms}
                     }}
                 ]
-                
-                # Stream data via aggregation
+
                 for doc in CertificateModel.collection.aggregate(pipeline, allowDiskUse=True):
-                    cert = CertificateModel.serialize_certificate(doc)
-                    
+                    cert = SharedModels.serialize_certificate(doc)
                     if filters.get('country') and cert.get('country') != filters['country']:
                         continue
-                    
-                    yield self._csv_row([
-                        cert.get('domain', 'N/A'),
-                        cert.get('validFrom', 'N/A'),
-                        cert.get('validTo', 'N/A'),
-                        cert.get('sslGrade', 'N/A'),
-                        cert.get('encryptionType', 'N/A'),
-                        cert.get('issuer', 'N/A'),
-                        cert.get('country', 'N/A'),
-                        cert.get('status', 'N/A'),
-                        cert.get('vulnerabilityCount', 0)
-                    ])
+                    yield self._cert_row(cert)
                 return
-        
-        # Filter by expiring days
+
         if filters.get('expiring_days'):
             target_date = (datetime.now(timezone.utc) + timedelta(days=filters['expiring_days'])).strftime('%Y-%m-%dT%H:%M:%SZ')
             query['parsed.validity.end'] = {
-                '$gt': now,  # Not yet expired
-                '$lte': target_date  # Within expiring_days window
+                '$gt': now,
+                '$lte': target_date
             }
-        
-        # Filter by issued within days (for Trends page "Issued 30d" card)
+
         if filters.get('issued_within_days'):
             past_date = (datetime.now(timezone.utc) - timedelta(days=filters['issued_within_days'])).strftime('%Y-%m-%dT%H:%M:%SZ')
             query['parsed.validity.start'] = {
                 '$gte': past_date,
                 '$lte': now
             }
-        
-        # Filter by validation level (DV, OV, EV)
+
         if filters.get('validation_level'):
             query['parsed.validation_level'] = filters['validation_level']
-        
-        # SAN TLD filter - filter certs where any dns_name ends with the TLD
+
         if filters.get('san_tld'):
             tld_pattern = filters['san_tld'].lstrip('.')
             query['parsed.extensions.subject_alt_name.dns_names'] = {
                 '$regex': f'\\.{tld_pattern}$',
                 '$options': 'i'
             }
-        
-        # SAN type filter - filter by wildcard or standard SANs
+
         if filters.get('san_type'):
             if filters['san_type'].lower() == 'wildcard':
                 query['parsed.extensions.subject_alt_name.dns_names'] = {
@@ -423,13 +428,11 @@ class CertificateDownloadView(View):
                         '$not': {'$regex': '^\\*\\.'}
                     }
                 })
-        
-        # SAN count filter - requires aggregation pipeline
+
         san_count_min = filters.get('san_count_min')
         san_count_max = filters.get('san_count_max')
-        
+
         if san_count_min is not None or san_count_max is not None:
-            # Use aggregation for san count filtering
             pipeline = [
                 {'$match': query if query else {}},
                 {'$addFields': {
@@ -438,66 +441,52 @@ class CertificateDownloadView(View):
                     }
                 }},
             ]
-            
+
             san_count_match = {}
             if san_count_min is not None:
                 san_count_match['$gte'] = san_count_min
             if san_count_max is not None:
                 san_count_match['$lte'] = san_count_max
-            
+
             if san_count_match:
                 pipeline.append({'$match': {'sanCount': san_count_match}})
-            
-            # Stream data via aggregation
+
             for doc in CertificateModel.collection.aggregate(pipeline, allowDiskUse=True):
-                cert = CertificateModel.serialize_certificate(doc)
-                
+                cert = SharedModels.serialize_certificate(doc)
                 if filters.get('country') and cert.get('country') != filters['country']:
                     continue
-                
-                yield self._csv_row([
-                    cert.get('domain', 'N/A'),
-                    cert.get('validFrom', 'N/A'),
-                    cert.get('validTo', 'N/A'),
-                    cert.get('sslGrade', 'N/A'),
-                    cert.get('encryptionType', 'N/A'),
-                    cert.get('issuer', 'N/A'),
-                    cert.get('country', 'N/A'),
-                    cert.get('status', 'N/A'),
-                    cert.get('vulnerabilityCount', 0)
-                ])
+                yield self._cert_row(cert)
             return
-        
-        # Stream data in batches (batch_size for MongoDB cursor)
+
         cursor = CertificateModel.collection.find(query).batch_size(1000)
-        
+
         for doc in cursor:
-            cert = CertificateModel.serialize_certificate(doc)
-            
-            # Apply country filter after serialization (TLD-based)
+            cert = SharedModels.serialize_certificate(doc)
             if filters.get('country') and cert.get('country') != filters['country']:
                 continue
-            
-            yield self._csv_row([
-                cert.get('domain', 'N/A'),
-                cert.get('validFrom', 'N/A'),
-                cert.get('validTo', 'N/A'),
-                cert.get('sslGrade', 'N/A'),
-                cert.get('encryptionType', 'N/A'),
-                cert.get('issuer', 'N/A'),
-                cert.get('country', 'N/A'),
-                cert.get('status', 'N/A'),
-                cert.get('vulnerabilityCount', 0)
-            ])
-    
-    def _csv_row(self, row):
-        """Convert row to CSV string"""
-        from io import StringIO
+            yield self._cert_row(cert)
+
+    def _generate_csv(self, **filters):
+        """Generator for streaming CSV rows"""
         import csv
+        from io import StringIO
+
+        header = ['Domain', 'Start Date', 'End Date', 'SSL Grade',
+                   'Encryption', 'Issuer', 'Country', 'Status', 'Vulnerabilities']
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(row)
-        return output.getvalue()
+        writer.writerow(header)
+        yield output.getvalue()
+
+        for row in self._iter_certificates(**filters):
+            output = StringIO()
+            writer = csv.writer(output)
+            writer.writerow([row[k] for k in header])
+            yield output.getvalue()
+
+    def _generate_json(self, **filters):
+        """Return all matching certificates as a list of dicts"""
+        return list(self._iter_certificates(**filters))
 
 
 @csrf_exempt

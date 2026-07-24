@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import {ChevronRightIcon, CertificateIcon, GlobeIcon, ShieldIcon, AlertIcon } from '@/components/icons/Icons';
 
 import { useSearch } from '@/context/SearchContext';
@@ -15,6 +15,7 @@ import { fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry } from '@/types/dashboard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 const STORAGE_KEY = 'ca-analytics-state';
 
@@ -99,7 +100,6 @@ export default function CAAnalyticsPage() {
     const [filterValue, setFilterValue] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const [isRestoring, setIsRestoring] = useState(true);
-    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
     const [defaultFilterSet, setDefaultFilterSet] = useState(false);
 
     // SWR data fetching
@@ -219,6 +219,7 @@ export default function CAAnalyticsPage() {
 
     const tableData = certsData?.certificates || [];
     const totalPages = certsData?.pagination?.totalPages || 1;
+    const totalItems = certsData?.pagination?.total || 0;
 
     // Scroll to table on search
     useEffect(() => {
@@ -419,7 +420,30 @@ export default function CAAnalyticsPage() {
                 </Card>
 
                 {/* Validation Level by Issuer Heatmap */}
-                <Card title="Validation Level by Issuer" infoTooltip={cardInfoTooltips.heatmap}>
+                <Card
+                    title="Validation Level by Issuer"
+                    infoTooltip={cardInfoTooltips.heatmap}
+                    headerAction={
+                        !isMatrixLoading && heatmapData.issuers.length > 0 ? (
+                            <ExportButton
+                                data={heatmapData.issuers.map(issuer => {
+                                    const row: Record<string, unknown> = { Issuer: issuer };
+                                    for (const col of HEATMAP_COLUMNS) {
+                                        row[col] = heatmapData.matrix[issuer]?.[col] || 0;
+                                    }
+                                    return row;
+                                })}
+                                columns={[
+                                    { header: 'Issuer', key: 'Issuer' },
+                                    ...HEATMAP_COLUMNS.map(col => ({ header: col, key: col })),
+                                ]}
+                                filename="validation-by-issuer"
+                                filterLabel="Validation matrix"
+                                totalCount={heatmapData.issuers.length}
+                            />
+                        ) : undefined
+                    }
+                >
                     <div className="overflow-x-auto">
                         {isMatrixLoading ? (
                             <div className="flex items-center justify-center h-64">
@@ -555,17 +579,15 @@ export default function CAAnalyticsPage() {
                     title={getTableTitle()}
                     subtitle="Certificates filtered by CA analysis criteria"
                     infoTooltip="View certificates filtered by selected CA, validation level, or self-signed status."
-                    headerAction={null /*
-                        <button
-                            onClick={() => setIsDownloadModalOpen(true)}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Download
-                        </button>
-                    */}
+                    headerAction={
+                        <ExportButton
+                            serverUrl={buildExportUrl(getActiveFilter())}
+                            columns={CERTIFICATE_COLUMNS}
+                            filename={`${getTableTitle().toLowerCase().replace(/\s+/g, '-')}-certificates`}
+                            filterLabel={getTableTitle()}
+                            totalCount={totalItems}
+                        />
+                    }
                 >
                     <div className={`transition-opacity duration-200 ${isCertsLoading ? 'opacity-50' : 'opacity-100'}`}>
                         {!swrKey ? (
@@ -584,14 +606,6 @@ export default function CAAnalyticsPage() {
                     </div>
                 </Card>
             </div>
-
-            {/* Download Modal */}
-            <DownloadModal
-                isOpen={isDownloadModalOpen}
-                onClose={() => setIsDownloadModalOpen(false)}
-                activeFilter={getActiveFilter()}
-                currentPageData={tableData}
-            />
         </div>
     );
 }

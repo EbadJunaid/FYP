@@ -41,6 +41,7 @@ The project is built from three interconnected pillars:
 | **`useful-scripts/`** | Helper tools for database maintenance (remove raw field from dataset, remove fingerprint duplicate certificates , adds the scope field), checking CT log endpoint health, cleaning up domain CSV files, and preparing small test databases from a larger dataset. |
 | **`assets/`** | Diagrams (Mermaid, Excalidraw, PNG), animations, and the project poster. |
 | **`research-papers/`** | Reference papers that motivated the analyses |  |
+| **`latex-report/`** | LaTeX source code for the project report. |
 | **`archive/`** | Older work kept for reference only. **Not used by the project anymore.** |  |
 
 <br>
@@ -315,6 +316,11 @@ python3 static-ip-crawler.py
 1. Prepare a dataset by following the instructions in [`dashboard/README.md`](dashboard/README.md).
 2. Start the dashboard.
 3. (Optional) Schedule the CT renewal pipeline.
+
+
+### 🔮 Future Work
+
+The CA Ranking Trends feature currently accepts monthly snapshots via CSV upload, giving the user full control over which months to compare and making the tool immediately usable without any backend modifications. A natural next step would be automating this process by connecting the feature directly to the database — taking periodic snapshots and enabling fully automated, hands-free month-over-month comparisons.
 
 
 ### ⭐ Closing note

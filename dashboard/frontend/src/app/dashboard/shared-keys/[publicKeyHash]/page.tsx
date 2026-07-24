@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import Card from '@/components/Card';
+import ExportButton from '@/components/ExportButton';
 import { KeyIcon, AlertIcon, ShieldIcon } from '@/components/icons/Icons';
 
 // TypeScript interfaces
@@ -231,7 +232,29 @@ export default function SharedKeyDetailPage() {
             </Card>
 
             {/* Issuers */}
-            <Card title="Certificate Authorities" subtitle={`${detail.issuer_count} issuer${detail.issuer_count > 1 ? 's' : ''} involved`}>
+            <Card
+                title="Certificate Authorities"
+                subtitle={`${detail.issuer_count} issuer${detail.issuer_count > 1 ? 's' : ''} involved`}
+                headerAction={
+                    detail.issuers.length > 0 ? (
+                        <ExportButton
+                            data={detail.issuers.map(issuer => ({
+                                Organization: issuer.organization,
+                                'Common Name': issuer.common_name || 'N/A',
+                                'Certificate Count': issuer.certificate_count,
+                            }))}
+                            columns={[
+                                { header: 'Organization', key: 'Organization' },
+                                { header: 'Common Name', key: 'Common Name' },
+                                { header: 'Certificate Count', key: 'Certificate Count' },
+                            ]}
+                            filename="shared-key-issuers"
+                            filterLabel="Certificate authorities"
+                            totalCount={detail.issuer_count}
+                        />
+                    ) : undefined
+                }
+            >
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>

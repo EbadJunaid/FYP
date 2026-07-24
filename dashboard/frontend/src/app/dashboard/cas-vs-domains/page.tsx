@@ -6,11 +6,13 @@ import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import ProgressBar from '@/components/charts/ProgressBar';
 import SmallSearchInput from '@/components/SmallSearchInput';
+import ExportButton from '@/components/ExportButton';
 import { ShieldIcon, CertificateIcon, CloseIcon } from '@/components/icons/Icons';
 import { fetchCertificates } from '@/controllers/pageController';
 import apiClient, { CALeaderboardEntry } from '@/services/apiClient';
 import { ScanEntry } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 export default function CAsPage() {
     const [tableData, setTableData] = useState<ScanEntry[]>([]);
@@ -325,7 +327,7 @@ export default function CAsPage() {
 
             {/* Table */}
             <div ref={tableRef}>
-                <Card 
+                <Card
                     title={selectedCA ? `Certificates from ${selectedCA.name}` : "Certificates"}
                     subtitle={
                         selectedCA && selectedCA.name !== caData[0]?.name ? (
@@ -337,6 +339,15 @@ export default function CAsPage() {
                                 Reset to Top CA
                             </button>
                         ) : undefined
+                    }
+                    headerAction={
+                        <ExportButton
+                            serverUrl={buildExportUrl(selectedCA ? { type: 'ca', value: selectedCA.name } : { type: 'all' })}
+                            columns={CERTIFICATE_COLUMNS}
+                            filename={`${selectedCA ? selectedCA.name.toLowerCase().replace(/\s+/g, '-') : 'all'}-certificates`}
+                            filterLabel={selectedCA ? `Certificates from ${selectedCA.name}` : 'All certificates'}
+                            totalCount={totalCerts}
+                        />
                     }
                 >
                 <DataTable

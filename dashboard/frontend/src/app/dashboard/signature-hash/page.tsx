@@ -5,11 +5,13 @@ import useSWR from 'swr';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import { apiClient, SignatureStats, HashTrendEntry, IssuerAlgorithmEntry } from '@/services/apiClient';
 import { fetchCertificates } from '@/controllers/pageController';
 import { useSearch } from '@/context/SearchContext';
+import { ScanEntry } from '@/types/dashboard';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
     LineChart, Line, XAxis, YAxis, CartesianGrid
@@ -112,7 +114,6 @@ export default function SignatureHashPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [hiddenSegments, setHiddenSegments] = useState<Set<string>>(new Set());
     const [hiddenHashLines, setHiddenHashLines] = useState<Set<string>>(new Set());
-    const [downloadModalOpen, setDownloadModalOpen] = useState(false);
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
     const [isRestoring, setIsRestoring] = useState(true);
@@ -489,7 +490,30 @@ export default function SignatureHashPage() {
                 </Card>
 
                 {/* Signature Strength Heatmap by Issuer */}
-                <Card title="Signature Strength by Issuer" infoTooltip={cardInfoTooltips.heatmap}>
+                <Card
+                    title="Signature Strength by Issuer"
+                    infoTooltip={cardInfoTooltips.heatmap}
+                    headerAction={
+                        heatmapData.issuers.length > 0 ? (
+                            <ExportButton
+                                data={heatmapData.issuers.map(issuer => {
+                                    const row: Record<string, unknown> = { Issuer: issuer };
+                                    for (const col of HEATMAP_COLUMNS) {
+                                        row[col] = heatmapData.matrix[issuer]?.[col] || 0;
+                                    }
+                                    return row;
+                                })}
+                                columns={[
+                                    { header: 'Issuer', key: 'Issuer' },
+                                    ...HEATMAP_COLUMNS.map(col => ({ header: col, key: col })),
+                                ]}
+                                filename="signature-strength-by-issuer"
+                                filterLabel="Signature strength matrix"
+                                totalCount={heatmapData.issuers.length}
+                            />
+                        ) : undefined
+                    }
+                >
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
@@ -682,17 +706,13 @@ export default function SignatureHashPage() {
                                     </button>
                                 ))}
                             </div>
-                    {/*
-                            <button
-                                onClick={() => setDownloadModalOpen(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                            </button>
-                    */}
+                            <ExportButton
+                                serverUrl={buildExportUrl(getActiveFilterForModal())}
+                                columns={CERTIFICATE_COLUMNS}
+                                filename={`${getTableTitle().toLowerCase().replace(/\s+/g, '-')}-certificates`}
+                                filterLabel={getTableTitle()}
+                                totalCount={totalItems}
+                            />
                         </div>
                     }
                 >
@@ -713,15 +733,6 @@ export default function SignatureHashPage() {
                     </div>
                 </Card>
             </div>
-
-            {/* Download Modal */}
-            <DownloadModal
-                isOpen={downloadModalOpen}
-                onClose={() => setDownloadModalOpen(false)}
-                currentPageData={tableData}
-                activeFilter={getActiveFilterForModal()}
-                totalCount={totalItems}
-            />
         </div>
     );
 }

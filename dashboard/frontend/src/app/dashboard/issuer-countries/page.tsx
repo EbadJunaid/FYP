@@ -6,10 +6,12 @@ import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import ProgressBar from '@/components/charts/ProgressBar';
 import SmallSearchInput from '@/components/SmallSearchInput';
+import ExportButton from '@/components/ExportButton';
 import { GlobeIcon, CertificateIcon, CloseIcon } from '@/components/icons/Icons';
 import { fetchGeographicDistribution, fetchCertificates, fetchDashboardMetrics } from '@/controllers/pageController';
 import { ScanEntry, GeographicEntry } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 const STORAGE_KEY = 'issuer-countries-page-state';
 
@@ -324,7 +326,7 @@ export default function IssuerCountriesPage() {
 
             {/* Table */}
             <div ref={tableRef}>
-                <Card 
+                <Card
                     title={selectedCountry ? `Certificates from ${selectedCountry.country}` : "Certificates"}
                     subtitle={
                         selectedCountry && selectedCountry.country !== geoData[0]?.country ? (
@@ -336,6 +338,15 @@ export default function IssuerCountriesPage() {
                                 Reset to Top Country
                             </button>
                         ) : undefined
+                    }
+                    headerAction={
+                        <ExportButton
+                            serverUrl={buildExportUrl(selectedCountry ? { type: 'geographic', value: selectedCountry.country } : { type: 'all' })}
+                            columns={CERTIFICATE_COLUMNS}
+                            filename={`${selectedCountry ? selectedCountry.country.toLowerCase().replace(/\s+/g, '-') : 'all'}-certificates`}
+                            filterLabel={selectedCountry ? `Certificates from ${selectedCountry.country}` : 'All certificates'}
+                            totalCount={totalCerts}
+                        />
                     }
                 >
                 <DataTable

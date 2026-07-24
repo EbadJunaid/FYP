@@ -6,11 +6,13 @@ import useSWR from 'swr';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
+import ExportButton from '@/components/ExportButton';
 import { CertificateIcon, ClockIcon, AlertIcon, TrendUpIcon } from '@/components/icons/Icons';
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { useSearch } from '@/context/SearchContext';
 import { DashboardMetrics, ScanEntry } from '@/types/dashboard';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 const STORAGE_KEY = 'overview-state';
 
@@ -173,7 +175,18 @@ export default function OverviewPage() {
 
             {/* Certificates Table */}
             <div ref={tableRef}>
-                <Card title="Certificate Overview">
+                <Card
+                    title="Certificate Overview"
+                    headerAction={
+                        <ExportButton
+                            serverUrl={buildExportUrl({ type: 'all' })}
+                            columns={CERTIFICATE_COLUMNS}
+                            filename="certificate-overview"
+                            filterLabel="All certificates"
+                            totalCount={certsData?.pagination?.total || 0}
+                        />
+                    }
+                >
                     <div className={`transition-opacity duration-200 ${isCertsLoading || isPending ? 'opacity-50' : 'opacity-100'}`}>
                         <DataTable
                             data={tableData}

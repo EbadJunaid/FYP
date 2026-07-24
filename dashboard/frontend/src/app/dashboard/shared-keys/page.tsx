@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import Card from '@/components/Card';
 import MetricCard from '@/components/dashboard/MetricCard';
+import ExportButton from '@/components/ExportButton';
 import { CertificateIcon, AlertIcon, ShieldIcon, KeyIcon } from '@/components/icons/Icons';
 import { useSearchOptional } from '@/context/SearchContext';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
@@ -348,7 +349,30 @@ export default function SharedKeysPage() {
             </div>
 
             {/* Heatmap Table */}
-            <Card title="Issuer × Key Type Matrix" infoTooltip="Shows which issuer/key-type combinations have the most shared keys.">
+            <Card
+                title="Issuer × Key Type Matrix"
+                infoTooltip="Shows which issuer/key-type combinations have the most shared keys."
+                headerAction={
+                    heatmapData.keyTypeList.length > 0 ? (
+                        <ExportButton
+                            data={Object.entries(heatmapData.issuerMap).map(([issuer, keyTypes]) => {
+                                const row: Record<string, unknown> = { Issuer: issuer };
+                                for (const kt of heatmapData.keyTypeList) {
+                                    row[kt] = (keyTypes as Record<string, number>)[kt] || 0;
+                                }
+                                return row;
+                            })}
+                            columns={[
+                                { header: 'Issuer', key: 'Issuer' },
+                                ...heatmapData.keyTypeList.map(kt => ({ header: kt, key: kt })),
+                            ]}
+                            filename="shared-key-heatmap"
+                            filterLabel="Issuer × Key Type matrix"
+                            totalCount={Object.keys(heatmapData.issuerMap).length}
+                        />
+                    ) : undefined
+                }
+            >
                 <div className="overflow-x-auto">
                     {isHeatmapLoading ? (
                         <div className="flex items-center justify-center h-48">
@@ -408,6 +432,35 @@ export default function SharedKeysPage() {
                 <Card
                     title="Shared Key Groups"
                     subtitle={`${totalItems} groups with certificates sharing the same public key`}
+                    headerAction={
+                        sharedKeysList.length > 0 ? (
+                            <ExportButton
+                                data={sharedKeysList.map(group => ({
+                                    'Public Key Hash': group.public_key_hash_short || group.public_key_hash.substring(0, 16),
+                                    'Cert Count': group.certificate_count,
+                                    'Total Domains': group.total_domains,
+                                    'Sample Domains': group.sample_domains.join(', '),
+                                    'Total SANs': group.total_sans,
+                                    'Key Type': group.key_type,
+                                    'Issuers': group.issuers.map(i => i.organization).join(', '),
+                                    Risk: group.risk_level,
+                                }))}
+                                columns={[
+                                    { header: 'Public Key Hash', key: 'Public Key Hash' },
+                                    { header: 'Cert Count', key: 'Cert Count' },
+                                    { header: 'Total Domains', key: 'Total Domains' },
+                                    { header: 'Sample Domains', key: 'Sample Domains' },
+                                    { header: 'Total SANs', key: 'Total SANs' },
+                                    { header: 'Key Type', key: 'Key Type' },
+                                    { header: 'Issuers', key: 'Issuers' },
+                                    { header: 'Risk', key: 'Risk' },
+                                ]}
+                                filename="shared-key-groups"
+                                filterLabel="Shared key groups"
+                                totalCount={totalItems}
+                            />
+                        ) : undefined
+                    }
                 >
                     <div className={`transition-opacity duration-200 ${isTableLoading || isPending ? 'opacity-50' : 'opacity-100'}`}>
                         {isTableLoading ? (

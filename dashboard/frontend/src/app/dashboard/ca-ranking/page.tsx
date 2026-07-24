@@ -17,12 +17,14 @@ import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import SmallSearchInput from '@/components/SmallSearchInput';
+import ExportButton from '@/components/ExportButton';
 import { CertificateIcon, CheckCircleIcon, InfoIcon, ShieldIcon, TrendUpIcon } from '@/components/icons/Icons';
 import apiClient, { CARankingEntry, CARankingResponse } from '@/services/apiClient';
 import { fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry } from '@/types/dashboard';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import { useSearch } from '@/context/SearchContext';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 const STORAGE_KEY = 'ca-ranking-page-state';
 const rankingFetcher = () => apiClient.getCARanking(5000, 'ca');
@@ -200,9 +202,18 @@ export default function CARankingPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-text-primary">CA Ranking</h1>
-                <p className="text-text-muted mt-1">Certificate Authority trust ranking for the selected scope</p>
+            <div className="flex items-start justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-text-primary">CA Ranking</h1>
+                    <p className="text-text-muted mt-1">Certificate Authority trust ranking for the selected scope</p>
+                </div>
+                <a
+                    href="/dashboard/ca-ranking-trends"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-blue border border-primary-blue/30 rounded-xl hover:bg-primary-blue/5 transition-colors"
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                    Monthly Trends
+                </a>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -286,13 +297,44 @@ export default function CARankingPage() {
                 title="Ranking Details"
                 subtitle={`Component scores for ranked CAs${rankingSearch ? ` matching "${rankingSearch}"` : ''}`}
                 headerAction={
-                    <SmallSearchInput
-                        ref={rankingSearchRef}
-                        value={rankingSearch}
-                        onChange={(event) => setRankingSearch(event.target.value)}
-                        placeholder="Search CA"
-                        shortcutKey="C"
-                    />
+                    <>
+                        <SmallSearchInput
+                            ref={rankingSearchRef}
+                            value={rankingSearch}
+                            onChange={(event) => setRankingSearch(event.target.value)}
+                            placeholder="Search CA"
+                            shortcutKey="C"
+                        />
+                        {rankingItems.length > 0 && (
+                            <ExportButton
+                                data={rankingItems.map(entry => ({
+                                    Rank: `#${entry.rank}`,
+                                    CA: entry.name,
+                                    Score: entry.score,
+                                    'Lint Hygiene': entry.coreHygiene,
+                                    'Crypto Health': entry.cryptoHealth,
+                                    Operations: entry.operationalStability,
+                                    Policy: entry.policyCompliance,
+                                    'Risk Context': entry.riskFactors,
+                                    Certificates: entry.count,
+                                }))}
+                                columns={[
+                                    { header: 'Rank', key: 'Rank' },
+                                    { header: 'CA', key: 'CA' },
+                                    { header: 'Score', key: 'Score' },
+                                    { header: 'Lint Hygiene', key: 'Lint Hygiene' },
+                                    { header: 'Crypto Health', key: 'Crypto Health' },
+                                    { header: 'Operations', key: 'Operations' },
+                                    { header: 'Policy', key: 'Policy' },
+                                    { header: 'Risk Context', key: 'Risk Context' },
+                                    { header: 'Certificates', key: 'Certificates' },
+                                ]}
+                                filename="ca-ranking-details"
+                                filterLabel="CA ranking"
+                                totalCount={rankingItems.length}
+                            />
+                        )}
+                    </>
                 }
             >
                 <div className="overflow-x-auto">
@@ -365,6 +407,17 @@ export default function CARankingPage() {
                 <Card
                     title={activeCA ? `Certificates by ${activeCA.name}` : 'Certificates'}
                     subtitle="Click a row to open complete certificate details"
+                    headerAction={
+                        activeCA ? (
+                            <ExportButton
+                                serverUrl={buildExportUrl({ type: 'ca', value: activeCA.name })}
+                                columns={CERTIFICATE_COLUMNS}
+                                filename={`${activeCA.name.toLowerCase().replace(/\s+/g, '-')}-certificates`}
+                                filterLabel={`Certificates by ${activeCA.name}`}
+                                totalCount={certsData?.pagination?.total || 0}
+                            />
+                        ) : undefined
+                    }
                 >
                     <div className={`transition-opacity duration-200 ${isCertsLoading ? 'opacity-50' : 'opacity-100'}`}>
                         <DataTable

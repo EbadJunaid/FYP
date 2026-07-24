@@ -5,12 +5,13 @@ import useSWR from 'swr';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import { CertificateIcon, CheckCircleIcon, ErrorCircleIcon, ClockIcon } from '@/components/icons/Icons';
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry, DashboardMetrics } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
+import { buildExportUrl, CERTIFICATE_COLUMNS, ActiveFilter } from '@/utils/exportUtils';
 
 // Define the filter types for this page
 type FilterType = 'all' | 'active' | 'expired' | 'expiring_soon';
@@ -59,7 +60,6 @@ const certificatesFetcher = async (key: string) => {
 export default function ActiveVsExpiredPage() {
     const [filter, setFilter] = useState<FilterType>('all');
     const [currentPage, setCurrentPage] = useState(1);
-    const [downloadModalOpen, setDownloadModalOpen] = useState(false);
     const tableRef = useRef<HTMLDivElement>(null);
     const [isPending, startTransition] = useTransition();
     const [isRestoring, setIsRestoring] = useState(true);
@@ -190,10 +190,13 @@ export default function ActiveVsExpiredPage() {
     const expiredCount = metrics?.expiredCertificates?.count || 0;
     const expiringSoonCount = metrics?.expiringSoon?.count || 0;
 
-    // Handle download
-    const handleDownload = useCallback(() => {
-        setDownloadModalOpen(true);
-    }, []);
+    // Build active filter for export
+    const getActiveFilterForExport = (): ActiveFilter => {
+        if (filter === 'active') return { type: 'active' };
+        if (filter === 'expired') return { type: 'expired' };
+        if (filter === 'expiring_soon') return { type: 'expiringSoon' };
+        return { type: 'all' };
+    };
 
     // Show loading only on initial load
     if (isMetricsLoading && !metrics) {
@@ -283,17 +286,15 @@ export default function ActiveVsExpiredPage() {
             <div ref={tableRef}>
                 <Card
                     title={tableTitles[filter]}
-                    headerAction={null /*
-                        <button
-                            onClick={handleDownload}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Download
-                        </button>
-                    */}
+                    headerAction={
+                        <ExportButton
+                            serverUrl={buildExportUrl(getActiveFilterForExport())}
+                            columns={CERTIFICATE_COLUMNS}
+                            filename={`${filter}-certificates`}
+                            filterLabel={tableTitles[filter]}
+                            totalCount={totalItems}
+                        />
+                    }
                 >
                     {/* Show loading indicator without unmounting table */}
                     <div className={`transition-opacity duration-200 ${isTableLoading || isPending ? 'opacity-50' : 'opacity-100'}`}>
@@ -313,18 +314,6 @@ export default function ActiveVsExpiredPage() {
                     </div>
                 </Card>
             </div>
-
-            {/* Download Modal - pass filter correctly for expired */}
-            <DownloadModal
-                isOpen={downloadModalOpen}
-                onClose={() => setDownloadModalOpen(false)}
-                currentPageData={tableData}
-                activeFilter={{
-                    type: filter === 'expired' ? 'expired' : filter === 'active' ? 'active' : 'all',
-                    value: filter
-                }}
-                totalCount={totalItems}
-            />
         </div>
     );
 }

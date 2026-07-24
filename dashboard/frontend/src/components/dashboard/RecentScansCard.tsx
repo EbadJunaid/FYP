@@ -3,15 +3,13 @@
 import React from 'react';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
-import { DownloadIcon } from '@/components/icons/Icons';
 import { ScanEntry } from '@/types/dashboard';
 
 interface RecentScansCardProps {
     data: ScanEntry[];
-    title?: string; // Dynamic title based on active filter
+    title?: string;
     onRowClick?: (entry: ScanEntry) => void;
-    onDownloadClick?: () => void;
-    // Pagination props
+    headerAction?: React.ReactNode;
     currentPage: number;
     totalPages: number;
     onPageChange: (page: number) => void;
@@ -19,9 +17,9 @@ interface RecentScansCardProps {
 
 export default function RecentScansCard({
     data,
-    title = 'Recent Scans', // Default title
+    title = 'Recent Scans',
     onRowClick,
-    onDownloadClick,
+    headerAction,
     currentPage,
     totalPages,
     onPageChange,
@@ -29,15 +27,7 @@ export default function RecentScansCard({
     return (
         <Card
             title={title}
-            headerAction={null /*
-                <button
-                    onClick={onDownloadClick}
-                    className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-background transition-colors"
-                    aria-label="Download scans"
-                >
-                    <DownloadIcon size={18} />
-                </button>
-            */}
+            headerAction={headerAction}
             infoTooltip="List of SSL certificates with key details. Click on a row to view certificate details."
         >
             <DataTable

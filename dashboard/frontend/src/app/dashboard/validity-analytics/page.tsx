@@ -5,11 +5,12 @@ import useSWR from 'swr';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import { CertificateIcon, CheckCircleIcon, AlertIcon, ClockIcon } from '@/components/icons/Icons';
 import { fetchDashboardMetrics, fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry, DashboardMetrics } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 import { apiClient, ValidityStats, ValidityDistributionEntry, IssuanceTimelineEntry, ValidityTrend } from '@/services/apiClient';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import {
@@ -132,7 +133,6 @@ const certificatesFetcher = async (key: string) => {
 export default function ValidityAnalyticsPage() {
     const [filter, setFilter] = useState<FilterType>('all');
     const [currentPage, setCurrentPage] = useState(1);
-    const [downloadModalOpen, setDownloadModalOpen] = useState(false);
     const [granularity, setGranularity] = useState<'monthly' | 'weekly'>('monthly');
     const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
     const tableRef = useRef<HTMLDivElement>(null);
@@ -683,17 +683,26 @@ export default function ValidityAnalyticsPage() {
                                     </button>
                                 ))}
                             </div>
-                    {/*
-                            <button
-                                onClick={() => setDownloadModalOpen(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                            </button>
-                    */}
+                            <ExportButton
+                                serverUrl={buildExportUrl((() => {
+                                    if (filter === 'all') return { type: 'all' };
+                                    if (filter === 'valid') return { type: 'active' };
+                                    if (filter === 'expiring') return { type: 'expiringSoon' };
+                                    if (filter === 'expired') return { type: 'expired' };
+                                    if (filter === 'expiring30') return { type: 'expiringDays', value: '30' };
+                                    if (filter === 'expiring90') return { type: 'expiringDays', value: '90' };
+                                    if (filter.startsWith('bucket-')) return { type: 'bucket', value: filter.replace('bucket-', '') };
+                                    if (filter.startsWith('expiring-month-')) return { type: 'expiringMonth', value: filter.replace('expiring-month-', '') };
+                                    if (filter.startsWith('expiring-range::')) return { type: 'expiringRange', value: filter.replace('expiring-range::', '') };
+                                    if (filter.startsWith('issued-month-')) return { type: 'issuedMonth', value: filter.replace('issued-month-', '') };
+                                    if (filter.startsWith('expired-month-')) return { type: 'expiredMonth', value: filter.replace('expired-month-', '') };
+                                    return { type: 'all' };
+                                })())}
+                                columns={CERTIFICATE_COLUMNS}
+                                filename="validity-analytics-certificates"
+                                filterLabel="Validity analytics certificates"
+                                totalCount={totalItems}
+                            />
                         </div>
                     }
                 >
@@ -714,42 +723,6 @@ export default function ValidityAnalyticsPage() {
                     </div>
                 </Card>
             </div>
-
-            {/* Download Modal - Pass correct active filter based on current filter state */}
-            <DownloadModal
-                isOpen={downloadModalOpen}
-                onClose={() => setDownloadModalOpen(false)}
-                currentPageData={tableData}
-                activeFilter={(() => {
-                    // Helper to map current filter string to ActiveFilter object
-                    if (filter === 'all') return { type: 'all' };
-                    if (filter === 'valid') return { type: 'active' }; // Map valid to active
-                    if (filter === 'expiring') return { type: 'expiringSoon' }; // Map expiring to expiringSoon
-                    if (filter === 'expired') return { type: 'expired' };
-                    if (filter === 'expiring30') return { type: 'expiringDays', value: '30' };
-                    if (filter === 'expiring90') return { type: 'expiringDays', value: '90' };
-
-                    if (filter.startsWith('bucket-')) {
-                        return { type: 'bucket', value: filter.replace('bucket-', '') };
-                    }
-                    if (filter.startsWith('expiring-month-')) {
-                        return { type: 'expiringMonth', value: filter.replace('expiring-month-', '') };
-                    }
-                    if (filter.startsWith('expiring-range::')) {
-                        return { type: 'expiringRange', value: filter.replace('expiring-range::', '') };
-                    }
-                    if (filter.startsWith('issued-month-')) {
-                        return { type: 'issuedMonth', value: filter.replace('issued-month-', '') };
-                    }
-                    if (filter.startsWith('expired-month-')) {
-                        return { type: 'expiredMonth', value: filter.replace('expired-month-', '') };
-                    }
-
-                    // Fallback
-                    return { type: 'all', value: filter };
-                })()}
-                totalCount={totalItems}
-            />
         </div>
     );
 }

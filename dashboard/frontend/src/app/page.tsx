@@ -7,9 +7,10 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import MobileDrawer from '@/components/layout/MobileDrawer';
 import FilterModal from '@/components/FilterModal';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import NotDevelopedModal from '@/components/NotDevelopedModal';
 import { NotificationItem } from '@/services/apiClient';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 
 // Dashboard Cards
 import GlobalHealthCard from '@/components/dashboard/GlobalHealthCard';
@@ -41,7 +42,6 @@ function DashboardContent() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
-  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
 
   const { metrics, encryptionStrength, caLeaderboard, geographicDistribution, validityTrend, filters } = state;
@@ -62,11 +62,6 @@ function DashboardContent() {
   // Handle View Full Report button - Show coming soon modal
   const handleViewFullReport = () => {
     setComingSoonModalOpen(true);
-  };
-
-  // Handle download scans - opens modal
-  const handleDownloadScans = () => {
-    setDownloadModalOpen(true);
   };
 
   // Handle notification click - filter table based on notification type
@@ -223,7 +218,15 @@ function DashboardContent() {
               data={paginatedScans}
               title={tableTitle}
               onRowClick={(entry) => console.log('Scan row clicked:', entry)}
-              onDownloadClick={handleDownloadScans}
+              headerAction={
+                <ExportButton
+                  serverUrl={buildExportUrl(activeFilter)}
+                  columns={CERTIFICATE_COLUMNS}
+                  filename="certificates-export"
+                  filterLabel={tableTitle}
+                  totalCount={pagination.totalItems}
+                />
+              }
               currentPage={pagination.currentPage}
               totalPages={totalPages}
               onPageChange={setPage}
@@ -238,15 +241,6 @@ function DashboardContent() {
         onClose={() => setFilterModalOpen(false)}
         filters={filters}
         onApplyFilters={handleFilter}
-      />
-
-      {/* Download Modal */}
-      <DownloadModal
-        isOpen={downloadModalOpen}
-        onClose={() => setDownloadModalOpen(false)}
-        currentPageData={paginatedScans}
-        activeFilter={activeFilter}
-        totalCount={pagination.totalItems}
       />
 
       {/* Coming Soon Modal */}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
+import ExportButton from '@/components/ExportButton';
 import Pagination from '@/components/Pagination';
 import { AlertIcon, ShieldIcon, ChevronRightIcon, KeyIcon, InfoIcon } from '@/components/icons/Icons';
 import { fetchVulnerabilities } from '@/controllers/pageController';
@@ -258,7 +259,37 @@ export default function VulnerabilitiesPage() {
                 ))}
             </div>
 
-            <Card title="Risk Details" subtitle={`${activeFilter.label} certificates`}>
+            <Card
+                title="Risk Details"
+                subtitle={`${activeFilter.label} certificates`}
+                headerAction={
+                    certificates.length > 0 ? (
+                        <ExportButton
+                            data={certificates.map(cert => ({
+                                Domain: cert.domain,
+                                Issuer: cert.issuer,
+                                'Risk Score': cert.riskScore || 0,
+                                Level: vulnerabilityLabel(cert),
+                                'Risk Factors': (cert.riskFactors || []).map(f => f.label).join(', '),
+                                ZLint: `${cert.vulnerabilityCount.errors} errors / ${cert.vulnerabilityCount.warnings} warnings`,
+                                Status: cert.status,
+                            }))}
+                            columns={[
+                                { header: 'Domain', key: 'Domain' },
+                                { header: 'Issuer', key: 'Issuer' },
+                                { header: 'Risk Score', key: 'Risk Score' },
+                                { header: 'Level', key: 'Level' },
+                                { header: 'Risk Factors', key: 'Risk Factors' },
+                                { header: 'ZLint', key: 'ZLint' },
+                                { header: 'Status', key: 'Status' },
+                            ]}
+                            filename="vulnerability-details"
+                            filterLabel={`${activeFilter.label} certificates`}
+                            totalCount={certificates.length}
+                        />
+                    ) : undefined
+                }
+            >
                 {isLoading ? (
                     <div className="py-20 text-center text-text-muted">Loading vulnerabilities...</div>
                 ) : error ? (

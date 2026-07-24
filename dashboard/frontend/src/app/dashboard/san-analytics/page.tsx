@@ -6,11 +6,12 @@ import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import MetricCard from '@/components/dashboard/MetricCard';
-import DownloadModal from '@/components/DownloadModal';
+import ExportButton from '@/components/ExportButton';
 import { CertificateIcon, AlertIcon, GlobeIcon } from '@/components/icons/Icons';
 import { fetchCertificates } from '@/controllers/pageController';
 import { ScanEntry } from '@/types/dashboard';
 import { useSearch } from '@/context/SearchContext';
+import { buildExportUrl, CERTIFICATE_COLUMNS } from '@/utils/exportUtils';
 import { useDatabaseKey } from '@/hooks/useDatabaseKey';
 import { apiClient, SANStats, SANDistributionEntry, SANTLDEntry, SANWildcardBreakdown, SANFilteredCertsResponse } from '@/services/apiClient';
 import {
@@ -169,7 +170,6 @@ export default function SANAnalyticsPage() {
     const [filterValue, setFilterValue] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const [isRestoring, setIsRestoring] = useState(true);
-    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
     const { searchQuery, setSearchQuery } = useSearch();
 
@@ -580,17 +580,13 @@ export default function SANAnalyticsPage() {
                             </select>
 
                             <div className="w-px h-5 bg-border-default mx-1" />
-                    {/*
-                            <button
-                                onClick={() => setIsDownloadModalOpen(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-primary-blue transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                            </button>
-                    */}
+                            <ExportButton
+                                serverUrl={buildExportUrl(getActiveFilter())}
+                                columns={CERTIFICATE_COLUMNS}
+                                filename="san-analytics-certificates"
+                                filterLabel={`SAN: ${getActiveFilter().value || 'standard'}`}
+                                totalCount={certsData?.pagination?.total || 0}
+                            />
                         </div>
                     }
                 >
@@ -613,15 +609,6 @@ export default function SANAnalyticsPage() {
                     </div>
                 </Card>
             </div>
-
-            {/* Download Modal */}
-            <DownloadModal
-                isOpen={isDownloadModalOpen}
-                onClose={() => setIsDownloadModalOpen(false)}
-                currentPageData={tableData}
-                activeFilter={getActiveFilter()}
-                totalCount={certsData?.pagination?.total || 0}
-            />
         </div>
     );
 }
