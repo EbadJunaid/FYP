@@ -1,0 +1,348 @@
+% ===========================================================================
+% CHAPTER 2
+% ===========================================================================
+
+\chapter{Technical Background and Related Work}
+\label{chap:background-related-work}
+
+\section{TLS and the X.509 Certificate Ecosystem}
+\label{sec:tls-x509-ecosystem}
+
+\textbf{Transport Layer Security (TLS)} is the standard protocol for protecting
+Internet communication through \textbf{confidentiality}, \textbf{integrity},
+and \textbf{authentication}. \textbf{HTTPS} applies TLS to web traffic. During
+the handshake, the client and server negotiate cryptographic parameters,
+establish shared secrets, authenticate the server, and derive the symmetric session keys used
+to protect subsequent application data~\cite{rfc8446}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    participant/.style={draw, rounded corners=2pt, align=center, minimum width=2.4cm, minimum height=0.7cm, fill=black!5},
+    life/.style={densely dashed, black!55},
+    message/.style={-{Latex[length=2mm]}, line width=0.55pt},
+    secure/.style={{Latex[length=2mm]}-{Latex[length=2mm]}, line width=0.65pt},
+    messageLabel/.style={fill=white, inner sep=1.3pt, align=center},
+    annotation/.style={fill=white, inner sep=1.5pt, align=center, text width=3.8cm}
+  ]
+    \node[participant] (client) at (-4.8,0) {\textbf{Client}};
+    \node[participant] (server) at (4.8,0) {\textbf{Server}};
+
+    \draw[life] (client.south) -- ++(0,-5.1);
+    \draw[life] (server.south) -- ++(0,-5.1);
+
+    \draw[message] (-4.8,-0.9) --
+      node[messageLabel,above]{\textbf{ClientHello}}
+      (4.8,-0.9);
+
+    \draw[message] (4.8,-1.85) --
+      node[messageLabel,above]{\textbf{ServerHello}, \textbf{Certificate},\\
+      \textbf{CertificateVerify}, \textbf{Finished}}
+      (-4.8,-1.85);
+
+    \node[annotation] (validation) at (-3.25,-2.75)
+      {\textbf{Client validates certificate}\\and trust chain};
+    \node[annotation] (keys) at (0,-3.85)
+      {\textbf{Shared session keys established}};
+
+    \draw[message] (-4.8,-3.2) -- (keys.west);
+    \draw[message] (4.8,-2.45) -- (keys.east);
+
+    \coordinate (httpsPoint) at (0,-5.05);
+    \draw[message] (keys.south) -- (httpsPoint);
+    \draw[secure] (-4.8,-5.05) -- (4.8,-5.05);
+    \node[messageLabel,font=\scriptsize\bfseries] at (httpsPoint)
+      {Encrypted HTTPS communication};
+  \end{tikzpicture}
+  \caption{Simplified TLS Handshake and Certificate Authentication Process}
+  \label{fig:tls-handshake-authentication}
+\end{figure}
+
+\textbf{Public Key Infrastructure (PKI)} provides the trust framework used for
+certificate-based authentication. A \textbf{root Certificate Authority (CA)}
+acts as a trust anchor and delegates issuance through one or more
+\textbf{intermediate CAs}. Together with the server certificate, these
+certificates form a \textbf{trust chain}. A browser validates the signatures,
+validity periods, identity constraints, and trusted root before accepting the
+server's identity.
+
+The \textbf{X.509} standard defines the structure of public-key certificates.
+Important fields include the \textbf{Serial Number}, \textbf{Subject},
+\textbf{Issuer}, \textbf{Validity Period}, \textbf{Signature Algorithm}, and
+\textbf{Subject Public Key Info}. Extensions such as
+\textbf{Basic Constraints}, \textbf{Key Usage}, \textbf{Extended Key Usage},
+\textbf{Certificate Policies}, and \textbf{Subject Alternative Name (SAN)}
+describe certification authority status, permitted operations, policy context,
+and authenticated domain names~\cite{rfc5280}. Collectively, these fields define
+a certificate's identity, cryptographic properties, and intended use.
+
+Beyond their role in authentication, X.509 certificates provide a rich source 
+of publicly observable security information. Their fields support the study of 
+cryptographic practices, issuer behaviour, deployment patterns, and certificate 
+quality. Comparing these properties across large datasets enables ecosystem-wide measurements and
+Internet security research that cannot be achieved through isolated
+certificate inspection.
+
+\textbf{Certificate observation} differs from \textbf{certificate validation}.
+Browsers trust a connection only after validation, while research measurements
+may record expired, self-signed, hostname-mismatched, or untrusted
+certificates. Observation confirms presentation by an endpoint, not acceptance
+by a standards-compliant client.
+
+\section{Certificate Transparency and Dataset Freshness}
+\label{sec:ct-freshness}
+
+\textbf{Certificate Transparency (CT)} was introduced to reduce the risk that
+incorrectly or maliciously issued certificates could remain undetected within
+the \textbf{Public Key Infrastructure (PKI)}. It requires certificate issuance
+to be exposed through publicly accessible, cryptographically verifiable, and
+\textbf{append-only logs}. This public record improves the transparency and
+accountability of Certificate Authorities by allowing certificate activity and
+log consistency to be independently examined~\cite{rfc9162}.
+
+Within the CT ecosystem, a \textbf{Certificate Authority (CA)} submits an
+issued certificate or precertificate to a CT log. The log records the entry and
+returns a \textbf{Signed Certificate Timestamp (SCT)} as evidence of promised
+inclusion. Browsers check for acceptable SCT evidence when evaluating a
+certificate, while \textbf{monitors} and \textbf{auditors} observe the public
+logs for unexpected certificates and inconsistent log behaviour. CT therefore
+adds public accountability to certificate issuance without replacing normal
+certificate-chain and hostname validation.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    entity/.style={draw, rounded corners=2pt, align=center, text width=3.15cm, minimum height=0.85cm, fill=black!5},
+    primary/.style={draw, very thick, rounded corners=2pt, align=center, text width=3.35cm, minimum height=0.9cm, fill=black!9},
+    result/.style={draw, rounded corners=2pt, align=center, text width=3.4cm, minimum height=0.85cm, fill=black!4},
+    flow/.style={-{Latex[length=2mm]}, line width=0.55pt}
+  ]
+    \node[entity] (ca) at (0,0) {\textbf{Certificate Authority}\\issues and submits certificate};
+    \node[primary] (log) at (0,-1.75) {\textbf{Certificate Transparency Log}\\append-only public record};
+
+    \node[entity] (browser) at (-4.5,-3.65) {\textbf{Browser}\\checks SCT evidence};
+    \node[entity] (monitor) at (0,-3.65) {\textbf{Monitor or Auditor}\\observes log activity};
+    \node[entity] (researcher) at (4.5,-3.65) {\textbf{Security Researcher}\\discovers certificate events};
+
+    \node[result] (analysis) at (0,-5.35) {\textbf{Certificate Analysis}\\monitoring, discovery, and measurement};
+
+    \draw[flow] (ca) -- (log);
+    \draw[flow] (log) -- (browser);
+    \draw[flow] (log) -- (monitor);
+    \draw[flow] (log) -- (researcher);
+    \draw[flow] (monitor) -- (analysis);
+    \draw[flow] (researcher) -- (analysis);
+  \end{tikzpicture}
+  \caption{Simplified Certificate Transparency Ecosystem}
+  \label{fig:certificate-transparency-ecosystem}
+\end{figure}
+
+The public visibility provided by CT supports \textbf{certificate monitoring},
+\textbf{certificate discovery}, and the detection of potential
+\textbf{misissuance}. Organizations can search for unexpected certificates
+associated with their domains, while researchers can examine issuance
+patterns, CA behaviour, cryptographic characteristics, and changes across large
+collections. CT logs consequently provide an important data source for
+Internet-scale measurement and certificate ecosystem research.
+
+\textbf{Dataset freshness} describes how closely a dataset represents the
+current state of the environment being studied. Certificate ecosystems change
+continuously as new certificates are issued, existing certificates expire or
+are renewed, new domains become active while others are retired or no longer deploy TLS services, and deployed certificates are
+replaced. A static certificate dataset therefore becomes progressively
+outdated and may no longer represent current issuance or deployment patterns.
+
+Maintaining a fresh dataset is essential for accurate large-scale analytics,
+meaningful statistical comparisons, reliable trend analysis, longitudinal
+security studies, and informed security assessment. Historical snapshots remain
+valuable for studying change, but current measurements require continuing
+observation of the evolving certificate ecosystem. Continuously updated
+datasets are therefore fundamental to meaningful SSL/TLS certificate
+analytics.
+
+\section{Security-Relevant Certificate Characteristics}
+\label{sec:certificate-key-reuse}
+
+An \textbf{X.509 certificate} contains substantially more information than a
+binding between a domain identity and a public key. Its subject, issuer,
+validity, cryptographic parameters, extensions, and policy information describe
+how the certificate was issued and how it is intended to be used~\cite{rfc5280}.
+These attributes provide observable evidence about \textbf{deployment
+practices}, \textbf{cryptographic strength}, \textbf{operational security}, and
+broader certificate ecosystem behaviour. They are therefore widely used in
+Internet measurement studies and cybersecurity research.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\fontsize{9}{10.8}\selectfont,
+    >=Latex,
+    root/.style={draw, very thick, rounded corners=2pt, align=center, text width=3.5cm, minimum height=0.95cm, fill=black!9},
+    identityCategory/.style={draw, rounded corners=2pt, align=center, text width=4.1cm, minimum height=1.9cm, inner xsep=3pt, fill=black!5},
+    cryptographyCategory/.style={draw, rounded corners=2pt, align=center, text width=2.9cm, minimum height=1.9cm, inner xsep=3pt, fill=black!5},
+    operationalCategory/.style={draw, rounded corners=2pt, align=center, text width=2.9cm, minimum height=1.9cm, inner xsep=3pt, fill=black!5},
+    trustCategory/.style={draw, rounded corners=2pt, align=center, text width=3.2cm, minimum height=1.9cm, inner xsep=3pt, fill=black!5},
+    indicator/.style={draw, rounded corners=2pt, align=center, text width=10.5cm, minimum height=1.45cm, fill=black!7},
+    outcome/.style={draw, very thick, rounded corners=2pt, align=center, text width=4.5cm, minimum height=0.9cm, fill=black!9},
+    flow/.style={-{Latex[length=2mm]}, line width=0.55pt},
+    connector/.style={line width=0.5pt}
+  ]
+    \node[root] (certificate) at (0,0) {\textbf{X.509 Certificate}};
+
+    \node[identityCategory] (identity) at (-5.15,-2.0)
+      {\textbf{Identity}\\Subject\\Issuer\\
+      \mbox{\fontsize{8.5}{10}\selectfont Subject Alternative Name (SAN)}};
+    \node[cryptographyCategory] (crypto) at (-1.22,-2.0)
+      {\textbf{Cryptography}\\RSA or ECDSA\\Key length\\
+      \mbox{Signature algorithm}};
+    \node[operationalCategory] (operational) at (2.12,-2.0)
+      {\textbf{Operational}\\Validity period\\Expiration date\\Certificate lifetime};
+    \node[trustCategory] (trust) at (5.60,-2.0)
+      {\textbf{Trust}\\\mbox{Certificate Authority}\\Certificate chain\\Validation level};
+
+    \draw[connector] (certificate.south) -- (0,-0.85);
+    \draw[connector] (-5.15,-0.85) -- (5.60,-0.85);
+    \draw[flow] (-5.15,-0.85) -- (identity.north);
+    \draw[flow] (-1.22,-0.85) -- (crypto.north);
+    \draw[flow] (2.12,-0.85) -- (operational.north);
+    \draw[flow] (5.60,-0.85) -- (trust.north);
+
+    \node[indicator] (indicators) at (0,-4.45)
+      {\mbox{\textbf{Security-Relevant Indicators}}\\[2pt]
+      Weak cryptography \quad \textbullet \quad Expired certificates \quad
+      \textbullet \quad Public-key reuse\\
+      Certificate quality \quad \textbullet \quad Standards-compliance  };
+
+    \draw[connector] (identity.south) -- (-5.15,-3.35);
+    \draw[connector] (crypto.south) -- (-1.22,-3.35);
+    \draw[connector] (operational.south) -- (2.12,-3.35);
+    \draw[connector] (trust.south) -- (5.60,-3.35);
+    \draw[connector] (-5.15,-3.35) -- (5.60,-3.35);
+    \draw[flow] (0,-3.35) -- (indicators.north);
+
+    \node[outcome] (assessment) at (0,-6.2)
+      {\mbox{\textbf{Security Assessment}}};
+    \draw[flow] (indicators) -- (assessment);
+  \end{tikzpicture}
+  \caption{Major Security-Relevant Characteristics of an X.509 Certificate}
+  \label{fig:x509-security-characteristics}
+\end{figure}
+
+\textbf{Cryptographic characteristics} determine the mechanisms used to
+authenticate the certificate and protect the associated connection. The
+\textbf{public-key algorithm}, commonly RSA or ECDSA, identifies the underlying
+cryptographic approach, while \textbf{key length} affects resistance to
+computational attacks. The \textbf{signature algorithm} identifies how the
+issuer signs the certificate and which hash function supports that signature.
+Modern algorithms and appropriately sized keys contribute to strong security,
+whereas obsolete hashes, weak algorithms, or insufficient key sizes may reduce
+confidence in a deployment. These characteristics must also be interpreted in
+historical and policy context, because an algorithm accepted when a certificate
+was issued may later become deprecated as standards and computational
+capabilities evolve. Algorithm choice and key size therefore indicate whether
+a deployment follows contemporary security expectations.
+
+\textbf{Operational characteristics} describe certificate lifecycle and trust
+management. The \textbf{validity period} defines when a certificate is intended
+to be accepted, and the expiration date indicates when it should cease to be
+used. Expired certificates can interrupt services or reveal weaknesses in
+renewal and deployment practices, while unusually long validity periods may
+increase exposure if authorization or key ownership changes~\cite{ma2023stale}.
+The issuing \textbf{Certificate Authority} and certificate chain also provide
+context about the trust relationship, validation process, and certificate
+management practices. Issuer patterns across large datasets can additionally
+reveal trust concentration, differing validation practices, and changes in CA
+market activity.
+
+Common \textbf{security-relevant indicators} include expired certificates,
+weak cryptographic configurations, repeated public keys, and
+standards-compliance or certificate-quality findings. Public-key reuse can
+arise across distinct certificates and has been observed at Internet
+scale~\cite{nezhadian2025reuse}; however, legitimate renewal, cross-signing,
+and shared infrastructure can produce the same pattern
+~\cite{junaid2025shared}. These characteristics should therefore be treated as
+signals requiring contextual investigation, not as automatic proof of a
+vulnerability, successful attack, or private-key compromise. When considered
+together, identity, cryptographic, operational, and trust attributes provide a
+broader view of SSL/TLS security posture and support meaningful ecosystem-wide
+measurement.
+
+\section{Related Work and Research Gap}
+\label{sec:related-work-comparison}
+
+SSL/TLS certificates, \textbf{Certificate Transparency (CT)}, and
+Internet-scale certificate ecosystems have been studied extensively over the
+past decade. Previous research has examined Internet-wide certificate
+measurement, publicly auditable CT logs, certificate quality, public-key
+reuse, and certificate lifecycle behaviour. These studies have revealed
+deployment patterns, issuance errors, shared-key risks, and changes in the
+certificate ecosystem, thereby substantially improving understanding of the
+\textbf{Web Public Key Infrastructure (Web PKI)}.
+
+\begin{table}[H]
+  \centering
+  \caption{Representative Studies Related to SSL/TLS Certificate Analysis}
+  \label{tab:related-work-comparison}
+  \begingroup
+  \scriptsize
+  \renewcommand{\arraystretch}{1.08}
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.17\textwidth}>{\RaggedRight\arraybackslash}p{0.18\textwidth}>{\RaggedRight\arraybackslash}p{0.27\textwidth}>{\RaggedRight\arraybackslash}X@{}}
+    \toprule
+    \textbf{Study} & \textbf{Primary Focus} & \textbf{Major Contribution} & \textbf{Relevance to This Work} \\
+    \midrule
+    Laurie et al.~\cite{rfc9162}
+    & Certificate Transparency
+    & Defined publicly auditable logs for observing certificate issuance and identifying suspect activity.
+    & Establishes the basis for CT-assisted discovery and dataset freshness. \\
+
+    Durumeric et al.~\cite{durumeric2013https}
+    & Internet-wide HTTPS measurement
+    & Used repeated scans to characterize CA relationships, deployment practices, and configuration problems.
+    & Demonstrates the value of large-scale and time-aware certificate analysis. \\
+
+    Kumar et al.~\cite{kumar2018misissuance}
+    & Certificate quality and CA behaviour
+    & Introduced ZLint to measure certificate conformance with technical standards and policy requirements.
+    & Supports certificate-quality indicators and issuer-oriented assessment. \\
+
+    Junaid and Janjua~\cite{junaid2025shared}
+    & Public-key sharing and domain ownership
+    & Analysed shared keys and used domain-ownership relationships to distinguish legitimate and potentially unsafe cases.
+    & Provides context for shared-key detection and cautious interpretation of reuse patterns. \\
+
+    Ma et al.~\cite{ma2023stale}
+    & Certificate lifecycle and staleness
+    & Examined valid but operationally stale certificates and risks associated with prolonged key validity.
+    & Motivates certificate lifetime, renewal, and freshness analysis. \\
+    \bottomrule
+  \end{tabularx}
+  \endgroup
+\end{table}
+
+Existing platforms make certificate and Internet observations accessible to
+researchers and practitioners. \textbf{crt.sh} supports certificate search and
+CT-log exploration~\cite{crtsh}; \textbf{Censys} combines Internet-wide host
+discovery with searchable certificate records and security-related
+metadata~\cite{durumeric2015censys,censyscerts}; and \textbf{Shodan} provides
+Internet-connected service discovery, TLS certificate filtering, CT lookup,
+and security monitoring~\cite{shodan,shodanct}. These platforms have become
+important resources for certificate discovery, infrastructure measurement,
+and targeted security investigation.
+
+Previous studies and existing platforms have significantly advanced
+certificate measurement, CT monitoring, certificate discovery, quality
+assessment, and Internet-scale security research. However, existing work
+often concentrates on a specific measurement question, data source, or
+security characteristic, while relatively few certificate-focused analytical
+environments integrate \textbf{automated certificate acquisition},
+\textbf{continuous dataset maintenance}, \textbf{CT-based dataset freshness},
+\textbf{comprehensive certificate analytics}, \textbf{Certificate Authority
+comparison}, \textbf{security-oriented indicators}, and \textbf{interactive
+visualization}. This systems-integration gap motivates the development of the
+proposed SSL/TLS certificate analytics platform described in the subsequent
+chapters.

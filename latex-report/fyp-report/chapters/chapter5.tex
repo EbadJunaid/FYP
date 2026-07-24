@@ -1,0 +1,278 @@
+% ===========================================================================
+% CHAPTER 5
+% ===========================================================================
+
+\chapter{Certificate Acquisition and Dataset Construction}
+\label{chap:certificate-acquisition}
+
+\section{Domain Dataset Preparation}
+\label{sec:domain-dataset-preparation}
+
+The domain-based acquisition workflow receives its initial targets through a
+configured master CSV dataset, with \texttt{global-dataset.csv} serving as the
+default input for the primary certificate dataset. The master dataset is
+treated as the operational input without assuming that every contained domain
+originates from one fixed upstream source. Independent preparation utilities
+support country-focused lists,
+Tranco-derived inputs, Rapid7-derived sources, and reconstruction of a domain
+list from existing certificate records. These utilities provide alternative
+preparation paths rather than mandatory stages of a single sequential process.
+
+At initialization, domain values from the configured CSV are loaded into the
+persistent acquisition-task dataset only when that dataset is empty. Each task
+is created in the pending state with its attempt count initialized and without
+an assigned worker or heartbeat. A unique domain task key prevents an identical
+domain value from creating multiple tasks during this loading stage. Once
+initialized, these records are maintained independently of the original CSV
+and retain their processing and attempt information across the acquisition
+run. The persistent task dataset therefore becomes the operational input that
+the domain-based crawler can subsequently process and monitor.
+
+Domain-derived scope information is not assigned while the input file is
+prepared or while its tasks are initialized. It is derived from the domain's
+final label and attached to the certificate record only after successful
+certificate retrieval and parsing, during record enrichment. The initialized
+tasks define the starting acquisition population, while confirmed new domains
+can later extend the master dataset through the Certificate
+Transparency-assisted discovery workflow described in Chapter~6.
+
+\subsection{Pakistan-Focused Domain Extraction}
+\label{sec:pk-domain-extraction}
+
+In addition to the global domain collection, the project places a special focus
+on Pakistan's certificate landscape. To build a targeted, localized dataset,
+\texttt{.pk} domains were systematically extracted from four large global
+sources: the Rapid7 Project Sonar dataset (approximately 15.8 million domains),
+the Tranco Top Sites list (approximately 4.62 million domains), the
+Cloudflare and Faculty dataset (approximately 2 million domains), and the
+Hugging Face dataset (approximately 800,000 domains). Each source was parsed to
+retain only domains ending in \texttt{.pk}, and known Pakistani government and
+critical infrastructure domains were appended to ensure thorough coverage. The
+extracted records were combined, deduplicated, and saved into a single file
+(\texttt{pk-domains.csv}) that was merged into the master dataset. This
+localized collection enables the dashboard's country-level analytical scopes
+and supports Pakistan-specific exploration of certificate characteristics.
+
+\section{Domain-Based Certificate Crawling}
+\label{sec:domain-crawler-architecture}
+
+The domain-based crawler uses persistent task records and a configurable pool
+of worker threads. A worker atomically claims one pending domain, changes its
+state to processing, and records its worker identity, start time, and heartbeat
+timestamp. Heartbeat information is refreshed at the principal acquisition
+stages so that interrupted work can later be distinguished from active work.
+Figure~\ref{fig:domain-crawler-flow} presents the acquisition architecture and
+its separate recovery path.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\footnotesize,
+    >=Latex,
+    external/.style={draw, rounded corners=2pt, align=center, text width=2.05cm,
+      minimum height=1.00cm, fill=black!3, inner sep=4pt},
+    store/.style={draw, rounded corners=2pt, align=center, text width=2.45cm,
+      minimum height=1.10cm, fill=black!7, inner sep=4pt},
+    component/.style={draw, rounded corners=2pt, align=center, text width=2.50cm,
+      minimum height=1.00cm, fill=black!11, inner sep=4pt,
+      font=\scriptsize},
+    support/.style={draw, rounded corners=2pt, align=center, text width=2.20cm,
+      minimum height=1.00cm, fill=black!5, inner sep=4pt},
+    marker/.style={circle, draw, fill=white, inner sep=1.1pt,
+      font=\bfseries\tiny},
+    flow/.style={-{Latex[length=2mm]}, line width=0.6pt},
+    exchange/.style={<->, >=Latex, line width=0.6pt},
+    recovery/.style={dashed, <->, >=Latex, line width=0.6pt}
+  ]
+    \draw[rounded corners=3pt, line width=0.65pt, fill=black!1]
+      (-1.75,-3.45) rectangle (1.75,3.30);
+    \draw[line width=0.45pt] (-1.75,2.48) -- (1.75,2.48);
+    \node[font=\scriptsize\bfseries, align=center, text width=3.05cm]
+      at (0,2.88) {Domain-Based Crawler};
+
+    \node[external]  (input)    at (-6.55,1.55) {Domain Dataset\\Input};
+    \node[store]     (tasks)    at (-3.85,1.55) {MongoDB Persistent\\Task/Status Store};
+    \node[component] (workers)  at (0,1.25) {Worker Thread Pool\\and Task Processing};
+    \node[component] (enrich)   at (0,-0.55) {Record Enrichment\\and Persistence};
+    \node[component] (doctor)   at (0,-2.35) {Doctor/Watchdog\\Task and Worker Recovery};
+    \node[external]  (endpoint) at (4.45,1.55) {Internet TLS\\Endpoints};
+    \node[support]   (parser)   at (4.45,-0.10) {\texttt{zcertificate}\\Parser};
+    \node[store]     (certs)    at (4.45,-1.85) {Primary Certificate\\Dataset};
+
+    \draw[flow] (input) -- node[marker]{1} (tasks);
+    \draw[flow] (tasks.east) -- node[marker]{2} (workers.west);
+    \draw[flow] (workers.south west) to[out=-155,in=-25]
+      node[marker]{6} (tasks.south east);
+    \draw[exchange] (workers.east) --
+      node[marker]{3} (endpoint.west);
+    \draw[flow] (workers.south east) to[out=-18,in=160]
+      node[marker]{4} (parser.north west);
+    \draw[flow] (parser.west) -- (enrich.east);
+    \draw[flow] (enrich.east) to[out=-18,in=160]
+      node[marker]{5} (certs.west);
+    \draw[recovery] (tasks.south west) to[out=-110,in=180]
+      node[marker]{R} (doctor.west);
+
+    \node[font=\scriptsize, align=center, text width=14.0cm] at (-1.05,-3.88)
+      {1: initialize tasks \quad 2: atomically claim pending task \quad
+       3: retrieve presented certificate \quad 4: parse certificate\\
+       5: enrich and persist record \quad 6: record completed/failed state \quad
+       R: monitor heartbeats and recover stale tasks};
+  \end{tikzpicture}
+  \caption{Domain-based crawler architecture}
+  \label{fig:domain-crawler-flow}
+\end{figure}
+
+For a claimed domain, the worker establishes a TCP connection to port~443 and
+sends the domain as Server Name Indication during the TLS handshake. Hostname
+and trust verification are intentionally disabled because acquisition is
+intended to observe the peer certificate rather than establish a browser-like
+trusted connection. The presented certificate is retrieved in DER form,
+converted to PEM, and passed to \texttt{zcertificate}, which produces a
+structured X.509 record. Network communication and parser execution use
+independently configurable timeouts, both set to ten seconds by default.
+
+After successful parsing, the record is enriched with the source domain,
+acquisition time, a scope derived from the domain's final label, and a
+pragmatic leaf-certificate flag. The flag excludes certificates whose subject
+and issuer distinguished names are identical or whose basic constraints mark
+them as a Certificate Authority. The enriched record is inserted into the
+primary certificate dataset before the task is marked completed. Domain-task
+uniqueness prevents duplicate task creation during initialization, whereas
+certificate persistence does not enforce fingerprint-based uniqueness and
+therefore does not provide an exactly-once insertion guarantee.
+
+Failures increment the task's attempt count and retain an error description.
+The retry limit and delays are configurable, although retry processing is
+disabled by default; a task without an enabled and eligible retry is marked
+failed. The Doctor/Watchdog identifies processing tasks whose heartbeat has
+become stale, returns them to the pending state, and can restore missing worker
+capacity. This recovery path preserves the explicit pending, processing,
+completed, and failed states without claiming end-to-end exactly-once
+processing.
+
+\section{IP-Based Certificate Acquisition}
+\label{sec:ip-crawler}
+
+IP-based acquisition provides a complementary method for observing
+certificates directly from IPv4 endpoints without requiring an associated
+domain name. Input may consist of individual IPv4 addresses or CIDR prefixes;
+a supporting utility can derive Pakistan-focused CIDR inputs from APNIC
+delegated statistics. The acquisition workflow validates the selected input
+format and expands each CIDR prefix into its usable host addresses before
+submitting the resulting targets for concurrent processing.
+
+For each acquisition run, the operator selects either a dummy hostname for
+Server Name Indication (SNI) or a connection without SNI. This choice is
+significant for virtual-hosted services because an endpoint may return a
+default certificate, an unrelated certificate, or reject an unrecognized SNI.
+The resulting observation therefore represents the certificate presented
+under the selected handshake context rather than a domain-specific assertion.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\footnotesize,
+    >=Latex,
+    external/.style={draw, rounded corners=2pt, align=center, text width=2.30cm,
+      minimum height=1.05cm, fill=black!3, inner sep=4pt},
+    process/.style={draw, rounded corners=2pt, align=center, text width=2.55cm,
+      minimum height=0.92cm, fill=black!10, inner sep=4pt,
+      font=\scriptsize},
+    store/.style={draw, rounded corners=2pt, align=center, text width=2.80cm,
+      minimum height=1.08cm, fill=black!7, inner sep=4pt,
+      font=\scriptsize},
+    marker/.style={circle, draw, fill=white, inner sep=1.1pt,
+      font=\bfseries\tiny},
+    flow/.style={-{Latex[length=2mm]}, line width=0.6pt},
+    exchange/.style={<->, >=Latex, line width=0.6pt},
+    bypass/.style={dashed, -{Latex[length=2mm]}, line width=0.6pt}
+  ]
+    \draw[rounded corners=3pt, line width=0.65pt, fill=black!1]
+      (-1.80,-3.75) rectangle (1.80,3.60);
+    \draw[line width=0.45pt] (-1.80,2.55) -- (1.80,2.55);
+    \node[font=\scriptsize\bfseries, align=center, text width=3.10cm]
+      at (0,3.05) {IP-Based Certificate\\Crawler};
+
+    \node[external] (source) at (-4.80,1.80)
+      {APNIC-derived CIDRs\\or IPv4 input};
+    \node[process] (prepare) at (0,1.80)
+      {Target Preparation\\Validate entries and expand CIDRs};
+    \node[process] (sni) at (0,0.25)
+      {Handshake Context\\Dummy SNI or no SNI};
+    \node[process] (scan) at (0,-1.30)
+      {Concurrent IP Scan\\TCP/TLS on port 443};
+    \node[process] (result) at (0,-2.85)
+      {Per-IP Result Assembly\\Status and certificate data};
+
+    \node[external] (endpoint) at (4.40,-1.10)
+      {Internet IPv4\\TLS Endpoints};
+    \node[external] (parser) at (4.40,-2.65)
+      {\texttt{zcertificate}\\Parser};
+    \node[store] (store) at (4.40,-4.50)
+      {IP Certificate Dataset\\(MongoDB)};
+
+    \draw[flow] (source.east) -- node[marker]{1} (prepare.west);
+    \draw[flow] (prepare.south) -- node[marker]{2} (sni.north);
+    \draw[flow] (sni.south) -- node[marker]{3} (scan.north);
+    \draw[exchange] (scan.east) -- node[marker]{4} (endpoint.west);
+    \draw[flow] (scan.south east) to[out=-25,in=155]
+      node[marker]{5} (parser.north west);
+    \draw[flow] (parser.west) -- node[marker]{6} (result.east);
+    \draw[bypass] (scan.south) -- node[marker]{F} (result.north);
+    \draw[flow] (result.south east) to[out=-25,in=155]
+      node[marker]{7} (store.north west);
+
+    \node[font=\scriptsize, align=center, text width=14.2cm] at (-0.40,-6.05)
+      {1: supply targets \quad 2: prepare addresses \quad
+       3: select handshake context\\
+       4: perform TCP/TLS exchange \quad 5: parse presented certificate \quad
+       6: assemble result\\
+       7: upsert by IP \quad F: record unsuccessful outcome};
+  \end{tikzpicture}
+  \caption{IP-based certificate acquisition and result-persistence workflow}
+  \label{fig:ip-crawler-flow}
+\end{figure}
+
+As shown in Figure~\ref{fig:ip-crawler-flow}, each target is first tested for a
+TCP service on port~443 and then for TLS negotiation. A successful handshake
+returns the presented certificate, which is converted to PEM, parsed with
+\texttt{zcertificate}, and stored without raw certificate fields. The workflow
+records differentiated outcomes for connection refusal, TCP or TLS timeout,
+TLS protocol errors, parsing failure, and successful acquisition. Results are
+upserted by IP address, so a later scan replaces the prior record for that
+address.
+
+The IP-based crawler uses a concurrent scan pool and an IP-unique persistence
+key, but it does not share the persistent task-state, retry, or Doctor/Watchdog
+model of the domain-based crawler. Its observations are maintained in a
+dedicated IP-based dataset rather than being merged into the primary
+domain-based analytics dashboard. This separation preserves the semantics of
+IP-directed measurement while allowing it to complement domain-based
+certificate acquisition.
+
+\section{Acquisition Limitations and Ethical Considerations}
+\label{sec:acquisition-limitations}
+
+Acquisition is bounded by configured inputs and scan-time conditions. DNS
+failure, unreachable hosts, closed ports, timeouts, TLS errors, parser failure,
+and transient network conditions can prevent collection. Deployments may also
+change over time, while IP scanning may return a default virtual-host
+certificate when SNI does not identify the intended service. Results are
+therefore point-in-time observations rather than complete Internet TLS
+coverage.
+
+Certificate collection is distinct from certificate validation. With normal
+trust and hostname checks disabled, an observed certificate may be expired,
+self-signed, untrusted, hostname-mismatched, or part of an invalid chain. Its
+presence records only what the endpoint presented and does not imply acceptance
+by a standards-compliant client.
+
+The implemented mechanisms perform ordinary TCP/TLS interaction against finite
+configured targets, use bounded timeouts, and retrieve only publicly presented
+certificate information; they neither exploit services nor request application
+data. The software does not centrally enforce rate limits, exclusions, opt-out
+handling, abuse response, consent, or ethics approval. Responsible deployment
+must therefore supply appropriate authorization and approval, conservative
+pacing, target exclusions, monitoring, and retention and disclosure controls.
+These are governance requirements rather than implemented crawler capabilities.

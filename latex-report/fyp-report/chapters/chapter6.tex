@@ -1,0 +1,317 @@
+% ===========================================================================
+% CHAPTER 6
+% ===========================================================================
+
+\chapter{Certificate Transparency Renewal and Discovery Pipeline}
+\label{chap:ct-renewal-pipeline}
+
+Certificate Authorities (CAs) participating in the Web Public Key
+Infrastructure are required by the CA/Browser Forum Baseline Requirements to
+submit every issued certificate to multiple public Certificate Transparency
+(CT) logs~\cite{rfc9162}. These logs maintain append-only, cryptographically
+verifiable records of all certificate issuance events. The public visibility
+created by this obligation makes CT logs a valuable observational source for
+monitoring certificate activity, including detecting newly issued certificates,
+identifying renewals of existing deployments, and observing changes in the
+certificate ecosystem over time. The pipeline described in this chapter
+converts these raw CT observations into a continuously maintained dataset by
+collecting domain events in real time, periodically separating renewed
+certificates from those belonging to previously unseen domains, acquiring
+current endpoint data for both groups, and incorporating the results into the
+analytical dataset.
+
+\section{Continuous CT Observation}
+\label{sec:ct-collection-configuration}
+
+The Certificate Transparency observation subsystem supplies the domain-level
+events that drive the maintenance workflow. It comprises three cooperating
+artifacts: a CT log listener, a consumer process, and a per-log position
+index.
+
+The CT log listener maintains persistent connections to a configured set of
+public logs---operated by Google, Cloudflare, Let's Encrypt, DigiCert,
+Sectigo, and others. As certificates are submitted to these logs, the
+listener decodes each issuance event and exposes the observed domain sets
+through a local WebSocket endpoint, delivering a stream of domain and Subject
+Alternative Name (SAN) observations extracted from each processed
+certificate.
+
+A consumer process maintains a persistent WebSocket connection to this
+endpoint. For each received message, it strips wildcard markers,
+deduplicates the domain set within that message, and accumulates unique
+observations in an in-memory buffer. Each buffered entry records the list of
+observed domains together with a processing flag initially set to
+\texttt{false}. When the buffer reaches a configured threshold, the
+accumulated records are flushed to MongoDB in a single batch write. A unique
+index on the \texttt{domains} field ensures that repeat observations of the
+same domain set are silently rejected at the database level without
+disrupting the ingestion flow.
+
+Two complementary persistence mechanisms support uninterrupted operation
+across process restarts. The per-log position index records the most recently
+processed entry position for each monitored CT log, allowing the listener to
+resume observation from that position rather than reprocessing the complete
+log history. Separately, the consumer records ingestion metadata---batch
+counts, processing timestamps, and run status---in a dedicated MongoDB
+collection. The processing flag on each buffered domain set serves as an
+additional tracking mechanism: it is set to \texttt{true} when the
+corresponding set has been considered by the renewal and discovery workflow,
+preventing the same observation from triggering repeated processing
+cycles.
+
+This design supports continuous, low-latency observation of CT log activity.
+On graceful shutdown, any remaining entries in the in-memory buffer are
+flushed to MongoDB before the process terminates. The buffer is not a durable
+message queue and does not guarantee exactly-once delivery for every domain
+observation, but this is acceptable given that the subsequent maintenance
+cycle processes the collected data in bulk and can tolerate occasional
+duplicate or missed observations within practical bounds.
+
+\section{The Periodic Maintenance Cycle}
+\label{sec:eight-stage-orchestrator}
+
+While the observation subsystem runs continuously, the maintenance operations
+that convert collected observations into dataset updates execute as a
+periodic, orchestrator-driven cycle. An orchestration component sequences
+several discrete stages in a defined order, ensuring that each completed
+cycle produces a coherent, self-consistent update to the certificate dataset
+and the corresponding analytical results. Figure~\ref{fig:ct-renewal-discovery-branches}
+illustrates the overall flow.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    box/.style={draw, rounded corners=2pt, align=center, text width=2.8cm, minimum height=0.8cm, fill=black!5},
+    store/.style={draw, cylinder, shape border rotate=90, aspect=0.22, align=center, text width=2.8cm, minimum height=0.9cm, fill=black!8},
+    main/.style={draw, very thick, cylinder, shape border rotate=90, aspect=0.22, align=center, text width=2.8cm, minimum height=0.95cm, fill=black!10},
+    flow/.style={-{Latex[length=2mm]}, line width=0.5pt},
+    dashflow/.style={-{Latex[length=2mm]}, line width=0.5pt, dashed}
+  ]
+    \node[box] (ct-logs) at (0,2.8) {Public CT logs};
+    
+    \node[box] (listener) at (0,1.6) {CT log listener\\and domain ingestion};
+    \node[store] (live-db) at (0,-0.45) {Live domain database\\(continuously updated)};
+
+    \node[box] (renew-select) at (-3.8,-2.6) {\hyphenpenalty=10000\exhyphenpenalty=10000 Match observations with\\known domains};
+    \node[box] (new-select) at (3.8,-2.6) {\hyphenpenalty=10000\exhyphenpenalty=10000 Select previously unseen\\candidate domains};
+
+    \node[box] (renew-crawl) at (-3.8,-4.65) {Crawl renewal\\candidates};
+    \node[box] (new-crawl) at (3.8,-4.65) {Crawl discovery\\candidates};
+
+    \node[store] (renew-db) at (-3.8,-6.45) {Renewal staging\\certificates};
+    \node[store] (new-db) at (3.8,-6.45) {Discovery staging\\certificates};
+
+    \node[box] (renew-merge) at (-3.8,-8.0) {Checkpointed replacement\\by domain};
+    \node[box] (new-merge) at (3.8,-8.0) {Insert accepted records\\and extend domain list};
+    \node[main] (main-db) at (0,-9.6) {Updated certificate\\dataset};
+
+    \node[box] (dashboard) at (0,-11.0) {Interactive dashboard};
+
+    \draw[flow] (ct-logs) -- (listener);
+    \draw[flow] (listener) -- (live-db);
+    \draw[dashflow] (live-db.south) -- (renew-select.north);
+    \draw[dashflow] (live-db.south) -- (new-select.north);
+    \draw[flow] (renew-select) -- (renew-crawl);
+    \draw[flow] (renew-crawl) -- (renew-db);
+    \draw[flow] (renew-db) -- (renew-merge);
+    \draw[flow] (renew-merge) -- (main-db);
+    \draw[flow] (new-select) -- (new-crawl);
+    \draw[flow] (new-crawl) -- (new-db);
+    \draw[flow] (new-db) -- (new-merge);
+    \draw[flow] (new-merge) -- (main-db);
+    \draw[flow] (main-db) -- (dashboard);
+  \end{tikzpicture}
+  \caption{The two-branch pipeline: CT observations are split into renewal candidates (left, replacing existing records) and discovery candidates (right, inserted as new records), both converging on the updated dataset that feeds the dashboard.}
+  \label{fig:ct-renewal-discovery-branches}
+\end{figure}
+
+The cycle begins by temporarily stopping the CT observation subsystem so that
+the accumulated domain data in the live database remains stable throughout
+the maintenance run. The orchestrator then verifies that the global domain
+dataset exists and, if necessary, generates it from the primary MongoDB
+collection. The core processing stage separates the buffered CT observations
+into two categories---domains already present in the maintained dataset
+(renewal candidates) and domains that have not been observed before
+(discovery candidates)---and processes each category independently through
+the certificate acquisition workflow described in
+Chapter~\ref{chap:certificate-acquisition}. After acquisition completes, the
+newly obtained certificates are merged into the main dataset using different
+strategies for each category: renewal results replace existing records,
+while discovery results are inserted as new entries. The analytical results
+are then recomputed, temporary staging data is removed, and the CT
+observation subsystem is restarted to resume collection for the next cycle.
+
+\section{Renewal Detection and New Domain Discovery}
+\label{sec:renewal-and-discovery}
+
+Renewal detection determines which of the observed CT domain sets correspond
+to certificates already represented in the maintained dataset. For each
+domain in the global domain list, the system generates base-domain and
+\texttt{www} variations and queries the buffered CT observations in the live
+domain database. A unique index on the stored domain sets allows each
+observation to be located efficiently by any domain that appears in its SAN
+list.
+
+When a matching observation is found, only one representative domain is
+selected for the renewal output, even when multiple domains in the dataset
+share the same certificate (indicated by identical SAN sets). This prevents
+redundant crawling of the same certificate endpoint from multiple domain
+entries. The corresponding CT observation is marked as processed so that
+subsequent maintenance cycles do not re-examine it. The resulting renewal
+list therefore contains one entry per renewed certificate rather than one
+entry per matching domain, reducing the acquisition workload while
+maintaining full coverage of the observed renewal activity.
+
+The discovery path extends the dataset with certificates for domains that
+have not been previously observed. It begins by extracting a bounded number
+of unprocessed domain records from the live domain database, writing them to
+a temporary input file. The source collection is then dropped, ensuring that
+the next observation cycle starts with a clean buffer.
+
+The domain-based crawler is launched against this extracted input and runs to
+completion. Each successfully acquired certificate is stored in a staging
+database. In the subsequent merge step, the newly acquired certificates are
+inserted into the main dataset as new records keyed by domain. Because
+modern certificates commonly cover a large number of Subject Alternative
+Names (SANs), a single certificate may be acquired independently for several
+different domains during a single discovery cycle. No fingerprint-based
+deduplication is applied---each domain receives its own independent record
+in the dataset, which is the desired behaviour given that the same
+certificate may serve multiple distinct web properties. The system tracks
+exactly which domains were successfully inserted and appends only those
+confirmed domains to the global domain list, maintaining consistency between
+the MongoDB records and the domain list used for subsequent acquisition
+cycles.
+
+\section{Dataset Merge and Analytical Refresh}
+\label{sec:ct-precompute-integration}
+
+The renewal merge transfers the certificates acquired during the renewal
+crawl from the staging database into the main certificate dataset. Each
+renewal document is written using a replacement operation keyed on the
+domain field: if a record for that domain already exists in the main
+collection, it is replaced in its entirety; if no record exists, a new
+document is inserted. This approach avoids the two-step delete-and-insert
+pattern, which would create a window during which the dashboard could read an
+incomplete certificate record.
+
+Progress is tracked through a checkpoint stored in a metadata collection
+within the main database. The checkpoint records the identifier of the last
+successfully processed renewal document and is advanced only after each batch
+write completes. If the merge process is interrupted---by a crash, a timeout,
+or an explicit stop request---a subsequent run resumes from the stored
+checkpoint rather than reprocessing the complete renewal dataset. Because
+each replacement operation is idempotent, rewriting the same document
+multiple times produces identical results, making partial progress always
+safe to resume.
+
+After the certificate dataset has been updated, the analytics process
+verifies the required database indexes and recomputes the six materialized
+analytical families. Detailed certificate queries and selected time-series
+views read directly from the main dataset and therefore reflect the current
+state immediately. Materialized dashboard views, by contrast, serve the
+latest completed analytical snapshot. The resulting availability is near real
+time in the sense that it follows the completed maintenance cycle; it is not
+an instantaneous streaming update driven by individual CT events.
+
+\section{Component Map}
+\label{sec:ct-component-map}
+
+Table~\ref{tab:ct-components} maps each functional role described in this
+chapter to the concrete artifact that implements it. Most artifacts reside in
+the \texttt{ct-logs-renewal-pipeline/} directory; the orchestrator additionally
+invokes the domain-based crawler in \texttt{ssl-certificates-crawler/} and the
+analytical refresh script \texttt{run-generic.py} in
+\texttt{dashboard/backend/pre-compute-scripts/}. All stages are coordinated by
+the orchestrator described in Section~\ref{sec:eight-stage-orchestrator}.
+
+\renewcommand{\arraystretch}{1.3}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{3.2cm} p{4.3cm} X@{}}
+\toprule
+\textbf{Functional role} & \textbf{Artifact} & \textbf{Responsibility} \\
+\midrule
+
+CT log listener &
+\texttt{certstream-server-go} &
+Maintains persistent connections to public CT logs and exposes domain events over a local WebSocket \\
+
+Observation consumer &
+\texttt{go-server.py} &
+Subscribes to the listener, buffers observations in memory, and batch-writes unique domain sets to MongoDB \\
+
+Log position index &
+\texttt{ct\_index.json} &
+Records the last-seen position per CT log for resumption after a restart \\
+
+Orchestrator &
+\texttt{main.py} &
+Sequences the stages of each maintenance cycle \\
+
+Master domain list &
+\texttt{global-dataset.csv} &
+Authoritative list of known domains, generated by \texttt{fetch-domains-names.py} \\
+
+Renewal detection &
+\texttt{data-renew.py} &
+Matches buffered observations against known domains \\
+
+Renewal merge &
+\texttt{data-renew-merge.py} &
+Performs checkpointed, domain-keyed replacement of renewal certificates into the main dataset \\
+
+Discovery acquisition &
+\texttt{new-data.py} &
+Crawls previously unseen domains and inserts new certificates into the main dataset\\
+
+Analytical refresh &
+\texttt{run-generic.py} &
+Recomputes the required indexes and the six materialized analytical families \\
+
+\bottomrule
+\end{tabularx}
+\caption{Mapping of pipeline roles to implementing artifacts.}
+\label{tab:ct-components}
+\end{table}
+
+\renewcommand{\arraystretch}{1}
+
+
+\section{Reliability and Correctness Considerations}
+\label{sec:ct-failure-limitations}
+
+The pipeline incorporates several stage-level recovery mechanisms. CT-log
+indices in the observation service allow collection to resume from a known
+position. Persistent processing flags prevent the same domain set from
+triggering repeated processing cycles. Acquisition task states, batch
+checkpoints, process-state tracking, and failure logs allow individual stages
+to be resumed or repeated after interruption without restarting the complete
+workflow from the beginning. In practice the orchestrator is launched on a
+fixed schedule through the operating system's task scheduler (cron on
+Linux/macOS, Task Scheduler on Windows), with each invocation running its
+stages to completion before the next cycle begins.
+
+The complete maintenance cycle is not, however, enclosed within a single
+transaction. CT observation, temporary staging, domain-list updates,
+certificate merges, analytical recomputation, and subsystem restarts each
+remain separate operations. The renewal checkpoint must remain consistent
+with the lifetime of its staging data---if the staging database is cleared
+before the checkpoint is advanced, the merge cannot be resumed. Concurrent
+maintenance cycles also require explicit operational coordination, because
+overlapping runs would read from and write to the same staging and main
+datasets without isolation guarantees.
+
+Consequently, the platform provides a practical, automated dataset maintenance
+process that significantly reduces the manual effort required to keep the
+certificate collection current. It does not claim global exactly-once
+processing for individual CT events, instantaneous end-to-end updates in
+response to every observed issuance, or experimentally measured freshness
+bounds. These characteristics are appropriate for the intended research and
+analytical use case, where periodic, coherent snapshots of the certificate
+ecosystem support meaningful analysis without requiring strict real-time
+event processing.

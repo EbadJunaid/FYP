@@ -32,7 +32,7 @@ import time
 
 # ==================== CONFIGURATION ====================
 MONGODB_URI = "mongodb://localhost:27017/"
-DATABASE_NAME = "ip-based-crawler-interactive"
+DATABASE_NAME = "latest-crawled-sni"
 COLLECTION_NAME = "pk-certificates"
 
 CSV_FILE = "pk-ip-ranges-mini.csv"  # Hardcoded CSV file path

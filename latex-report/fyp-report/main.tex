@@ -1,0 +1,93 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+\input{preamble}
+
+% --------------------------------------------------------------------------
+% User-supplied report metadata.
+% --------------------------------------------------------------------------
+\newcommand{\ReportTitle}{SSL Guardian: Large-Scale SSL Certificate Analytics Platform}
+\newcommand{\ReportStudent}{Ebad Junaid}
+\newcommand{\ReportRegistration}{22046}
+\newcommand{\ReportSupervisor}{Dr. Muhammad Umar Janjua}
+\newcommand{\ReportDepartment}{Computer Science}
+\newcommand{\ReportUniversity}{Information Technology University Lahore}
+\newcommand{\ReportProgramme}{BS Computer Science}
+\newcommand{\ReportSession}{BSCS 2022--2026}
+% Exactly two students were supplied for this report.
+\newcommand{\ReportStudentTwo}{Muhammad Arslan Shafi}
+\newcommand{\ReportRegistrationTwo}{22100}
+\newcommand{\ReportCommitteeMemberOne}{Mr. Kashif Junaid}
+\newcommand{\ReportCommitteeMemberTwo}{Mr. Shoaib Majeed}
+\newcommand{\ReportHeadOfDepartment}{Dr. Ali Ahmed}
+
+\begin{document}
+\hypersetup{pageanchor=false}
+
+% The report begins with the cover and submission pages. None prints a page
+% number. The former blank third page was removed by explicit user request.
+\pagenumbering{gobble}
+\input{frontmatter/titlepage}
+\input{frontmatter/formal-titlepage}
+
+% Preliminary pages retain internal Roman counters for navigation but remain
+% visually unnumbered. Page anchors are enabled only when visible numbering
+% begins, avoiding duplicate destinations when the Roman counter restarts.
+\pagenumbering{roman}
+\setcounter{page}{1}
+\input{frontmatter/declaration}
+\input{frontmatter/certification}
+\input{frontmatter/acknowledgements}
+\input{frontmatter/dedication}
+
+\clearpage
+\hypersetup{pageanchor=true}
+\pagenumbering{roman}
+\setcounter{page}{1}
+\pagestyle{plain}
+\begingroup
+\singlespacing
+\tableofcontents
+\endgroup
+
+\clearpage
+\phantomsection
+\TemplateFrontTocEntry{List of Tables}
+\begingroup
+\singlespacing
+\listoftables
+\endgroup
+
+\clearpage
+\phantomsection
+\TemplateFrontTocEntry{List of Figures}
+\begingroup
+\singlespacing
+\listoffigures
+\endgroup
+
+\input{frontmatter/abbreviations}
+\input{frontmatter/abstract}
+
+% Main matter starts at Chapter 1 with Arabic page numbering.
+\clearpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\pagestyle{plain}
+\input{chapters/chapter1}
+\input{chapters/chapter2}
+\input{chapters/chapter3}
+\input{chapters/chapter4}
+\input{chapters/chapter5}
+\input{chapters/chapter6}
+\input{chapters/chapter7}
+\input{chapters/chapter8}
+\input{chapters/chapter9}
+
+% References cited by the complete Chapters 1--9 report.
+\clearpage
+\phantomsection
+\TemplateFrontTocEntry{References}
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

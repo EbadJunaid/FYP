@@ -1,0 +1,147 @@
+% ===========================================================================
+% CHAPTER 8
+% ===========================================================================
+
+\chapter{Evaluation and Limitations}
+\label{chap:verification-security-discussion}
+
+\section{Evaluation Method and Verification Results}
+\label{sec:verification-method}
+
+We evaluated the platform using four methods: structural inspection, static
+analysis, interface traceability, and review of experimental outputs.
+Structural inspection verified that acquisition, dataset maintenance, analytics,
+application services, and presentation components use consistent data
+contracts. Static checks validated Python syntax, TypeScript types, and
+frontend lint status. These methods confirm structural soundness but do not
+replace full integration, load, recovery, or penetration testing.
+
+\begin{table}[H]
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \caption{Verification results}
+  \label{tab:verification-results}
+  \begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{0.25\textwidth}>{\RaggedRight\arraybackslash}p{0.29\textwidth}Y@{}}
+    \toprule
+    \textbf{Check} & \textbf{Result} & \textbf{Interpretation} \\
+    \midrule
+    Python syntax analysis & All first-party Python files parsed successfully & Establishes syntax validity, not runtime behavior \\
+    TypeScript compilation & Completed successfully without output generation & Establishes type consistency for the frontend project \\
+    Frontend lint analysis & Reported 22 errors and 45 warnings & Identifies remaining code-quality issues despite successful type checking \\
+    Backend runtime check & Static verification only; runtime integration remains future work & Full backend execution and endpoint behavior remain to be validated \\
+    Automated test inventory & Module-level and integration test automation remain future work & Functional, recovery, and concurrency claims require additional testing \\
+    Interface and data tracing & Major acquisition, analytics, and dashboard paths were structurally consistent & Confirms component relationships but not every runtime outcome \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The verification identified several secondary contracts that require further
+alignment, including an auxiliary export path, a duplicate scope-switch path,
+and a shared-key timeline query. These paths do not alter the principal
+acquisition, analytical, or dashboard workflows, but they should be corrected
+and covered by integration tests before broader deployment.
+
+\section{Experimental IP-Crawler Results}
+\label{sec:ip-experiment-results}
+
+The experimental IP crawler produced separate summaries for runs without
+Server Name Indication and with Server Name Indication. Each recorded run
+contains 79,184 outcomes.
+
+\begin{table}[H]
+  \centering
+  \small
+  \setlength{\tabcolsep}{6pt}
+  \caption{Experimental IP-crawler outcome summary}
+  \label{tab:ip-experiment-record}
+  \begin{tabularx}{\textwidth}{@{}Y>{\Centering\arraybackslash}p{0.20\textwidth}>{\Centering\arraybackslash}p{0.20\textwidth}@{}}
+    \toprule
+    \textbf{Outcome category} & \textbf{Without SNI} & \textbf{With SNI} \\
+    \midrule
+    SSL certificates found & 1,719 & 1,761 \\
+    No service on port 443 & 4,747 & 4,920 \\
+    TCP timeouts & 68,474 & 68,045 \\
+    TLS timeouts & 70 & 68 \\
+    SSL handshake errors & 428 & 434 \\
+    Certificate parser errors & 0 & 0 \\
+    Other errors & 3,746 & 3,956 \\
+    \midrule
+    Total recorded outcomes & 79,184 & 79,184 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The SNI-labelled run used \texttt{example.com} as a dummy hostname---a
+placeholder rather than the actual domain being connected to. It recorded
+1,761 successful certificates, compared with 1,719 without SNI, a descriptive
+difference of 42 (approximately 2.4\% more certificates across 79,184
+addresses). Sending \emph{any} SNI---even a
+mismatched dummy---yields at least as many certificates as no SNI, because some
+servers require an SNI value to complete the handshake. The available summary
+does not include repeated trials, a complete environment description,
+per-address results, or evidence that every other condition was held constant.
+The values therefore demonstrate recorded crawler behaviour but do not
+establish a causal effect of the specific SNI value or a population-level
+conclusion about Pakistan or global TLS deployment.
+
+\section{Security and Scalability Assessment}
+\label{sec:security-analysis}
+
+Security analysis distinguishes certificate measurement from controls expected
+in a deployed multi-user service. During collection, trust and hostname
+validation are disabled so that presented certificates can be observed; this
+activity must remain isolated from normal trusted-client behavior. The
+dashboard is designed for controlled operation and would require
+authentication, authorization, protected administrative actions, externalized
+secrets, restricted service exposure, and hardened environment-specific
+settings before broader deployment.
+
+Currently the analysis scope is stored as shared service state. For concurrent
+multi-user access, each request would need to carry its own scope. If the
+system were deployed publicly, collection would also require an approved policy
+covering authorization, rate limits, opt-out handling, data retention, and
+responsible disclosure.
+
+The system includes several mechanisms intended to support large datasets:
+concurrent acquisition, atomic task claims, batch writes, persisted
+checkpoints, compound indexes, materialized analytics, bounded candidate
+queries, pagination, optional response caching, and client-side request reuse.
+These mechanisms provide a scalability-oriented design, but their quantitative
+effect has not been established through a controlled throughput, latency,
+resource, or multi-user benchmark.
+
+\section{Limitations and Threats to Validity}
+\label{sec:implementation-limitations-drift}
+
+The main limitations of the platform are:
+
+\begin{enumerate}[label=\arabic*.,leftmargin=0.42in]
+  \item \textbf{Configuration consistency.} All components must share the same validated dataset and service configuration to produce consistent analytical results.
+  \item \textbf{Dataset-update correctness.} Renewal checkpoints and temporary staging data require coordinated lifecycle management.
+  \item \textbf{Analytical calibration.} CA rankings, signature strength values, shared-key exposure labels, and risk scores are project-defined. They need external validation before they can be interpreted as scientific security measurements.
+  \item \textbf{Geographic interpretation.} Country views are based on domain suffix and configured scope, not on physical server, subject, or issuer location.
+  \item \textbf{Evaluation coverage.} This chapter evaluates the platform through static verification and one IP-crawler experiment. Integration, concurrency, recovery, usability, security, and performance testing remain incomplete.
+  \item \textbf{Deployment readiness.} Production configuration, automated deployment, dependency locking, service supervision, and comprehensive test automation still require further work.
+\end{enumerate}
+
+\noindent\textbf{Internal validity.}
+Static checks cannot confirm correct behaviour under every runtime, concurrency,
+or interruption condition.
+
+\noindent\textbf{Construct validity.}
+The analytical scores use project-defined rules. Shared public keys do not prove
+compromise, encoded expiry does not imply stale authorization, and scheduled
+expiration counts are not predictions.
+
+\noindent\textbf{External validity.}
+Domain and IP inputs are bounded datasets rather than random or complete samples
+of global TLS deployment. The IP-crawler results are separate from the primary
+dashboard dataset.
+
+\noindent\textbf{Reproducibility and temporal validity.}
+Repeatable evaluation requires frozen datasets, complete environment
+definitions, versioned tools, recorded commands, and dated outputs.
+Certificates, CT observations, network conditions, and domain ownership change
+over time, so analytical results represent only the state captured by a
+particular acquisition and refresh cycle.

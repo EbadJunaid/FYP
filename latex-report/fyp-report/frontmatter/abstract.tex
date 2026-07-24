@@ -1,0 +1,35 @@
+\phantomsection
+\TemplateFrontTocEntry{Abstract}
+\TemplateFrontHeading{ABSTRACT}
+
+SSL/TLS certificates secure traffic across millions of websites, yet many use
+weak algorithms, carry expired validity, or reuse public keys across unrelated
+domains. Certificate Transparency logs make these certificates publicly
+observable, but looking at certificates one at a time reveals only isolated
+details, not the broader patterns needed to assess issuer behaviour,
+cryptographic practices, or certificate quality. This report presents SSL
+Guardian, an integrated platform that collects, maintains, analyzes, and
+presents large-scale certificate data through a single workflow.
+
+The platform acquires certificates from Internet TLS endpoints using a
+concurrent, domain-based crawler with persistent task state and stale-task
+recovery, supported by a separate experimental IP-based crawler. A
+CT-assisted maintenance pipeline observes public logs, separates renewal
+candidates from previously unseen domains, re-crawls both, and merges the
+results so that the dataset stays current. Parsed X.509 records are stored in
+MongoDB and processed into six materialized analytical families---validity,
+geography, signature and key, Subject Alternative Names, shared keys, and
+Certificate Authority---complemented by live queries for time-sensitive views.
+A Django service exposes these results, and a Next.js dashboard provides
+scope-aware search, filtering, visualization, and certificate-level drill-down
+across global and country-level scopes.
+
+The platform was evaluated through structural inspection, static analysis,
+interface traceability, and one IP-crawler experiment comparing acquisition
+with and without Server Name Indication. The analytical scores, Certificate
+Authority rankings, and shared-key labels are project-defined indicators for
+further investigation rather than externally calibrated security ratings or
+proof of compromise, and integration, concurrency, and performance testing
+remain future work.
+
+\clearpage

@@ -40,8 +40,8 @@ Without-SNI field :
    └────────────────────────────────────────────┘
 
 
-### Final checking which runs on more IP ranges :
-
+### Final checking which runs on more IP ranges [35,558 IPs explored ]:
+DB-NAME --> new-crawler-claude-3
 
 WITH N0-SNI : 
 
@@ -58,6 +58,8 @@ WITH N0-SNI :
 ================================================================================
 
 
+DB-name --> new-crawler-claude-3-sni
+
 With SNI :
 
 📊 FINAL RESULTS SUMMARY:
@@ -73,6 +75,63 @@ With SNI :
 ================================================================================
 
 
+NEW RUN [MORE IPs ]
+
+NO-SNI : 
 
 
+================================================================================
+🏁 ALL SCANS COMPLETED
+================================================================================
+
+⏱️  Total Time: 93.02 minutes (5581 seconds)
+📋 Total Entries Processed: 216
+🔍 Total IPs Scanned: 79,184
+⚡ Average Rate: 14.2 IPs/second
+
+📊 FINAL RESULTS SUMMARY:
+   ┌────────────────────────────────────────────┐
+   │ ✓ SSL Certificates Found:        1,719 │
+   │ ✗ No Service (Port 443):         4,747 │
+   │ ⏱ TCP Timeouts (Dead IPs):      68,474 │
+   │ ⏱ TLS Timeouts:                     70 │
+   │ ⚠ SSL Handshake Errors:            428 │
+   │ ⚠ ZCertificate Errors:               0 │
+   │ ❌ Other Errors:                  3,746 │
+   └────────────────────────────────────────────┘
+================================================================================
+
+
+With SNI :
+
+   📊 Running Total: SSL Found: 1761 | Elapsed: 92.2m
+
+================================================================================
+🏁 ALL SCANS COMPLETED
+================================================================================
+
+⏱️  Total Time: 92.22 minutes (5533 seconds)
+📋 Total Entries Processed: 216
+🔍 Total IPs Scanned: 79,184
+⚡ Average Rate: 14.3 IPs/second
+
+📊 FINAL RESULTS SUMMARY:
+   ┌────────────────────────────────────────────┐
+   │ ✓ SSL Certificates Found:        1,761 │
+   │ ✗ No Service (Port 443):         4,920 │
+   │ ⏱ TCP Timeouts (Dead IPs):      68,045 │
+   │ ⏱ TLS Timeouts:                     68 │
+   │ ⚠ SSL Handshake Errors:            434 │
+   │ ⚠ ZCertificate Errors:               0 │
+   │ ❌ Other Errors:                  3,956 │
+   └────────────────────────────────────────────┘
+================================================================================
+
+📁 MONGODB STATUS:
+   Total documents in collection: 79,184
+   SSL certificates stored:       1,761
+
+✅ All data saved to MongoDB
+   Database:   latest-crawled-sni
+   Collection: pk-certificates
 

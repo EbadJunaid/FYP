@@ -1,0 +1,100 @@
+% ===========================================================================
+% CHAPTER 9
+% ===========================================================================
+
+\chapter{Conclusion and Future Work}
+\label{chap:conclusion-future-work}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+SSL Guardian addresses the challenge of collecting, maintaining, analyzing, and
+presenting large SSL/TLS certificate datasets through one integrated platform.
+The developed system combines concurrent endpoint crawling, structured X.509
+parsing, CT-assisted renewal and new-domain discovery, persistent certificate
+storage, global and country-level analytics, application services, and an
+interactive dashboard.
+
+The acquisition framework uses persistent task states, atomic worker claims,
+concurrent processing, retries, stale-task recovery, certificate parsing, scope
+enrichment, and leaf classification. A separate IP-based crawler
+extends the acquisition work to address-based measurement while remaining
+isolated from the primary domain-based analytical dataset.
+
+The CT pipeline supports continuous dataset development by observing
+CT-derived domain sets, selecting known-domain renewal candidates, discovering
+new domains, crawling their current endpoints, and incorporating successful
+results. Analytical materialization follows completed update cycles, allowing
+the dashboard to reflect newly acquired certificate information with minimal
+operational delay while preserving a clear boundary from strict
+event-by-event real-time processing.
+
+The analytical platform covers validity, issuer and Certificate Authority
+activity, signature and hash algorithms, key properties, SANs, public-key
+reuse, geographic scope, trends, and security-oriented risk indicators.
+Certificate Authority ranking and certificate-risk scoring provide transparent
+comparative views, while the dashboard connects aggregate visualizations to
+filtered lists and detailed certificate records. These scores and labels are
+application-defined analytical aids and should not be interpreted as proof of
+compromise or externally certified security ratings.
+
+The project demonstrates a broad systems-engineering contribution to
+certificate intelligence. Its principal strengths are the integration of
+acquisition, CT-driven dataset maintenance, analytical processing, and
+interactive exploration. The evaluation also identifies limitations in
+production hardening, test automation, request isolation, benchmark coverage,
+and analytical calibration. These boundaries define the present scope and
+provide a clear direction for continued development.
+
+\section{Future Work}
+\label{sec:future-work}
+
+Future engineering work should strengthen the platform through systematic
+unit, integration, recovery, service-contract, and interface testing, supported
+by reproducible datasets and explicit dependency versioning. Unified
+configuration, externalized secrets, environment-specific settings,
+authentication, role-based authorization, request-level scope isolation,
+automated deployment, and operational monitoring would further support secure
+and reproducible use beyond a locally operated research environment.
+
+Larger deployments would benefit from distributed crawling, durable task
+coordination, resource-aware scheduling, backpressure, and idempotent
+processing. Incremental or distributed analytics could reduce repeated
+full-dataset computation as the certificate dataset grows. Controlled
+benchmarks should accompany these changes to evaluate acquisition throughput,
+update latency, query responsiveness, and resource consumption across larger
+datasets and analytical scopes.
+
+Certificate intelligence may be extended through certificate-chain and trust
+path analysis, deeper examination of certificate policies and name constraints,
+and active OCSP or CRL status assessment. Retaining historical certificate
+versions would enable lifecycle, renewal, key-rotation, issuer-migration, and
+stale-deployment studies. Certificate Authority evaluation could consequently
+incorporate transparent longitudinal measures, while ownership-aware analysis
+could distinguish legitimate shared infrastructure from concerning public-key
+reuse~\cite{junaid2025shared}.
+
+Certificate Transparency processing could progress from scheduled new-domain
+and renewal updates toward continuous, long-term ecosystem observation.
+Durable per-log progress, event histories, and incremental correlation with
+acquired certificates could improve renewal detection and reveal unusual
+changes in issuers, public keys, SAN coverage, validity profiles, or issuance
+frequency. Such anomalies should remain explainable investigative indicators.
+
+Machine learning and artificial intelligence offer a complementary research
+direction when sufficient history and reliable labels become available.
+Certificate attributes, CT observations, issuer behaviour, renewal history,
+cryptographic properties, quality findings, and analytical indicators could
+support anomaly detection, risk estimation, suspicious-certificate
+prioritization, and analyst triage. Models would require calibration,
+interpretability, bias assessment, and concept-drift monitoring; they should
+not be claimed to detect hacked websites directly or predict attacks.
+
+Further extensions may integrate governed threat intelligence, including
+trust-store, passive-DNS, reputation, and known malicious infrastructure data,
+with clear provenance and licensing controls. IPv6
+measurement, broader deployment environments, and richer longitudinal and
+comparative visualizations would expand research utility. Collectively, these
+directions reinforce the platform as a foundation for large-scale SSL/TLS
+certificate intelligence, cybersecurity research, and advanced analytical
+systems.
